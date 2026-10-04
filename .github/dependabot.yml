@@ -1,0 +1,13 @@
+# 依存の更新を月 1 回、PR で提案する（マージ前に CI とレビューを通す）
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: monthly}
+  - package-ecosystem: pip
+    directory: /mcp-server
+    schedule: {interval: monthly}
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: mcp
+        update-types: ["version-update:semver-major"]  # 2.x は API が変わるため、移行は手作業で
