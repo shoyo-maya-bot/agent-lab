@@ -1,0 +1,64 @@
+# sample-app（dev-environment）に今あるとわかっている弱いところ 8 件.
+# レビュー（AI・人）がこれをどれだけ見つけるかで、レビューの構成（R0〜R4）を比べる.
+#
+# 一致の判定（runner/score.py）: 指摘の「箇所＋本文」に files のどれかが含まれ、かつ keywords のどれかが含まれる
+#   - files はファイル名。拡張子なしの名前（MemberService など）でも一致とする。大文字小文字は区別しない
+#   - keywords は言い換えに強いよう、日本語と英語を並べる
+target: dev-environment/sample-app
+version: 1
+bugs:
+  - id: B01
+    title: 同じメールアドレスの同時登録で 500 になる
+    severity: MUST
+    files: [MemberService.java, ApiExceptionHandler.java]
+    keywords: [同時, 競合, 一意制約, UNIQUE, DuplicateKey, race, 二重登録]
+    why: existsByEmail で確かめてから insert するため、同時の 2 件目は DB の一意制約で失敗し、409 ではなく 500 になる
+
+  - id: B02
+    title: 存在しない会員 ID の行 1 件で、注文ファイル全体が取り消される
+    severity: MUST
+    files: [OrderImportService.java, OrderMapper.xml]
+    keywords: [外部キー, foreign key, ロールバック, rollback, 全件, 存在しない会員, member_id]
+    why: parse が会員の存在を確かめず、INSERT の外部キー違反でトランザクション全体が戻り、終了コード 8 になる
+
+  - id: B03
+    title: 桁あふれの行 1 件で、注文ファイル全体が取り消される
+    severity: WANT
+    files: [OrderImportService.java]
+    keywords: [桁, 長さ, length, VARCHAR, 20 文字, 文字数]
+    why: order_no・product_code の長さを確かめず、DB の VARCHAR(20) を超えると INSERT で失敗する
+
+  - id: B04
+    title: Karate の接続先（baseUrl）がテストに渡らない
+    severity: WANT
+    files: [build.gradle, karate-config.js]
+    keywords: [baseUrl, systemProperty, 接続先]
+    why: karateTest タスクが karate.env しか渡さないため、-DbaseUrl を指定しても使われない
+
+  - id: B05
+    title: ジョブ ID の誤り・未指定でも終了コード 0
+    severity: MUST
+    files: [OrderImportJob.java, SampleApplication.java]
+    keywords: [ジョブ ID, app.batch.job, 終了コード 0, exit code 0, 何もしない, ConditionalOnProperty]
+    why: 対象のジョブが無いと何も実行されず、スケジューラからは正常終了に見える
+
+  - id: B06
+    title: 想定外のエラーが ErrorResponse の形で返らない
+    severity: WANT
+    files: [ApiExceptionHandler.java]
+    keywords: [型, MethodArgumentTypeMismatch, HttpMessageNotReadable, JSON, 既定のエラー, ErrorResponse, 形式がそろ]
+    why: 3 種類の例外しか処理しておらず、ID の型違い・JSON の誤り・DB 障害で Spring の既定の形が返る
+
+  - id: B07
+    title: 404 のメッセージで ID が「1,234」と表示される
+    severity: NITS
+    files: [MemberService.java, messages.properties, NotFoundException.java]
+    keywords: [MessageFormat, カンマ, 桁区切り, "1,234", "{0,number"]
+    why: long の ID を MessageFormat に渡すと桁区切りが入る
+
+  - id: B08
+    title: バッチの異常終了ログにメッセージ ID が無い
+    severity: NITS
+    files: [OrderImportJob.java]
+    keywords: [メッセージ ID, message id, APPE, ログ, log.error]
+    why: 異常終了のログが「JOB0001 異常終了」だけで、規約のメッセージ ID が先頭に無い。入力指定漏れでは API 用の ID を流用している

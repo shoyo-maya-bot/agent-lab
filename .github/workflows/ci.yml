@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e "mcp-server[dev]" pyyaml
+      - run: ruff check . && ruff format --check .
+      - name: MCP server
+        run: pytest -q mcp-server/tests
+      - name: scorer
+        run: pytest -q runner/tests
