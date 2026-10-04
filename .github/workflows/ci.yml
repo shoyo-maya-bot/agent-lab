@@ -19,6 +19,8 @@ jobs:
       - run: pip install -e "mcp-server[dev]" pyyaml
       - run: ruff check . && ruff format --check .
       - name: MCP server
-        run: pytest -q mcp-server/tests
+        run: |
+          set -o pipefail
+          pytest -q mcp-server/tests 2>&1 | tee mcp-test.log || { grep -E "Error|error|FAILED|assert" mcp-test.log | head -30 | sed 's/^/::error::/'; exit 1; }
       - name: scorer
         run: pytest -q runner/tests
