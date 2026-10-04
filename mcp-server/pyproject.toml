@@ -9,7 +9,7 @@ description = "devtools の CLI（doc2md・design-diff・fieldcheck・spec-trace
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.10"]
+dependencies = ["mcp>=1.10,<2"]  # 2.x は API が変わった（FastMCP → MCPServer）。移行は別途
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
