@@ -1,0 +1,71 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3594,
+   "output_tokens": 744,
+   "cost_usd": 0.0214,
+   "seconds": 7.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0214,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、監視で検知できなくなる恐れ",
+   "detail": "異常終了時（ファイル取得失敗、DB 障害など任意の例外）のログから MessageIds.BATCH_FAILED が削除された。運用監視やログ検索がメッセージ ID で異常終了を拾っている場合、ジョブが終了コード 8 で落ちてもアラートが発報されなくなる。同じクラス内の他の error/warn/info ログはすべてメッセージ ID を先頭に付けており、ここだけ書式が不揃いになる。「読みやすくする」目的であっても ID は検索・監視のキーなので外すべきでない。",
+   "line": 62,
+   "evidence": "差分: `log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e)` → `log.error(\"JOB0001 異常終了\", e)`。同ファイルの run() 内の他ログ（BATCH_INVALID_ARGS / IMPORT_STARTED / IMPORT_FINISHED / IMPORT_LINE_SKIPPED）はすべて MessageIds を使用。監視ルールの内容は差分から見えないため、影響範囲は推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、監視で検知できなくなる恐れ 異常終了時（ファイル取得失敗、DB 障害など任意の例外）のログから MessageIds.BATCH_FAILED が削除された。運用監視やログ検索がメッセージ ID で異常終了を拾っている場合、ジョブが終了コード 8 で落ちてもアラートが発報されなくなる。同じクラス内の他の error/warn/info ログはすべてメッセージ ID を先頭に付けており、ここだけ書式が不揃いになる。「読みやすくする」目的であっても ID は検索・監視のキーなので外すべきでない。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "BATCH_FAILED が未使用になる可能性（import は他で使用中）",
+   "detail": "この変更で MessageIds.BATCH_FAILED の参照が OrderImportJob からなくなる。他の場所でも使われていなければ未使用定数になる。ID を戻せばこの問題も解消する。",
+   "line": 62,
+   "evidence": "OrderImportJob 内の BATCH_FAILED 参照は差分で削除されている。他ファイルでの使用有無は差分から見えないため推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "BATCH_FAILED が未使用になる可能性（import は他で使用中） この変更で MessageIds.BATCH_FAILED の参照が OrderImportJob からなくなる。他の場所でも使われていなければ未使用定数になる。ID を戻せばこの問題も解消する。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "standard"
+}

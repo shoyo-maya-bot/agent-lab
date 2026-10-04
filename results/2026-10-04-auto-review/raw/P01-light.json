@@ -1,0 +1,121 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-haiku-4-5-20251001",
+   "input_tokens": 3734,
+   "output_tokens": 6334,
+   "cost_usd": 0.0385,
+   "seconds": 51.0,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0385,
+ "notes": [],
+ "summary": {
+  "findings": 5,
+  "shown": 5,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同時登録で DuplicateKeyException が HTTP 500 になる",
+   "detail": "existsByEmail() で確認した直後に insert() の間に別スレッドが同じメールで登録すると、DB の一意制約により DuplicateKeyException が発生する。変更前は try-catch でこれを BusinessException に変換していたが、削除されたため技術的な例外が呼び出し元に伝播し、HTTP 500 になる可能性がある",
+   "line": 36,
+   "evidence": "変更前 line 40-42 では try-catch (DuplicateKeyException e) で例外を変換していたが、削除された。@Transactional 内で競合状態は発生し得る（複数スレッドが同時に existsByEmail() をすり抜けて insert() を呼ぶ）",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "src/main/java/com/example/sample/member/MemberService.java:36",
+   "message": "同時登録で DuplicateKeyException が HTTP 500 になる existsByEmail() で確認した直後に insert() の間に別スレッドが同じメールで登録すると、DB の一意制約により DuplicateKeyException が発生する。変更前は try-catch でこれを BusinessException に変換していたが、削除されたため技術的な例外が呼び出し元に伝播し、HTTP 500 になる可能性がある"
+  },
+  {
+   "severity": "MUST",
+   "file": "src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "競合状態のテストケース削除で検証がない",
+   "detail": "削除されたテスト register_concurrentDuplicateBecomesBusinessError は、insert() で DuplicateKeyException が発生した場合に BusinessException に変換されることを検証していた。テスト削除により、同時登録時の例外ハンドリングが検証されなくなった。実装削除の正当性を確認するテストがない",
+   "line": 62,
+   "evidence": "diff に 「void register_concurrentDuplicateBecomesBusinessError()」テスト 16 行削除。このテストは new InMemoryMapper() { public int insert() { throw new DuplicateKeyException(); }} でシミュレートしていた",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "src/test/java/com/example/sample/member/MemberServiceTest.java:62",
+   "message": "競合状態のテストケース削除で検証がない 削除されたテスト register_concurrentDuplicateBecomesBusinessError は、insert() で DuplicateKeyException が発生した場合に BusinessException に変換されることを検証していた。テスト削除により、同時登録時の例外ハンドリングが検証されなくなった。実装削除の正当性を確認するテストがない"
+  },
+  {
+   "severity": "WANT",
+   "file": "src/main/java/com/example/sample/member/MemberService.java",
+   "title": "エラーハンドリングの応答が不一貫",
+   "detail": "existsByEmail() での重複検出は BusinessException（409 Conflict 相当）だが、insert() での DuplicateKeyException はキャッチされないため、同じ「重複」という業務エラーでも HTTP レスポンス（409 vs 500）が異なる可能性がある",
+   "line": 30,
+   "evidence": "line 32 で if (mapper.existsByEmail(normalized)) throw new BusinessException(...) だが、line 36 mapper.insert(rec) の例外処理がない",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "src/main/java/com/example/sample/member/MemberService.java:30",
+   "message": "エラーハンドリングの応答が不一貫 existsByEmail() での重複検出は BusinessException（409 Conflict 相当）だが、insert() での DuplicateKeyException はキャッチされないため、同じ「重複」という業務エラーでも HTTP レスポンス（409 vs 500）が異なる可能性がある"
+  },
+  {
+   "severity": "WANT",
+   "file": "src/main/java/com/example/sample/member/MemberService.java",
+   "title": "設計意図を説明するコメント削除",
+   "detail": "削除されたコメント「同時に登録されたときの最終的な判定は DB の一意制約に任せる」は、existsByEmail() で一般的重複を早期に検出し、DB 制約で最終判定する二段階設計を説明していた。削除により、なぜ insert() の例外ハンドリングが必要なのかが不明確になった",
+   "line": 30,
+   "evidence": "変更前 line 30 のコメント削除。実装では「事前確認 + DB 制約」の双方でカバーする設計のはずだが、削除後は説明がない",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "src/main/java/com/example/sample/member/MemberService.java:30",
+   "message": "設計意図を説明するコメント削除 削除されたコメント「同時に登録されたときの最終的な判定は DB の一意制約に任せる」は、existsByEmail() で一般的重複を早期に検出し、DB 制約で最終判定する二段階設計を説明していた。削除により、なぜ insert() の例外ハンドリングが必要なのかが不明確になった"
+  },
+  {
+   "severity": "NITS",
+   "file": "src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "不要な import が残存",
+   "detail": "register_concurrentDuplicateBecomesBusinessError テスト削除により、DuplicateKeyException import は不使用になった。削除されていない",
+   "line": 14,
+   "evidence": "line 14 の import org.springframework.dao.DuplicateKeyException; はテストコード内で使用されていない",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "src/test/java/com/example/sample/member/MemberServiceTest.java:14",
+   "message": "不要な import が残存 register_concurrentDuplicateBecomesBusinessError テスト削除により、DuplicateKeyException import は不使用になった。削除されていない"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "light"
+}

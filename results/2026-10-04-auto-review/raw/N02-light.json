@@ -1,0 +1,51 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "skip",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": "文書・ロックファイルだけの変更"
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-haiku-4-5-20251001",
+   "input_tokens": 3142,
+   "output_tokens": 9160,
+   "cost_usd": 0.0514,
+   "seconds": 70.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0514,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "README.md",
+   "title": "PR説明と実際の変更内容の不一致",
+   "detail": "PR説明では『README の表記ゆれを直しました』とありますが、実際の差分は『（どちらか片方だけでも使えます）』という新たな説明文を追加したもので、表記ゆれの修正ではなく内容の改訂です。PR の目的・説明が正確かどうか確認が必要です。",
+   "line": 4,
+   "evidence": "PR タイトル『README の誤字』、PR説明『表記ゆれを直しました』に対し、実際の差分は『「二段構えで使います。」→「二段構えで使います（どちらか片方だけでも使えます）。」』—これは表記ゆれの修正ではなく説明文の追加です。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "README.md:4",
+   "message": "PR説明と実際の変更内容の不一致 PR説明では『README の表記ゆれを直しました』とありますが、実際の差分は『（どちらか片方だけでも使えます）』という新たな説明文を追加したもので、表記ゆれの修正ではなく内容の改訂です。PR の目的・説明が正確かどうか確認が必要です。"
+  }
+ ],
+ "rejected": [],
+ "case": "N02",
+ "config": "light"
+}

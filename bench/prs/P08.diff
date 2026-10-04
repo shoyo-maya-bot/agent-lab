@@ -1,0 +1,13 @@
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+index 0921e80..a175d65 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+@@ -59,7 +59,7 @@ public class OrderImportJob implements BatchJob, ApplicationRunner, ExitCodeGene
+                     MessageIds.IMPORT_FINISHED, r.imported(), r.duplicated(), r.errors().size());
+             exitCode = r.hasErrors() ? WARN : OK;
+         } catch (Exception e) {
+-            log.error("{} JOB0001 異常終了", MessageIds.BATCH_FAILED, e);
++            log.error("JOB0001 異常終了", e);
+             exitCode = ERROR;
+         }
+     }

@@ -1,0 +1,57 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberService.java b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+index 2912e45..2cfd91f 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberService.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+@@ -4,7 +4,6 @@ import com.example.sample.common.BusinessException;
+ import com.example.sample.common.MessageIds;
+ import com.example.sample.common.NotFoundException;
+ import java.util.Locale;
+-import org.springframework.dao.DuplicateKeyException;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+@@ -28,16 +27,11 @@ public class MemberService {
+     @Transactional
+     public Member register(String name, String email) {
+         String normalized = email.trim().toLowerCase(Locale.ROOT);
+-        // 事前の確認は「よくある重複」を早く返すため。同時に登録されたときの最終的な判定は DB の一意制約に任せる
+         if (mapper.existsByEmail(normalized)) {
+             throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized);
+         }
+         MemberRecord rec = new MemberRecord(name.trim(), normalized);
+-        try {
+-            mapper.insert(rec);
+-        } catch (DuplicateKeyException e) {
+-            throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized);
+-        }
++        mapper.insert(rec);
+         return rec.toMember();
+     }
+ }
+diff --git a/sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java b/sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java
+index 69d73d7..7e7ef3d 100644
+--- a/sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java
+@@ -59,22 +59,6 @@ class MemberServiceTest {
+                 .isEqualTo(MessageIds.EMAIL_ALREADY_USED);
+     }
+ 
+-    @Test
+-    void register_concurrentDuplicateBecomesBusinessError() {
+-        // 事前の確認をすり抜けた（同時に登録された）ケース: DB の一意制約で失敗しても 409 の業務エラーにする
+-        MemberMapper racing = new InMemoryMapper() {
+-            @Override
+-            public int insert(MemberRecord member) {
+-                throw new DuplicateKeyException("member_email_key");
+-            }
+-        };
+-
+-        assertThatThrownBy(() -> new MemberService(racing).register("A", "a@example.com"))
+-                .isInstanceOf(BusinessException.class)
+-                .extracting(e -> ((BusinessException) e).getMessageId())
+-                .isEqualTo(MessageIds.EMAIL_ALREADY_USED);
+-    }
+-
+     @Test
+     void get_throwsNotFoundForUnknownId() {
+         assertThatThrownBy(() -> service.get(99))

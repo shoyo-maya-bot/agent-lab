@@ -1,0 +1,105 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6072,
+   "output_tokens": 1409,
+   "cost_usd": 0.04,
+   "seconds": 13.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.04,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁数チェックを外したため、21 文字以上の 1 行でインポート全体がロールバックする",
+   "detail": "order_no または product_code が 21 文字以上の行が 1 行でもあると、insertIfAbsent が DB の桁数超過例外（DataIntegrityViolationException 等）を投げる。この例外は importLines で捕捉されず、@Transactional によりそれまでに登録した行もすべて取り消され、ジョブが異常終了する。従来は該当行だけを「N: order_no は 20 文字以内です」と報告してスキップし、他の行は取り込めた。「形式エラーの行は飛ばして続行」という仕様が壊れる。再実行しても同じ行で同じ失敗になる。なお DB によっては（MySQL の非 strict モードなど）エラーにならず黙って切り詰められ、別の注文番号と衝突して重複扱いになる恐れもある（推測）。",
+   "line": 82,
+   "evidence": "差分で code() の length チェックと CODE_MAX_LENGTH を削除。クラスの Javadoc に「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる。DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため」と残っており、この変更はその設計意図と矛盾している。importLines は parse の IllegalArgumentException しか catch していない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "桁数チェックを外したため、21 文字以上の 1 行でインポート全体がロールバックする order_no または product_code が 21 文字以上の行が 1 行でもあると、insertIfAbsent が DB の桁数超過例外（DataIntegrityViolationException 等）を投げる。この例外は importLines で捕捉されず、@Transactional によりそれまでに登録した行もすべて取り消され、ジョブが異常終了する。従来は該当行だけを「N: order_no は 20 文字以内です」と報告してスキップし、他の行は取り込めた。「形式エラーの行は飛ばして続行」という仕様が壊れる。再実行しても同じ行で同じ失敗になる。なお DB によっては（MySQL の非 strict モードなど）エラーにならず黙って切り詰められ、別の注文番号と衝突して重複扱いになる恐れもある（推測）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "桁数まわりの回帰テストを削除しており、上記の退行を検出できない",
+   "detail": "tooLongCodeSkipsOnlyThatLine、parseRejects の 20 文字超ケース、parseAcceptsExactlyTwentyChars を削除したため、長すぎるコードの扱い（スキップして続行、境界の 20 文字は受理）を確認するテストが無くなった。FakeOrderMapper は DB の桁数制約を再現しないとみられ、単体テストでは退行に気付けない（推測）。",
+   "line": 62,
+   "evidence": "差分で該当テスト 3 件が削除され、変更後のテストファイルに桁数に関するケースが残っていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:62",
+   "message": "桁数まわりの回帰テストを削除しており、上記の退行を検出できない tooLongCodeSkipsOnlyThatLine、parseRejects の 20 文字超ケース、parseAcceptsExactlyTwentyChars を削除したため、長すぎるコードの扱い（スキップして続行、境界の 20 文字は受理）を確認するテストが無くなった。FakeOrderMapper は DB の桁数制約を再現しないとみられ、単体テストでは退行に気付けない（推測）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "「2 か所で持つと食い違う」への対処は、検証を外すのではなく一元化で行うべき",
+   "detail": "定義の重複が問題なら、上限値を一箇所にまとめる、または DDL とスキーマの一致を確認するテストを置く、といった方法がある。もしくは DB 例外を行単位で捕捉する場合は、トランザクションがすでに rollback-only になる点に注意が必要で、行ごとに REQUIRES_NEW や SAVEPOINT が必要になる。現状はそのどちらも無い。",
+   "line": 82,
+   "evidence": "PR 説明「Java 側のチェックを外しました」。削除前のコメントは local/db/init/01_schema.sql の VARCHAR(20) を参照していた。importLines には DB 例外の処理が無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "「2 か所で持つと食い違う」への対処は、検証を外すのではなく一元化で行うべき 定義の重複が問題なら、上限値を一箇所にまとめる、または DDL とスキーマの一致を確認するテストを置く、といった方法がある。もしくは DB 例外を行単位で捕捉する場合は、トランザクションがすでに rollback-only になる点に注意が必要で、行ごとに REQUIRES_NEW や SAVEPOINT が必要になる。現状はそのどちらも無い。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc と実装が食い違っている",
+   "detail": "クラスの Javadoc は「桁数をここで確かめる」と書いているが、この変更で実装はそれをしなくなった。意図的に方針を変えるなら、DB 例外時にジョブ全体を失敗させてよいという合意があるのか確認したい。",
+   "line": 13,
+   "evidence": "Javadoc の「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」が変更されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:13",
+   "message": "Javadoc と実装が食い違っている クラスの Javadoc は「桁数をここで確かめる」と書いているが、この変更で実装はそれをしなくなった。意図的に方針を変えるなら、DB 例外時にジョブ全体を失敗させてよいという合意があるのか確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "standard"
+}

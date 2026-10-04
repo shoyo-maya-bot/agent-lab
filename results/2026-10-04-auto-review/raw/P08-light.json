@@ -1,0 +1,87 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-haiku-4-5-20251001",
+   "input_tokens": 2885,
+   "output_tokens": 6814,
+   "cost_usd": 0.0392,
+   "seconds": 56.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0392,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "エラーログのメッセージID削除により、ログフォーマットが非統一化",
+   "detail": "同ファイルの他のすべてのログ出力（54行目の log.error、62行目の log.info）は '{} ...' フォーマットでメッセージID定数を先頭に配置していますが、異常終了のログだけこのパターンを破り MessageIds.BATCH_FAILED が削除されました。ログ集約・監視ツールは MessageIds パターンに基づいてフィルタリング・集計・アラート設定している可能性が高く、この不統一がツール側で異常終了を検出できない、または誤検出する結果につながり得ます。",
+   "line": 63,
+   "evidence": "変更: log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e) → log.error(\"JOB0001 異常終了\", e)。54行目 log.error(\"{} JOB0001 引数...\", MessageIds.BATCH_INVALID_ARGS) および 62行目 log.info(\"{} JOB0001 終了...\", MessageIds.IMPORT_FINISHED, ...) と比較するとパターンが異なる。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:63",
+   "message": "エラーログのメッセージID削除により、ログフォーマットが非統一化 同ファイルの他のすべてのログ出力（54行目の log.error、62行目の log.info）は '{} ...' フォーマットでメッセージID定数を先頭に配置していますが、異常終了のログだけこのパターンを破り MessageIds.BATCH_FAILED が削除されました。ログ集約・監視ツールは MessageIds パターンに基づいてフィルタリング・集計・アラート設定している可能性が高く、この不統一がツール側で異常終了を検出できない、または誤検出する結果につながり得ます。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "MessageIds.BATCH_FAILED の参照が消失、デッドコード化の可能性",
+   "detail": "MessageIds.BATCH_FAILED への唯一の参照が削除され、このファイル内で他に使用箇所がないため、定義元（MessageIds クラス）でこの定数がデッドコード化している可能性があります。コードベース全体で BATCH_FAILED がまだ使用されているか確認し、不要であれば定義から削除が必要です。",
+   "line": 63,
+   "evidence": "差分で MessageIds.BATCH_FAILED への参照が削除され、提供されたファイル全文にも BATCH_FAILED への参照がない。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:63",
+   "message": "MessageIds.BATCH_FAILED の参照が消失、デッドコード化の可能性 MessageIds.BATCH_FAILED への唯一の参照が削除され、このファイル内で他に使用箇所がないため、定義元（MessageIds クラス）でこの定数がデッドコード化している可能性があります。コードベース全体で BATCH_FAILED がまだ使用されているか確認し、不要であれば定義から削除が必要です。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "PR説明『読みやすく』と実装内容に不整合",
+   "detail": "PR説明では『異常終了のログを読みやすくしました』とありますが、差分ではメッセージID定数の削除により運用に必要な情報が失われています。何がどのように読みやすくなったのか、削除の背景（例えば監視ツールがメッセージID定数に対応していないなど）があれば説明をお願いします。",
+   "line": 63,
+   "evidence": "PR説明と差分の内容が一致していない。メッセージID削除は『情報削減』に見え、『読みやすさ向上』の根拠が明記されていない。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:63",
+   "message": "PR説明『読みやすく』と実装内容に不整合 PR説明では『異常終了のログを読みやすくしました』とありますが、差分ではメッセージID定数の削除により運用に必要な情報が失われています。何がどのように読みやすくなったのか、削除の背景（例えば監視ツールがメッセージID定数に対応していないなど）があれば説明をお願いします。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "light"
+}

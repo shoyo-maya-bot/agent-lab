@@ -1,0 +1,26 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "skip",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": "文書・ロックファイルだけの変更"
+ },
+ "calls": [],
+ "cost_usd": 0,
+ "notes": [
+  "AI レビューは省略しました（文書・ロックファイルだけの変更）"
+ ],
+ "summary": {
+  "findings": 0,
+  "shown": 0,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [],
+ "rejected": [],
+ "case": "N02",
+ "config": "auto"
+}

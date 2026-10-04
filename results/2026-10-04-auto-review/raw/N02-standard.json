@@ -1,0 +1,67 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "skip",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": "文書・ロックファイルだけの変更"
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3710,
+   "output_tokens": 653,
+   "cost_usd": 0.0212,
+   "seconds": 7.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0212,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "README.md",
+   "title": "「どちらか片方だけでも使えます」は事実として正しいか",
+   "detail": "ローカルのみ、またはクラウドのみで使えると読めるが、構成上そうならない可能性がある。例えば sample-app はローカル環境（docker-compose の DB と S3 エミュレータ）を前提とし、cloud 側だけで使う場合の手順や前提が README から読み取れない。また、前段の「二段構えで使います」と意味が緩く矛盾するため、読者が混乱するおそれがある。意図どおりの記述か確認したい。",
+   "line": 4,
+   "evidence": "README の「中身」表で sample-app は「ローカル環境ができたら」と案内されている。cloud/ は「クラウド環境を触る人」向けと書かれているが、ローカルを経由せずに使う手順は本文に見当たらない。cloud/ や local/ の中身は差分に含まれないため、実際に片方だけで成立するかは推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "README.md:4",
+   "message": "「どちらか片方だけでも使えます」は事実として正しいか ローカルのみ、またはクラウドのみで使えると読めるが、構成上そうならない可能性がある。例えば sample-app はローカル環境（docker-compose の DB と S3 エミュレータ）を前提とし、cloud 側だけで使う場合の手順や前提が README から読み取れない。また、前段の「二段構えで使います」と意味が緩く矛盾するため、読者が混乱するおそれがある。意図どおりの記述か確認したい。"
+  },
+  {
+   "severity": "NITS",
+   "file": "README.md",
+   "title": "PR タイトル・説明と実際の変更内容が一致していない",
+   "detail": "PR は「README の誤字・表記ゆれを直した」と説明しているが、実際の差分は「（どちらか片方だけでも使えます）」という新しい説明文の追加で、誤字修正ではない。レビュー時に変更意図を取り違えたり、履歴から変更理由を追えなくなったりする。説明を実態に合わせるか、誤字修正と内容追加を分けるのが望ましい。",
+   "line": 4,
+   "evidence": "差分は 1 行のみ。「二段構えで使います。」が「二段構えで使います（どちらか片方だけでも使えます）。」に変わっており、既存の語の訂正ではなく文言の追加である。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "README.md:4",
+   "message": "PR タイトル・説明と実際の変更内容が一致していない PR は「README の誤字・表記ゆれを直した」と説明しているが、実際の差分は「（どちらか片方だけでも使えます）」という新しい説明文の追加で、誤字修正ではない。レビュー時に変更意図を取り違えたり、履歴から変更理由を追えなくなったりする。説明を実態に合わせるか、誤字修正と内容追加を分けるのが望ましい。"
+  }
+ ],
+ "rejected": [],
+ "case": "N02",
+ "config": "standard"
+}

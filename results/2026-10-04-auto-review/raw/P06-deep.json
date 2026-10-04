@@ -1,0 +1,186 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: エラー応答",
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: 例外の扱いの変更",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 4 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 6505,
+   "output_tokens": 3461,
+   "cost_usd": 0.1201,
+   "seconds": 32.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.1201,
+ "notes": [],
+ "summary": {
+  "findings": 9,
+  "shown": 9,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "想定外エラー（DB 障害など）が ErrorResponse の形で返らなくなり、API の契約が壊れる",
+   "detail": "DB 接続断や MyBatis の例外、一意制約違反（DataIntegrityViolationException など）、NPE が起きた場合の話。これまでは 500 / messageId=APPE9999 / details=[] の ErrorResponse を返していた。変更後は Spring Boot 既定の /error（BasicErrorController）が応答する。応答の形は {timestamp, status, error, path} になり、messageId と message がない。messageId で分岐している利用側（画面・連携先）は、エラー内容を解釈できなくなる。",
+   "line": 23,
+   "evidence": "`@ExceptionHandler(Exception.class) unexpected(...)` が削除され、残るハンドラは NotFoundException / BusinessException / MethodArgumentNotValidException の 3 つだけ。クラスの Javadoc には「どの失敗でも ErrorResponse の形で返す」「想定外のエラーは 500 と APPE9999 だけを返す」と書かれたままで、実装と食い違っている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:23",
+   "message": "想定外エラー（DB 障害など）が ErrorResponse の形で返らなくなり、API の契約が壊れる DB 接続断や MyBatis の例外、一意制約違反（DataIntegrityViolationException など）、NPE が起きた場合の話。これまでは 500 / messageId=APPE9999 / details=[] の ErrorResponse を返していた。変更後は Spring Boot 既定の /error（BasicErrorController）が応答する。応答の形は {timestamp, status, error, path} になり、messageId と message がない。messageId で分岐している利用側（画面・連携先）は、エラー内容を解釈できなくなる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "型違い・JSON 不正の 400 が、入力チェックの 400 と別の形になる",
+   "detail": "`GET /api/v1/members/abc` や、壊れた JSON 本文の POST を受けた場合の話。ステータスは DefaultHandlerExceptionResolver が 400 にするが、本文は Spring 既定の形になる。messageId=APPE0001 も details もない。同じ 400 でも、Bean Validation の失敗だけが ErrorResponse になり、利用側は 2 種類の形を扱う必要が出る。",
+   "line": 45,
+   "evidence": "`typeMismatch(MethodArgumentTypeMismatchException)` と `unreadable(HttpMessageNotReadableException)` が削除された。残っている 400 のハンドラは `invalid(MethodArgumentNotValidException)` だけ。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:45",
+   "message": "型違い・JSON 不正の 400 が、入力チェックの 400 と別の形になる `GET /api/v1/members/abc` や、壊れた JSON 本文の POST を受けた場合の話。ステータスは DefaultHandlerExceptionResolver が 400 にするが、本文は Spring 既定の形になる。messageId=APPE0001 も details もない。同じ 400 でも、Bean Validation の失敗だけが ErrorResponse になり、利用側は 2 種類の形を扱う必要が出る。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "405/404/415 などのフレームワーク例外が APPE0004 の形で返らなくなる",
+   "detail": "`POST /api/v1/members/1`（未対応のメソッド）や、未対応の Content-Type を送った場合の話。ステータスは保たれるが、本文は Spring 既定の形になり、messageId=APPE0004 は返らない。",
+   "line": 23,
+   "evidence": "削除された `unexpected` には、`org.springframework.web.ErrorResponse` を実装する 4xx 例外を `MessageIds.REQUEST_REJECTED` に変換する分岐があった。代わりの処理はない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:23",
+   "message": "405/404/415 などのフレームワーク例外が APPE0004 の形で返らなくなる `POST /api/v1/members/1`（未対応のメソッド）や、未対応の Content-Type を送った場合の話。ステータスは保たれるが、本文は Spring 既定の形になり、messageId=APPE0004 は返らない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "想定外エラーのログに APPE9999 が出なくなり、監視・調査の手掛かりが減る",
+   "detail": "これまで想定外のエラーは `APPE9999 想定外のエラー` として ERROR ログに出ていた。変更後は、コンテナや DispatcherServlet の既定ログに頼ることになる。メッセージ ID で検知する監視ルールがあれば、障害を検知できなくなる（監視ルールの有無は推測）。",
+   "line": 23,
+   "evidence": "`log.error(\"{} 想定外のエラー\", MessageIds.SYSTEM_ERROR, e)` が削除された。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:23",
+   "message": "想定外エラーのログに APPE9999 が出なくなり、監視・調査の手掛かりが減る これまで想定外のエラーは `APPE9999 想定外のエラー` として ERROR ログに出ていた。変更後は、コンテナや DispatcherServlet の既定ログに頼ることになる。メッセージ ID で検知する監視ルールがあれば、障害を検知できなくなる（監視ルールの有無は推測）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "既定のエラー応答では、設定によって例外の中身が外に出るおそれ（推測）",
+   "detail": "変更前は、想定外のエラーでも details を空にして、例外の中身を返さないことを保証していた（テスト unexpectedErrorReturns500WithoutDetails）。変更後は、`server.error.include-message` / `include-stacktrace` / `include-exception` の設定しだいになる。たとえば例外メッセージ 'connection refused: secret-host:5432' が応答に含まれうる。設定ファイルは差分に含まれないため、実際の値は確認できない。",
+   "line": 23,
+   "evidence": "上記テストと、それに対応する catch-all ハンドラの両方が削除されている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:23",
+   "message": "既定のエラー応答では、設定によって例外の中身が外に出るおそれ（推測） 変更前は、想定外のエラーでも details を空にして、例外の中身を返さないことを保証していた（テスト unexpectedErrorReturns500WithoutDetails）。変更後は、`server.error.include-message` / `include-stacktrace` / `include-exception` の設定しだいになる。たとえば例外メッセージ 'connection refused: secret-host:5432' が応答に含まれうる。設定ファイルは差分に含まれないため、実際の値は確認できない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "失敗系のテストを、新しい挙動を確かめるテストに置き換えずに削除している",
+   "detail": "型違い・JSON 不正・405・500 のテストが削除され、これらの場合に何を返すかを確かめるテストがなくなった。standaloneSetup の MockMvc は /error へフォワードしない。そのため、今後これらの応答を確かめるには @SpringBootTest などが必要になる。挙動を変える PR なのに、変更後の挙動がどこにも固定されていない。",
+   "line": 79,
+   "evidence": "4 つの @Test が削除され、代わりのテストは追加されていない。テストは `MockMvcBuilders.standaloneSetup` で組み立てられている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:79",
+   "message": "失敗系のテストを、新しい挙動を確かめるテストに置き換えずに削除している 型違い・JSON 不正・405・500 のテストが削除され、これらの場合に何を返すかを確かめるテストがなくなった。standaloneSetup の MockMvc は /error へフォワードしない。そのため、今後これらの応答を確かめるには @SpringBootTest などが必要になる。挙動を変える PR なのに、変更後の挙動がどこにも固定されていない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "エラー応答の形を統一する方針をやめることは、利用側と合意済みか",
+   "detail": "PR 説明の「それ以外は Spring の既定に任せる」は、クラスの Javadoc にある設計方針（利用側が扱う形を 1 つにする）を覆す。外部の利用側やフロントエンドとの合意、API 仕様書の更新は済んでいるか。合意がないなら、ResponseEntityExceptionHandler を継承して形をそろえる方法も考えられる。",
+   "line": 18,
+   "evidence": "Javadoc: 「どの失敗でも ErrorResponse の形で返す（利用側が 1 つの形だけを扱えばよいように）」",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s7",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:18",
+   "message": "エラー応答の形を統一する方針をやめることは、利用側と合意済みか PR 説明の「それ以外は Spring の既定に任せる」は、クラスの Javadoc にある設計方針（利用側が扱う形を 1 つにする）を覆す。外部の利用側やフロントエンドとの合意、API 仕様書の更新は済んでいるか。合意がないなら、ResponseEntityExceptionHandler を継承して形をそろえる方法も考えられる。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "使われなくなった import が残っている",
+   "detail": "HttpMessageNotReadableException と MethodArgumentTypeMismatchException の import が未使用になった。Checkstyle などで未使用 import をエラーにしている場合、ビルドが失敗する。MessageIds.REQUEST_REJECTED / SYSTEM_ERROR と、それに対応するメッセージ定義も未使用になっている可能性がある（推測）。",
+   "line": 11,
+   "evidence": "11 行目と 15 行目の import が、変更後のクラス本体で参照されていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s8",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:11",
+   "message": "使われなくなった import が残っている HttpMessageNotReadableException と MethodArgumentTypeMismatchException の import が未使用になった。Checkstyle などで未使用 import をエラーにしている場合、ビルドが失敗する。MessageIds.REQUEST_REJECTED / SYSTEM_ERROR と、それに対応するメッセージ定義も未使用になっている可能性がある（推測）。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "テストに未使用の import と空行が残っている",
+   "detail": "java.util.Optional の import が未使用になった。クラスの末尾には空行が 2 行残っている。",
+   "line": 11,
+   "evidence": "Optional を使っていた unexpectedErrorReturns500WithoutDetails が削除され、末尾の `}` の前に空行が並んでいる。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s9",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:11",
+   "message": "テストに未使用の import と空行が残っている java.util.Optional の import が未使用になった。クラスの末尾には空行が 2 行残っている。"
+  }
+ ],
+ "rejected": [],
+ "case": "P06",
+ "config": "deep"
+}

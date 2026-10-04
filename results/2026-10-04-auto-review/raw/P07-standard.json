@@ -1,0 +1,89 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5338,
+   "output_tokens": 1142,
+   "cost_usd": 0.0336,
+   "seconds": 11.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0336,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "ID を Long のまま渡すと MessageFormat が桁区切りを入れ、メッセージが変わる",
+   "detail": "存在しない会員 ID が 1234 以上のとき（例: GET /api/v1/members/1234）、メッセージ中の {0} が数値として整形され、「会員ID: 1,234」のように桁区切り付きで返る（ロケールが日本語の場合。ロケール依存で、他ロケールでは区切り文字も変わる）。ID は識別子なので表示が変わるのは不具合で、ログや問い合わせでの突合もしにくくなる。削除された String.valueOf(id) とそのコメントは、この挙動を避けるための意図的な対策だった。『不要な変換』ではない。",
+   "line": 23,
+   "evidence": "削除されたコメント「数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる」。ApiExceptionHandler は StaticMessageSource（MessageFormat 利用）でメッセージ解決しており、引数が Long なら数値整形される。差分前は String.valueOf(id) でこれを回避していた（ApiExceptionHandler の実装自体は差分に無いため、解決方法は推測を含む）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "ID を Long のまま渡すと MessageFormat が桁区切りを入れ、メッセージが変わる 存在しない会員 ID が 1234 以上のとき（例: GET /api/v1/members/1234）、メッセージ中の {0} が数値として整形され、「会員ID: 1,234」のように桁区切り付きで返る（ロケールが日本語の場合。ロケール依存で、他ロケールでは区切り文字も変わる）。ID は識別子なので表示が変わるのは不具合で、ログや問い合わせでの突合もしにくくなる。削除された String.valueOf(id) とそのコメントは、この挙動を避けるための意図的な対策だった。『不要な変換』ではない。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "桁区切り防止の回帰テストを削除しており、上記の不具合を検知できなくなる",
+   "detail": "notFoundMessageHasNoThousandsSeparator（ID 1234 で「会員ID: 1234」を検証）はまさに今回の変更で壊れる挙動を守るテストだった。これを消したため CI が通ってしまい、不具合が気付かれずにリリースされる。残っている notFoundReturns404WithMessageId は ID 42 なので桁区切りが発生せず、検出できない。",
+   "line": 73,
+   "evidence": "差分で notFoundMessageHasNoThousandsSeparator が丸ごと削除されている。変更後の全文にある 404 のテストは /api/v1/members/42 のみ。テストを消す代わりに、変更を戻してテストを残すのが妥当。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:73",
+   "message": "桁区切り防止の回帰テストを削除しており、上記の不具合を検知できなくなる notFoundMessageHasNoThousandsSeparator（ID 1234 で「会員ID: 1234」を検証）はまさに今回の変更で壊れる挙動を守るテストだった。これを消したため CI が通ってしまい、不具合が気付かれずにリリースされる。残っている notFoundReturns404WithMessageId は ID 42 なので桁区切りが発生せず、検出できない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "再発防止を呼び出し側の注意に頼らず、NotFoundException 側で吸収することを検討",
+   "detail": "「引数は Object だから何でも渡せる」という設計だと、今回のように別の人が数値を渡して同じ問題を再発させうる。NotFoundException（または ApiExceptionHandler）で引数を String 化してから MessageFormat に渡せば、呼び出し側は ID をそのまま渡せ、この PR の意図も安全に達成できる。",
+   "line": 23,
+   "evidence": "PR 説明は「NotFoundException の引数は Object なので」とあるが、Object であることと MessageFormat の数値整形が起きないことは別。NotFoundException / ApiExceptionHandler の実装は差分に無いため、修正場所は推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "再発防止を呼び出し側の注意に頼らず、NotFoundException 側で吸収することを検討 「引数は Object だから何でも渡せる」という設計だと、今回のように別の人が数値を渡して同じ問題を再発させうる。NotFoundException（または ApiExceptionHandler）で引数を String 化してから MessageFormat に渡せば、呼び出し側は ID をそのまま渡せ、この PR の意図も安全に達成できる。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "standard"
+}

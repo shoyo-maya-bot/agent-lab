@@ -1,0 +1,15 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberController.java b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+index 4e3202a..09df5c8 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberController.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+@@ -35,7 +35,8 @@ public class MemberController {
+ 
+     @PostMapping
+     public ResponseEntity<Member> register(@Valid @RequestBody RegisterRequest req) {
+-        Member created = service.register(req.name(), req.email());
+-        return ResponseEntity.created(URI.create("/api/v1/members/" + created.id())).body(created);
++        Member member = service.register(req.name(), req.email());
++        // Location ヘッダーに、登録した会員を照会する URL を入れる
++        return ResponseEntity.created(URI.create("/api/v1/members/" + member.id())).body(member);
+     }
+ }

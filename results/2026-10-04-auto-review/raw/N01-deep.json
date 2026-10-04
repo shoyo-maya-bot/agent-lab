@@ -1,0 +1,51 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4123,
+   "output_tokens": 1055,
+   "cost_usd": 0.0513,
+   "seconds": 12.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0513,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "quantity の境界テストが受け付け側と上限超えに偏っている",
+   "detail": "このテストで受け付け側の 1 と 999 は確認できます。拒否側は、上限超えの 1000 が parseRejects で確認されています。一方、下限を下回る 0 は importLines 経由の行エラーとしてしか確認されていません。次のような値を parse に渡したときの振る舞いは、どのテストでも固定されていません（実際の振る舞いは推測です）。\n- 負数（-1）\n- 数値でない値（x）\n- 空文字\nquantity の検証を後で直したときに、これらが例外メッセージなしで落ちたり、通ってしまったりしても、テストでは気づけません。境界の網羅が目的なら、parseRejects に次の行を足すと、境界の両側が parse 単位でそろいます。\n- \"A001,1,P-01,0 | quantity は 1〜999 です（0）\"\n- 負数の行\n- 数値でない値の行",
+   "line": 92,
+   "evidence": "parseRejects の @CsvSource にある quantity 関連の行は 1000 だけです。0 は badLinesAreReportedWithLineNumbersAndOthersContinue で、importLines のエラー文字列として間接的に確認されているだけです。数値でない quantity・負数・空文字を検証するケースは、ファイル内のどこにもありません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "quantity の境界テストが受け付け側と上限超えに偏っている このテストで受け付け側の 1 と 999 は確認できます。拒否側は、上限超えの 1000 が parseRejects で確認されています。一方、下限を下回る 0 は importLines 経由の行エラーとしてしか確認されていません。次のような値を parse に渡したときの振る舞いは、どのテストでも固定されていません（実際の振る舞いは推測です）。\n- 負数（-1）\n- 数値でない値（x）\n- 空文字\nquantity の検証を後で直したときに、これらが例外メッセージなしで落ちたり、通ってしまったりしても、テストでは気づけません。境界の網羅が目的なら、parseRejects に次の行を足すと、境界の両側が parse 単位でそろいます。\n- \"A001,1,P-01,0 | quantity は 1〜999 です（0）\"\n- 負数の行\n- 数値でない値の行"
+  }
+ ],
+ "rejected": [],
+ "case": "N01",
+ "config": "deep"
+}

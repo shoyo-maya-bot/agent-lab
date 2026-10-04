@@ -1,0 +1,87 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3588,
+   "output_tokens": 1792,
+   "cost_usd": 0.0613,
+   "seconds": 19.6,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0613,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、監視で検知できなくなるおそれ",
+   "detail": "S3 の取得失敗や DB エラーなどでジョブが異常終了すると、終了コードは 8 になります。ただし、出力されるログは「JOB0001 異常終了」だけで、先頭のメッセージ ID が付きません。ログ監視がメッセージ ID をキーにアラートを出している場合、最も検知すべき異常終了だけが通知されなくなります（監視設定は差分に含まれないため推測）。ID はほかに無いので、ID で集計・検索している運用手順からも漏れます。PR の目的は『読みやすくする』ことなので、ID は残すべきです。",
+   "line": 62,
+   "evidence": "変更前は `log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e)`、変更後は `log.error(\"JOB0001 異常終了\", e)` です。同じクラスのほかのログはすべて先頭に MessageIds を付けています（BATCH_INVALID_ARGS / IMPORT_STARTED / IMPORT_LINE_SKIPPED / IMPORT_FINISHED）。この 1 箇所だけ形式が揃っていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、監視で検知できなくなるおそれ S3 の取得失敗や DB エラーなどでジョブが異常終了すると、終了コードは 8 になります。ただし、出力されるログは「JOB0001 異常終了」だけで、先頭のメッセージ ID が付きません。ログ監視がメッセージ ID をキーにアラートを出している場合、最も検知すべき異常終了だけが通知されなくなります（監視設定は差分に含まれないため推測）。ID はほかに無いので、ID で集計・検索している運用手順からも漏れます。PR の目的は『読みやすくする』ことなので、ID は残すべきです。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "ログ形式を担保するテストが無い／既存テストが壊れていないか確認が必要",
+   "detail": "今回のようにメッセージ ID が落ちても気づけるよう、異常系（fetcher または service が例外を投げる場合）で次の 2 点を検証するテストがあるとよいです。・ERROR ログに BATCH_FAILED が含まれること ・終了コードが 8 になること。逆に、ログ文字列を検証する既存テストがあれば、この変更で失敗しているはずです（テストコードは差分に無いため推測）。",
+   "line": 62,
+   "evidence": "差分はログ文言の変更だけで、テストの追加・修正が含まれていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "ログ形式を担保するテストが無い／既存テストが壊れていないか確認が必要 今回のようにメッセージ ID が落ちても気づけるよう、異常系（fetcher または service が例外を投げる場合）で次の 2 点を検証するテストがあるとよいです。・ERROR ログに BATCH_FAILED が含まれること ・終了コードが 8 になること。逆に、ログ文字列を検証する既存テストがあれば、この変更で失敗しているはずです（テストコードは差分に無いため推測）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "BATCH_FAILED を外した意図の確認",
+   "detail": "ID を外したのは意図的ですか。読みにくさの原因が『{} の位置に ID が入ること』であれば、ID は残して文言だけ変える形で足りるはずです。また、BATCH_FAILED をほかで使っていないなら、MessageIds 側に未使用の定数が残ります（MessageIds の中身は見えないため推測）。",
+   "line": 62,
+   "evidence": "PR 説明は「異常終了のログを読みやすくしました」だけで、ID を削除した理由が書かれていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "BATCH_FAILED を外した意図の確認 ID を外したのは意図的ですか。読みにくさの原因が『{} の位置に ID が入ること』であれば、ID は残して文言だけ変える形で足りるはずです。また、BATCH_FAILED をほかで使っていないなら、MessageIds 側に未使用の定数が残ります（MessageIds の中身は見えないため推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "deep"
+}

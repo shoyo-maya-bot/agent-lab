@@ -1,0 +1,138 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: エラー応答",
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: 例外の扱いの変更",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 4 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6511,
+   "output_tokens": 2049,
+   "cost_usd": 0.0482,
+   "seconds": 17.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0482,
+ "notes": [],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "想定外の例外・フレームワーク例外が ErrorResponse 形式でなくなり、500 の応答内容が Spring 既定に依存する",
+   "detail": "DB 障害などの想定外の例外が発生すると、これまでは APPE9999 と空の details だけを返していたが、今後は Spring の既定処理に任せる。内部例外を処理するハンドラが無いため、サーブレットコンテナのエラーページ（/error）へ回される。Spring Boot のエラー属性設定（server.error.include-message や include-stacktrace など）によっては例外メッセージが応答に含まれうる（設定は差分から見えないので推測）。含まれると、削除したテストが守っていた「secret-host:5432」のような接続先情報が外部に漏れる。また、クラス Javadoc の「どの失敗でも ErrorResponse の形で返す」という約束も守られなくなる。利用側は 1 つの形だけでは扱えず、500 のときだけ別形式の JSON を処理することになる。",
+   "line": 53,
+   "evidence": "`@ExceptionHandler(Exception.class)` の unexpected() が削除され、残りは NotFoundException / BusinessException / MethodArgumentNotValidException のみ。クラス Javadoc には「想定外のエラーは 500 と APPE9999 だけを返し、例外の中身はログにだけ出す」と残っている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:53",
+   "message": "想定外の例外・フレームワーク例外が ErrorResponse 形式でなくなり、500 の応答内容が Spring 既定に依存する DB 障害などの想定外の例外が発生すると、これまでは APPE9999 と空の details だけを返していたが、今後は Spring の既定処理に任せる。内部例外を処理するハンドラが無いため、サーブレットコンテナのエラーページ（/error）へ回される。Spring Boot のエラー属性設定（server.error.include-message や include-stacktrace など）によっては例外メッセージが応答に含まれうる（設定は差分から見えないので推測）。含まれると、削除したテストが守っていた「secret-host:5432」のような接続先情報が外部に漏れる。また、クラス Javadoc の「どの失敗でも ErrorResponse の形で返す」という約束も守られなくなる。利用側は 1 つの形だけでは扱えず、500 のときだけ別形式の JSON を処理することになる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "想定外エラーのログ出力が無くなり、障害の調査ができなくなる",
+   "detail": "これまでは `log.error(\"{} 想定外のエラー\", SYSTEM_ERROR, e)` でスタックトレースを残していた。今後は @RestControllerAdvice 側ではログを出さない。例外が Spring の既定処理を通って 500 になる場合、ログが出るかどうかはサーブレットコンテナの設定次第になる。APPE9999 のメッセージ ID も運用の検索キーとして使えなくなる。DB 障害時に原因を追えず、監視（APPE9999 の検知）も機能しなくなるおそれがある。",
+   "line": 53,
+   "evidence": "削除された unexpected() にだけ log.error があった。残りのハンドラで log を使うのは business() の warn のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:53",
+   "message": "想定外エラーのログ出力が無くなり、障害の調査ができなくなる これまでは `log.error(\"{} 想定外のエラー\", SYSTEM_ERROR, e)` でスタックトレースを残していた。今後は @RestControllerAdvice 側ではログを出さない。例外が Spring の既定処理を通って 500 になる場合、ログが出るかどうかはサーブレットコンテナの設定次第になる。APPE9999 のメッセージ ID も運用の検索キーとして使えなくなる。DB 障害時に原因を追えず、監視（APPE9999 の検知）も機能しなくなるおそれがある。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "型違い・不正 JSON・未対応メソッドの 400/405 が別形式の応答になる",
+   "detail": "/api/v1/members/abc や壊れた JSON は、ErrorResponse（messageId, message, details）ではなく Spring Boot 既定のエラー JSON（timestamp, status, error, path など）で返る。POST /members/1 の 405 も同様。PR の説明は「業務で使う例外だけ残す」だが、これらは API の利用者が普通に起こす入力ミスである。応答の形が変わるため、クライアント側で messageId を見て分岐している場合は互換性が壊れる。意図した仕様変更であるなら、API 仕様書や利用側への周知が必要である。",
+   "line": 53,
+   "evidence": "MethodArgumentTypeMismatchException と HttpMessageNotReadableException のハンドラを削除。ただし import 文は残っているので、削除の意図が不完全に見える。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:53",
+   "message": "型違い・不正 JSON・未対応メソッドの 400/405 が別形式の応答になる /api/v1/members/abc や壊れた JSON は、ErrorResponse（messageId, message, details）ではなく Spring Boot 既定のエラー JSON（timestamp, status, error, path など）で返る。POST /members/1 の 405 も同様。PR の説明は「業務で使う例外だけ残す」だが、これらは API の利用者が普通に起こす入力ミスである。応答の形が変わるため、クライアント側で messageId を見て分岐している場合は互換性が壊れる。意図した仕様変更であるなら、API 仕様書や利用側への周知が必要である。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "エラー応答の契約を守るテストを 4 件削除している",
+   "detail": "型違い 400、壊れた JSON 400、405 の形式維持、想定外エラーの 500 で内部情報を出さないことを確認するテストがすべて無くなった。これらは今回の削除で変わる挙動そのものを検証していた。テストを消したため、上の応答形式の変化や情報漏洩のリスクが CI で検知されなくなる。意図した変更なら、新しい期待値（Spring 既定の応答）に合わせたテストに置き換えるべきである。",
+   "line": 80,
+   "evidence": "wrongIdTypeReturns400InSameShape、brokenJsonReturns400InSameShape、unsupportedMethodKeepsStatusAndShape、unexpectedErrorReturns500WithoutDetails の削除。残りは正常系・404・入力チェック 400 のみ。BusinessException の 409 を検証するテストも元々見当たらない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:80",
+   "message": "エラー応答の契約を守るテストを 4 件削除している 型違い 400、壊れた JSON 400、405 の形式維持、想定外エラーの 500 で内部情報を出さないことを確認するテストがすべて無くなった。これらは今回の削除で変わる挙動そのものを検証していた。テストを消したため、上の応答形式の変化や情報漏洩のリスクが CI で検知されなくなる。意図した変更なら、新しい期待値（Spring 既定の応答）に合わせたテストに置き換えるべきである。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "未使用の import が残っている",
+   "detail": "HttpMessageNotReadableException と MethodArgumentTypeMismatchException の import が未使用になる。警告やビルドの静的チェック（未使用 import の禁止など）で失敗する可能性がある。また log は business() でしか使っていない。",
+   "line": 8,
+   "evidence": "変更後の全文の import 部分に両クラスが残っており、本文では参照されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:8",
+   "message": "未使用の import が残っている HttpMessageNotReadableException と MethodArgumentTypeMismatchException の import が未使用になる。警告やビルドの静的チェック（未使用 import の禁止など）で失敗する可能性がある。また log は business() でしか使っていない。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "テストファイルの末尾に不要な空行と未使用 import が残る",
+   "detail": "削除の跡で空行が連続している。Optional と MockMvc の build(MemberMapper) 引数など、削除したテスト専用だったものが残る。Optional の import は未使用になる。",
+   "line": 83,
+   "evidence": "変更後の全文で Optional は import されているが、本文のどこでも使われていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:83",
+   "message": "テストファイルの末尾に不要な空行と未使用 import が残る 削除の跡で空行が連続している。Optional と MockMvc の build(MemberMapper) 引数など、削除したテスト専用だったものが残る。Optional の import は未使用になる。"
+  }
+ ],
+ "rejected": [],
+ "case": "P06",
+ "config": "standard"
+}

@@ -1,0 +1,33 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberService.java b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+index 2912e45..4edf62b 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberService.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+@@ -20,9 +20,7 @@ public class MemberService {
+ 
+     @Transactional(readOnly = true)
+     public Member get(long id) {
+-        // ID は文字列で渡す。数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる
+-        return mapper.findById(id)
+-                .orElseThrow(() -> new NotFoundException(MessageIds.MEMBER_NOT_FOUND, String.valueOf(id)));
++        return mapper.findById(id).orElseThrow(() -> new NotFoundException(MessageIds.MEMBER_NOT_FOUND, id));
+     }
+ 
+     @Transactional
+diff --git a/sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java b/sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java
+index 6f2d57e..6981d27 100644
+--- a/sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java
++++ b/sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java
+@@ -71,13 +71,6 @@ class MemberControllerTest {
+                 .andExpect(jsonPath("$.details.length()").value(2));
+     }
+ 
+-    @Test
+-    void notFoundMessageHasNoThousandsSeparator() throws Exception {
+-        mvc.perform(get("/api/v1/members/1234"))
+-                .andExpect(status().isNotFound())
+-                .andExpect(jsonPath("$.message").value("会員が見つかりません（会員ID: 1234）。"));
+-    }
+-
+     @Test
+     void wrongIdTypeReturns400InSameShape() throws Exception {
+         mvc.perform(get("/api/v1/members/abc"))

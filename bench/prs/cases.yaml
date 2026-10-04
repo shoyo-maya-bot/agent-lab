@@ -1,0 +1,174 @@
+# PR 単位のレビュー課題. sample-app の修正済みの main（base_commit）に、弱いところを 1 つだけ戻す PR を作る.
+# 弱いところを含まない PR（N0x）も混ぜて、「何もない PR で騒がないか」「Opus に上げすぎないか」も見る.
+#
+# 作り方: python bench/prs/make_prs.py <dev-environment のパス>   → bench/prs/<id>.diff
+# 採点:   expect の正解（bench/bugs/sample-app-known.yaml の ID）を見つけたか。expect が無い PR は MUST・WANT の数を「誤警報」として数える
+target: dev-environment
+base_commit: e68db72b6d4513072890ce37a4b8f6e5a913db8c
+cases:
+  - id: P01
+    expect: B01
+    title: 会員登録の例外処理を簡素化
+    description: 重複は existsByEmail で確認済みなので、insert の例外処理は不要と判断して外しました。
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+        old: |2
+                  try {
+                      mapper.insert(rec);
+                  } catch (DuplicateKeyException e) {
+                      throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized);
+                  }
+        new: |2
+                  mapper.insert(rec);
+      - file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+        old: "import org.springframework.dao.DuplicateKeyException;\n"
+        new: ""
+      - file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+        old: "        // 事前の確認は「よくある重複」を早く返すため。同時に登録されたときの最終的な判定は DB の一意制約に任せる\n"
+        new: ""
+      - file: sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java
+        delete_between: ["    @Test\n    void register_concurrentDuplicateBecomesBusinessError", "    @Test\n    void get_throwsNotFoundForUnknownId"]
+
+  - id: P02
+    expect: B02
+    title: 注文取込の高速化（会員の存在確認をやめる）
+    description: 行ごとの SELECT が遅いので、会員の存在確認を外しました。member_id は DB の外部キーで守られています。
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+        old: |2
+                      if (!memberCache.computeIfAbsent(order.memberId(), mapper::memberExists)) {
+                          errors.add(lineNo + ": member_id の会員が存在しません（" + order.memberId() + "）");
+                          continue;
+                      }
+        new: ""
+      - file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+        old: "        Map<Long, Boolean> memberCache = new HashMap<>();\n"
+        new: ""
+      - file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+        old: "import java.util.HashMap;\n"
+        new: ""
+      - file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+        old: "import java.util.Map;\n"
+        new: ""
+      - file: sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+        delete_between: ["    @Test\n    void unknownMemberSkipsOnlyThatLine", "    @Test\n    void tooLongCodeSkipsOnlyThatLine"]
+
+  - id: P03
+    expect: B03
+    title: 取込の検証を整理（桁数は DB の定義に任せる）
+    description: 桁数の上限を Java と DDL の 2 か所で持つと食い違うので、Java 側のチェックを外しました。
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+        old: |2
+                  if (v.length() > CODE_MAX_LENGTH) {
+                      throw new IllegalArgumentException(
+                              name + " は " + CODE_MAX_LENGTH + " 文字以内です（" + v.length() + " 文字）");
+                  }
+        new: ""
+      - file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+        old: |2+
+              /** orders.order_no・orders.product_code の桁数（local/db/init/01_schema.sql の VARCHAR(20)）. */
+              static final int CODE_MAX_LENGTH = 20;
+
+        new: ""
+      - file: sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+        delete_between: ["    @Test\n    void tooLongCodeSkipsOnlyThatLine", "    @Test\n    void wrongHeaderIsRejected"]
+      - file: sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+        old: "        \"A001,1,P-01,1000   | quantity は 1〜999 です（1000）\",\n        \"A001,1,P-01234567890123456789,1 | product_code は 20 文字以内です（22 文字）\"\n"
+        new: "        \"A001,1,P-01,1000   | quantity は 1〜999 です（1000）\"\n"
+      - file: sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+        delete_between: ["\n    @Test\n    void parseAcceptsExactlyTwentyChars", "\n}"]
+
+  - id: P04
+    expect: B04
+    title: build.gradle の整理
+    description: karateTest タスクの不要そうな記述を削りました。
+    edits:
+      - file: sample-app/build.gradle
+        old: |2
+              // Gradle に渡した -DbaseUrl は、そのままではテストの JVM に届かないので明示的に渡す
+              if (System.getProperty('baseUrl')) {
+                  systemProperty 'baseUrl', System.getProperty('baseUrl')
+              }
+        new: ""
+
+  - id: P05
+    expect: B05
+    title: 使われていないクラスの削除
+    description: どこからも呼ばれていない BatchJobGuard を削除しました。
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+        delete_file: true
+      - file: sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+        delete_file: true
+
+  - id: P06
+    expect: B06
+    title: 例外ハンドラの簡素化
+    description: 業務で使う例外（NotFound・Business・入力チェック）だけ残し、それ以外は Spring の既定に任せます。
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+        delete_between: ["    /** パスやクエリの型違い", "    private ResponseEntity<ErrorResponse> body"]
+      - file: sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java
+        delete_between: ["    @Test\n    void wrongIdTypeReturns400InSameShape", "\n}"]
+
+  - id: P07
+    expect: B07
+    title: 不要な String 変換をやめる
+    description: NotFoundException の引数は Object なので、ID をそのまま渡すようにしました。
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+        old: |2
+                  // ID は文字列で渡す。数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる
+                  return mapper.findById(id)
+                          .orElseThrow(() -> new NotFoundException(MessageIds.MEMBER_NOT_FOUND, String.valueOf(id)));
+        new: |2
+                  return mapper.findById(id).orElseThrow(() -> new NotFoundException(MessageIds.MEMBER_NOT_FOUND, id));
+      - file: sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java
+        delete_between: ["    @Test\n    void notFoundMessageHasNoThousandsSeparator", "    @Test\n    void wrongIdTypeReturns400InSameShape"]
+
+  - id: P08
+    expect: B08
+    title: ログの整理
+    description: 異常終了のログを読みやすくしました。
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+        old: 'log.error("{} JOB0001 異常終了", MessageIds.BATCH_FAILED, e);'
+        new: 'log.error("JOB0001 異常終了", e);'
+
+  - id: N01
+    title: 数量の境界値のテストを追加
+    description: quantity の 1 と 999 を受け付けることのテストを足しました。
+    edits:
+      - file: sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+        old: "    @Test\n    void parseAcceptsExactlyTwentyChars() {\n"
+        new: |2
+              @ParameterizedTest
+              @CsvSource({"1", "999"})
+              void parseAcceptsQuantityBoundaries(int quantity) {
+                  assertThat(OrderImportService.parse("A001,1,P-01," + quantity).quantity()).isEqualTo(quantity);
+              }
+
+              @Test
+              void parseAcceptsExactlyTwentyChars() {
+
+  - id: N02
+    title: README の誤字
+    description: README の表記ゆれを直しました。
+    edits:
+      - file: README.md
+        old: "二段構えで使います。"
+        new: "二段構えで使います（どちらか片方だけでも使えます）。"
+
+  - id: N03
+    title: 会員 API のコメントと変数名を整える
+    description: 動作は変えていません。
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/member/MemberController.java
+        old: |2
+                  Member created = service.register(req.name(), req.email());
+                  return ResponseEntity.created(URI.create("/api/v1/members/" + created.id())).body(created);
+        new: |2
+                  Member member = service.register(req.name(), req.email());
+                  // Location ヘッダーに、登録した会員を照会する URL を入れる
+                  return ResponseEntity.created(URI.create("/api/v1/members/" + member.id())).body(member);

@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）",
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: 終了コード",
+   "+3 sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java: テストの削除"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-haiku-4-5-20251001",
+   "input_tokens": 2938,
+   "output_tokens": 2411,
+   "cost_usd": 0.0173,
+   "seconds": 22.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0173,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "ApplicationRunner パターンの削除検出ミス",
+   "detail": "BatchJobGuard は @Component で登録された ApplicationRunner インターフェース実装クラスで、Spring Boot が起動時に自動的に実行します。IDE の「使われていないクラス」検出では直接呼び出しがないと判定されますが、これは Spring のコンベンション（自動検出パターン）です。削除すると、バッチ実行時のジョブ ID 検証機能が失われ、誤ったジョブ ID でも終了コード 0（正常）で終わり、スケジューラが検出できなくなります。",
+   "line": 23,
+   "evidence": "@Component, @Profile(\"batch\"), implements ApplicationRunner, ExitCodeGenerator → Spring が自動実行するため、直接呼び出し参照がないのは正常。run() メソッドで終了コードを制御（line 43-48）し、getExitCode() で返す。削除前に、このジョブ ID 検証機能が他で実装されているのか確認が必須。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:23",
+   "message": "ApplicationRunner パターンの削除検出ミス BatchJobGuard は @Component で登録された ApplicationRunner インターフェース実装クラスで、Spring Boot が起動時に自動的に実行します。IDE の「使われていないクラス」検出では直接呼び出しがないと判定されますが、これは Spring のコンベンション（自動検出パターン）です。削除すると、バッチ実行時のジョブ ID 検証機能が失われ、誤ったジョブ ID でも終了コード 0（正常）で終わり、スケジューラが検出できなくなります。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "ジョブ検証ロジックの削除は機能喪失の可能性",
+   "detail": "ジョブ ID が存在しないときに exitCode = BatchJob.ERROR で異常終了させるロジックが削除されます。batch プロファイル起動時にこの検証がなくなると、スケジューラからの設定誤りや指定漏れをキャッチできなくなり、運用エラーの検出困難性が増します。",
+   "line": 48,
+   "evidence": "run() メソッド内の boolean found = jobs.stream().anyMatch(...) による検証と、!found 時の exitCode 設定（line 47-48）。削除されると、この機能を代替する実装が他にあるか不明。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:48",
+   "message": "ジョブ検証ロジックの削除は機能喪失の可能性 ジョブ ID が存在しないときに exitCode = BatchJob.ERROR で異常終了させるロジックが削除されます。batch プロファイル起動時にこの検証がなくなると、スケジューラからの設定誤りや指定漏れをキャッチできなくなり、運用エラーの検出困難性が増します。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "削除理由が不十分：代替実装の有無を確認すべき",
+   "detail": "PR説明では「どこからも呼ばれていない」と判定されていますが、Spring Bean の自動検出パターンが見落とされている可能性があります。バッチ起動時のジョブ ID 検証がどこで行われるのか、あるいは削除後もこの機能が保たれるのかを作者に確認が必要。",
+   "line": 1,
+   "evidence": "git grep や IDE の参照検索では ApplicationRunner 実装の自動実行を検出しません。@Profile(\"batch\") により限定的なコンポーネントなので、プロジェクト全体での検証が不十分の可能性があります。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "削除理由が不十分：代替実装の有無を確認すべき PR説明では「どこからも呼ばれていない」と判定されていますが、Spring Bean の自動検出パターンが見落とされている可能性があります。バッチ起動時のジョブ ID 検証がどこで行われるのか、あるいは削除後もこの機能が保たれるのかを作者に確認が必要。"
+  }
+ ],
+ "rejected": [],
+ "case": "P05",
+ "config": "light"
+}

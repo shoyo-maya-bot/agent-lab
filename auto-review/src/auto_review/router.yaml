@@ -1,0 +1,68 @@
+# auto-review の振り分けと予算の設定.
+# 「ふだんは Sonnet 1 回。危ない変更と、Sonnet が MUST を出したときだけ Opus を足す」を数字で決める.
+# 値を変えたら bench で流し直し、検出率・確認する件数・費用がどう変わるかを results/ に残す.
+version: 1
+
+# モデルと単価（USD / 100 万トークン）. 単価は 2026-10-02 時点の公開価格. 変わったらここだけ直す
+prices_checked: "2026-10-02"
+models:
+  light:    {id: claude-haiku-4-5-20251001, input_per_mtok: 1.0, output_per_mtok: 5.0}
+  standard: {id: claude-sonnet-5-5,         input_per_mtok: 2.0, output_per_mtok: 10.0}
+  deep:     {id: claude-opus-5-5,           input_per_mtok: 4.0, output_per_mtok: 20.0}
+
+# 振り分け（点数は下の risk で計算する）
+#   skip     : AI レビューしない（文書だけ・ロックファイルだけ・Dependabot）
+#   standard : standard モデルで 1 回
+#   deep     : standard のあと、deep モデルが「指摘の検証」と「危ないファイルの追加レビュー」をする
+escalation:
+  deep_score: 6            # この点数以上なら最初から deep
+  verify_must: true        # standard が MUST を出したら、deep モデルがその指摘だけ検証する（範囲を絞るので安い）
+  verify_max_findings: 8   # 検証に回す指摘の上限（重要度の高い順）
+
+labels:
+  deep: "review:deep"          # 人が「深く見て」と頼む
+  standard: "review:standard"  # deep に上げない（費用を抑えたいとき）
+  skip: "review:skip"
+
+skip:
+  authors: ["dependabot[bot]", "renovate[bot]"]
+  only_paths: ["**/*.md", "docs/**", "LICENSE", "**/*.lock", "**/package-lock.json", ".github/ISSUE_TEMPLATE/**"]
+
+# 予算. 見積もりが超えるなら deep の範囲を危ないファイルだけに絞り、それでも超えるなら deep を飛ばして理由を書く
+budget:
+  per_pr_usd: 1.00
+  context_max_tokens: 60000      # 変更ファイルの全文を入れる上限（危ない順に入れる）
+  output_tokens: {standard: 4000, deep: 6000, verify: 3000}
+  chars_per_token: 3.0           # 見積もり用（日本語・コード混じりで少し多めに見る）
+
+# 危なさの点数
+risk:
+  paths:
+    - {glob: "**/security/**",            weight: 4, reason: 認証・認可}
+    - {glob: "**/*Auth*",                 weight: 4, reason: 認証・認可}
+    - {glob: "**/*Security*",             weight: 4, reason: 認証・認可}
+    - {glob: "**/*Mapper.xml",            weight: 3, reason: SQL}
+    - {glob: "**/*.sql",                  weight: 3, reason: DB のスキーマ・データ}
+    - {glob: "**/migration/**",           weight: 3, reason: DB のスキーマ・データ}
+    - {glob: ".github/workflows/**",      weight: 3, reason: CI の権限・秘密情報}
+    - {glob: "**/*.tf",                   weight: 3, reason: インフラ}
+    - {glob: "**/*Service.java",          weight: 2, reason: 業務ロジック・トランザクション}
+    - {glob: "**/*ExceptionHandler*.java", weight: 2, reason: エラー応答}
+    - {glob: "**/batch/**",               weight: 2, reason: バッチ（終了コード・再実行）}
+    - {glob: "**/build.gradle",           weight: 1, reason: 依存・ビルド}
+    - {glob: "**/pom.xml",                weight: 1, reason: 依存・ビルド}
+    - {glob: "**/package.json",           weight: 1, reason: 依存・ビルド}
+  # 追加・削除された行の中身（正規表現）. 1 ファイルで同じ規則は 1 回だけ数える
+  patterns:
+    - {regex: "\\$\\{",                           files: "**/*.xml", weight: 4, reason: "SQL への文字列埋め込み（${}）"}
+    - {regex: "@Transactional",                   weight: 2, reason: トランザクション境界の変更}
+    - {regex: "synchronized|ReentrantLock|FOR UPDATE|ON CONFLICT", weight: 2, reason: 同時実行・排他}
+    - {regex: "(?i)(password|secret|api[_-]?key|token)\\s*[=:]", weight: 3, reason: 秘密情報らしき値}
+    - {regex: "System\\.exit|ExitCodeGenerator",  weight: 2, reason: 終了コード}
+    - {regex: "catch \\((Exception|Throwable|RuntimeException) ", weight: 1, reason: 広い例外の捕捉}
+    - {regex: "@ExceptionHandler|@(Rest)?ControllerAdvice", weight: 2, reason: 例外の扱いの変更}
+    - {regex: "permissions:|pull_request_target", files: ".github/workflows/**", weight: 3, reason: CI の権限}
+  size:
+    lines: [[200, 1], [400, 2], [800, 3]]   # 追加 + 削除の行数がこれ以上なら点数を足す（いちばん大きい段だけ）
+    files: [[10, 1], [20, 2]]
+  deleted_tests_weight: 3                   # テストを消した（ファイルの削除、またはテストメソッドが減った）

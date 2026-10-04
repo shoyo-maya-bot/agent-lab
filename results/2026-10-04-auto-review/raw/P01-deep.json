@@ -1,0 +1,89 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4698,
+   "output_tokens": 1298,
+   "cost_usd": 0.0666,
+   "seconds": 16.6,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0666,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同時登録で一意制約違反が業務エラー（409）にならず、システムエラーとして返る",
+   "detail": "同じメールアドレスの登録リクエストが 2 件ほぼ同時に来ると、両方の existsByEmail が false を返し、両方が insert に進みます。後から insert した側は DB の一意制約に当たり、DuplicateKeyException がそのまま呼び出し元へ出ます。変更前はこれを BusinessException(EMAIL_ALREADY_USED) に変換して 409 の業務エラーにしていました。変更後は、共通の例外ハンドラで 500 になると推測します（ハンドラの実装は差分に含まれていません）。利用者には『メールアドレスが使用済み』ではなく『システムエラー』が表示されます。エラーログやアラートの対象にもなります。existsByEmail は Read Committed などの分離レベルでは同時実行を防げません。PR 説明にある『existsByEmail で確認済みなので不要』は成り立ちません。",
+   "line": 34,
+   "evidence": "変更前は insert を try/catch (DuplicateKeyException) で囲み、BusinessException に変換していた。変更後は `mapper.insert(rec);` を裸で呼んでいる。削除されたコメントにも『同時に登録されたときの最終的な判定は DB の一意制約に任せる』と、この catch が同時実行への対策だと明記されていた。テストのコメントにも『DB の一意制約で失敗しても 409 の業務エラーにする』とある。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "同時登録で一意制約違反が業務エラー（409）にならず、システムエラーとして返る 同じメールアドレスの登録リクエストが 2 件ほぼ同時に来ると、両方の existsByEmail が false を返し、両方が insert に進みます。後から insert した側は DB の一意制約に当たり、DuplicateKeyException がそのまま呼び出し元へ出ます。変更前はこれを BusinessException(EMAIL_ALREADY_USED) に変換して 409 の業務エラーにしていました。変更後は、共通の例外ハンドラで 500 になると推測します（ハンドラの実装は差分に含まれていません）。利用者には『メールアドレスが使用済み』ではなく『システムエラー』が表示されます。エラーログやアラートの対象にもなります。existsByEmail は Read Committed などの分離レベルでは同時実行を防げません。PR 説明にある『existsByEmail で確認済みなので不要』は成り立ちません。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "同時登録の回帰テストを、防いでいた不具合ごと削除している",
+   "detail": "register_concurrentDuplicateBecomesBusinessError は、事前確認をすり抜けた場合に業務エラーへ変換されることを保証するテストでした。このテストが落ちる変更なのに、テストのほうを消して通しています。今後は同じ退行を検知できません。catch を戻して、テストも復元すべきです。",
+   "line": 59,
+   "evidence": "差分で、insert が DuplicateKeyException を投げる Mapper を使って BusinessException(EMAIL_ALREADY_USED) を検証していたテストが、まるごと削除されている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:59",
+   "message": "同時登録の回帰テストを、防いでいた不具合ごと削除している register_concurrentDuplicateBecomesBusinessError は、事前確認をすり抜けた場合に業務エラーへ変換されることを保証するテストでした。このテストが落ちる変更なのに、テストのほうを消して通しています。今後は同じ退行を検知できません。catch を戻して、テストも復元すべきです。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "使われなくなった DuplicateKeyException の import が残っている",
+   "detail": "テストを削除したことで、DuplicateKeyException の import が未使用になりました。コンパイルは通ります。Checkstyle などで未使用 import を禁止している場合は、ビルドが失敗する可能性があります（推測）。上の指摘どおりテストを復元すれば解消します。",
+   "line": 13,
+   "evidence": "変更後のテストの全文に `import org.springframework.dao.DuplicateKeyException;` があるが、ファイル内で参照されていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:13",
+   "message": "使われなくなった DuplicateKeyException の import が残っている テストを削除したことで、DuplicateKeyException の import が未使用になりました。コンパイルは通ります。Checkstyle などで未使用 import を禁止している場合は、ビルドが失敗する可能性があります（推測）。上の指摘どおりテストを復元すれば解消します。"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "deep"
+}
