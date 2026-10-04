@@ -20,4 +20,6 @@ AI エージェントに **どこまで任せられるか** を実験するリ�
 | [bench/bugs/](bench/bugs/) | sample-app の既知の弱いところ 8 件（レビューの正解） |
 | [runner/score.py](runner/score.py) | レビュー結果を正解と突き合わせ、検出率・ノイズ率を出す |
 | [reviewers/](reviewers/) | 実験で使うレビューのプロンプト |
-| [results/](results/) | 実験の結果。[2026-10-04 モデルの大きさによる違い](results/2026-10-04-model-compare/README.md) |
+| [runner/mcp-e2e/](runner/mcp-e2e/) | エージェントに MCP ツールだけで点検させる実地検証（`run.sh`） |
+| [examples/](examples/) | VS Code・Claude Code への MCP の設定例 |
+| [results/](results/) | 実験の結果。[モデルの大きさによる違い](results/2026-10-04-model-compare/README.md)、[MCP の実地検証](results/2026-10-04-mcp-e2e/README.md) |

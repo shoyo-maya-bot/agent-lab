@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "devtools": {
+      "type": "stdio",
+      "command": "devtools-mcp",
+      "env": { "DEVTOOLS_MCP_ROOT": "${workspaceFolder}" }
+    }
+  }
+}
