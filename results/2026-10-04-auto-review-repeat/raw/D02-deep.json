@@ -1,0 +1,72 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3501,
+   "output_tokens": 1063,
+   "cost_usd": 0.0459,
+   "seconds": 12.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0459,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "Set に変えた目的の確認",
+   "detail": "照合は起動時の 1 回だけで、ジョブ数も少ないと思われます（推測）。Set にしても性能上の利点はほとんどありません。後続の変更で、known を重複 ID の検出や、エラーログへの有効な ID 一覧の出力に使う予定はありますか。予定が無ければ、元の anyMatch でも十分です。",
+   "line": 46,
+   "evidence": "run() は ApplicationRunner から 1 回だけ呼ばれます。known は contains の 1 回にしか使われていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:46",
+   "message": "Set に変えた目的の確認 照合は起動時の 1 回だけで、ジョブ数も少ないと思われます（推測）。Set にしても性能上の利点はほとんどありません。後続の変更で、known を重複 ID の検出や、エラーログへの有効な ID 一覧の出力に使う予定はありますか。予定が無ければ、元の anyMatch でも十分です。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "jobId() が null を返すジョブがあると、変更前と挙動が変わる",
+   "detail": "jobId() が null を返す BatchJob Bean がある場合、変更前は j.jobId().equals(requested) で NullPointerException が起き、起動が失敗して異常終了していました。変更後は Collectors.toSet()（HashSet）が null をそのまま受け入れるため、例外になりません。そのジョブは照合対象から黙って外れ、ほかのジョブ ID が一致すれば正常に進みます。PR 説明の『動作は同じ』とは厳密には違います。実害は小さいと考えます。ただ、null の jobId を不正な定義として検出したいなら、収集時に Objects.requireNonNull するなど、意図を明示したほうが安全です。",
+   "line": 46,
+   "evidence": "変更前: jobs.stream().anyMatch(j -> j.jobId().equals(requested))。変更後: jobs.stream().map(BatchJob::jobId).collect(Collectors.toSet()) と known.contains(requested)。BatchJob.jobId() が null を返さない保証は、提示されたコードからは確認できません（推測）。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:46",
+   "message": "jobId() が null を返すジョブがあると、変更前と挙動が変わる jobId() が null を返す BatchJob Bean がある場合、変更前は j.jobId().equals(requested) で NullPointerException が起き、起動が失敗して異常終了していました。変更後は Collectors.toSet()（HashSet）が null をそのまま受け入れるため、例外になりません。そのジョブは照合対象から黙って外れ、ほかのジョブ ID が一致すれば正常に進みます。PR 説明の『動作は同じ』とは厳密には違います。実害は小さいと考えます。ただ、null の jobId を不正な定義として検出したいなら、収集時に Objects.requireNonNull するなど、意図を明示したほうが安全です。"
+  }
+ ],
+ "rejected": [],
+ "case": "D02",
+ "config": "deep",
+ "run": 1
+}

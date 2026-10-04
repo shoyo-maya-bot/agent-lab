@@ -1,0 +1,107 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）",
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: 終了コード",
+   "+3 sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java: テストの削除"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3693,
+   "output_tokens": 1729,
+   "cost_usd": 0.0609,
+   "seconds": 19.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0609,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "使われていないクラスではない。削除するとジョブ ID の誤りや指定漏れでも終了コード 0 になる",
+   "detail": "batch プロファイルで起動し、app.batch.job に誤った ID（例: JOB9999）を指定した場合や指定しなかった場合を考える。この場合、対応するジョブの Bean は作られない。現状はこのクラスがエラーログを出し、終了コード ERROR を返す。削除後は何も実行せずに正常終了（0）する。スケジューラからは成功に見えるので、バッチが実際には動いていないことに誰も気づかない。",
+   "line": 24,
+   "evidence": "@Component と @Profile(\"batch\") が付いており、ApplicationRunner と ExitCodeGenerator を実装している。Spring が自動で run() と getExitCode() を呼ぶため、コード上で明示的に呼ぶ箇所が無いのは正常。Javadoc にも『これが無いと…終了コード 0 で終わり、スケジューラからは正常終了に見えてしまう』と目的が書かれている。テストのコメントにも『ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない』とあり、他にこの状況を検出する仕組みは無いと読める（他クラスの実装は差分外のため推測）。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:24",
+   "message": "使われていないクラスではない。削除するとジョブ ID の誤りや指定漏れでも終了コード 0 になる batch プロファイルで起動し、app.batch.job に誤った ID（例: JOB9999）を指定した場合や指定しなかった場合を考える。この場合、対応するジョブの Bean は作られない。現状はこのクラスがエラーログを出し、終了コード ERROR を返す。削除後は何も実行せずに正常終了（0）する。スケジューラからは成功に見えるので、バッチが実際には動いていないことに誰も気づかない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java",
+   "title": "異常終了の回帰テストが代わりのテスト無しで消える",
+   "detail": "ジョブ ID が JOB9999・空文字・null のときに ERROR を返すことを確かめるテストが消える。今後この挙動が壊れても CI では検出できない。削除するのであれば、同じ保証を別の仕組みで用意し、そのテストを追加する必要がある。",
+   "line": 21,
+   "evidence": "errorWhenJobIdIsWrongOrMissing が 3 通りの入力で getExitCode() が BatchJob.ERROR になることを検証している。差分には代わりのテストが無い。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java:21",
+   "message": "異常終了の回帰テストが代わりのテスト無しで消える ジョブ ID が JOB9999・空文字・null のときに ERROR を返すことを確かめるテストが消える。今後この挙動が壊れても CI では検出できない。削除するのであれば、同じ保証を別の仕組みで用意し、そのテストを追加する必要がある。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "MessageIds.BATCH_UNKNOWN_JOB を監視に使っていないか",
+   "detail": "削除後は、ジョブ ID が不正なときのエラーログ（BATCH_UNKNOWN_JOB）が出なくなる。運用監視やアラートがこのメッセージ ID で検知している場合、検知が止まったことにも気づけない。MessageIds の定数が使われないまま残るかどうかも確認してほしい。",
+   "line": 46,
+   "evidence": "log.error(\"{} ジョブ ID が不正です …\", MessageIds.BATCH_UNKNOWN_JOB, …) を出しているのはこのクラスだけに見える（他の参照は差分外のため推測）。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:46",
+   "message": "MessageIds.BATCH_UNKNOWN_JOB を監視に使っていないか 削除後は、ジョブ ID が不正なときのエラーログ（BATCH_UNKNOWN_JOB）が出なくなる。運用監視やアラートがこのメッセージ ID で検知している場合、検知が止まったことにも気づけない。MessageIds の定数が使われないまま残るかどうかも確認してほしい。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "『どこからも呼ばれていない』はどうやって判断したか",
+   "detail": "IDE の参照検索や grep で直接の呼び出しが見つからないことを根拠にしたのであれば、DI で登録されるコンポーネントを誤って削除している可能性が高い。同じ方法で削除候補に挙げた他のクラスがあれば、あわせて見直してほしい。また、このガードが本当に不要になった理由（例: main が別の方法で終了コードを決めるよう変わった）があれば、PR の説明に書いてほしい。",
+   "line": 24,
+   "evidence": "PR の説明は『どこからも呼ばれていない BatchJobGuard を削除しました』だけ。クラスは Spring のライフサイクル（ApplicationRunner と ExitCodeGenerator）から呼ばれる。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:24",
+   "message": "『どこからも呼ばれていない』はどうやって判断したか IDE の参照検索や grep で直接の呼び出しが見つからないことを根拠にしたのであれば、DI で登録されるコンポーネントを誤って削除している可能性が高い。同じ方法で削除候補に挙げた他のクラスがあれば、あわせて見直してほしい。また、このガードが本当に不要になった理由（例: main が別の方法で終了コードを決めるよう変わった）があれば、PR の説明に書いてほしい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P05",
+ "config": "deep",
+ "run": 1
+}

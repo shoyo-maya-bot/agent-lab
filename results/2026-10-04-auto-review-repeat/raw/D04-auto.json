@@ -1,0 +1,53 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2926,
+   "output_tokens": 700,
+   "cost_usd": 0.0093,
+   "seconds": 7.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0093,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "-parameters が実際に有効か（IDE・他モジュール含め）確認したい",
+   "detail": "名前を省略すると、パラメータ名が class ファイルに残っていない場合に GET /api/v1/members/{id} が実行時に IllegalArgumentException（名前を解決できない）となり、500 を返す。コンパイル時には検出されない。PR の説明は build.gradle で -parameters を付けているとしているが、差分にその設定は含まれず、このレビューでは確認できない（推測）。Spring Boot Gradle プラグインを使っていれば JavaCompile に自動で付くが、プラグイン未使用やコンパイラ設定の上書きがあると効かない。IDE の独自ビルドで実行した場合も同様のリスクがある。",
+   "line": 32,
+   "evidence": "変更は @PathVariable(\"id\") を @PathVariable に変えただけで、build.gradle は差分にもファイル全文にも含まれない。GET /{id} の MockMvc 等のテストが差分にも見えず、あるかどうかは不明。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "-parameters が実際に有効か（IDE・他モジュール含め）確認したい 名前を省略すると、パラメータ名が class ファイルに残っていない場合に GET /api/v1/members/{id} が実行時に IllegalArgumentException（名前を解決できない）となり、500 を返す。コンパイル時には検出されない。PR の説明は build.gradle で -parameters を付けているとしているが、差分にその設定は含まれず、このレビューでは確認できない（推測）。Spring Boot Gradle プラグインを使っていれば JavaCompile に自動で付くが、プラグイン未使用やコンパイラ設定の上書きがあると効かない。IDE の独自ビルドで実行した場合も同様のリスクがある。"
+  }
+ ],
+ "rejected": [],
+ "case": "D04",
+ "config": "auto",
+ "run": 1
+}

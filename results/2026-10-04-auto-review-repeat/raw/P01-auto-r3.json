@@ -1,0 +1,120 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4704,
+   "output_tokens": 1166,
+   "cost_usd": 0.0157,
+   "seconds": 12.8,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5426,
+   "output_tokens": 661,
+   "cost_usd": 0.0545,
+   "seconds": 9.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0702,
+ "notes": [
+  "standard の MUST 2 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 2,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同時登録で DuplicateKeyException がそのまま 500 になる",
+   "detail": "同じメールアドレスのリクエストが同時に来ると、両方が existsByEmail=false を通過し、片方の insert が DB の一意制約違反で失敗する。例外処理を外したため DuplicateKeyException が BusinessException(409) に変換されず、想定外の例外として 500 で返る可能性が高い（グローバルハンドラの実装は差分外のため推測）。確認してから insert する方式は check-then-act で、同時実行を防げない。",
+   "line": 33,
+   "evidence": "register() は existsByEmail → insert の 2 段階で、間にロックや排他がない。削除された元コードのコメントにも「同時に登録されたときの最終的な判定は DB の一意制約に任せる」とあり、catch が唯一の変換箇所だった。PR 説明の「existsByEmail で確認済みなので不要」は同時実行を考慮していない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "register() は existsByEmail と insert の間に排他がない。同時リクエストでは両方が確認を通過し、片方の insert で DuplicateKeyException が発生する。この例外を BusinessException(EMAIL_ALREADY_USED) に変換していた唯一の catch が削除されたため、業務エラーとして扱われなくなる。HTTP ステータスが実際に何になるかは、差分外のハンドラ次第なので推測。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:33",
+   "message": "同時登録で DuplicateKeyException がそのまま 500 になる 同じメールアドレスのリクエストが同時に来ると、両方が existsByEmail=false を通過し、片方の insert が DB の一意制約違反で失敗する。例外処理を外したため DuplicateKeyException が BusinessException(409) に変換されず、想定外の例外として 500 で返る可能性が高い（グローバルハンドラの実装は差分外のため推測）。確認してから insert する方式は check-then-act で、同時実行を防げない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "競合時に 409 を返すことを保証するテストが削除された",
+   "detail": "register_concurrentDuplicateBecomesBusinessError を削除したため、同時登録時の業務エラー変換の回帰を検知できなくなった。上記の不具合を入れてもテストが通る状態になっている。テストを消すのではなく、むしろ維持すべきテスト。",
+   "line": 59,
+   "evidence": "差分でテストが丸ごと削除され、変更後のテストには DuplicateKeyException を扱うケースがない。import org.springframework.dao.DuplicateKeyException も未使用のまま残っている。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "競合時の変換を確かめる唯一のテストが削除され、DuplicateKeyException の import も未使用で残っている点は事実。ただし本体の不具合は s1 であり、s1 を直せばこのテストも一緒に戻すことになるので、独立した MUST ではなく WANT とした。",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:59",
+   "message": "競合時に 409 を返すことを保証するテストが削除された register_concurrentDuplicateBecomesBusinessError を削除したため、同時登録時の業務エラー変換の回帰を検知できなくなった。上記の不具合を入れてもテストが通る状態になっている。テストを消すのではなく、むしろ維持すべきテスト。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "大文字小文字違い以外の一意制約の違反も同様に落ちる / 制約の存在を前提にしたコメントが消えた",
+   "detail": "元の catch とコメントは「DB の一意制約が最終防衛線」という設計意図を示していた。これらを消すと、後続の開発者が事前チェックだけで十分と誤解し、制約の扱いが再び抜けやすくなる。元の実装を戻し、必要なら別の一意制約違反（name など）との区別も検討する。",
+   "line": 33,
+   "evidence": "削除された行のコメント「事前の確認は『よくある重複』を早く返すため…」。現在のコードにはその説明がない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:33",
+   "message": "大文字小文字違い以外の一意制約の違反も同様に落ちる / 制約の存在を前提にしたコメントが消えた 元の catch とコメントは「DB の一意制約が最終防衛線」という設計意図を示していた。これらを消すと、後続の開発者が事前チェックだけで十分と誤解し、制約の扱いが再び抜けやすくなる。元の実装を戻し、必要なら別の一意制約違反（name など）との区別も検討する。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "DuplicateKeyException を別の場所で変換しているか",
+   "detail": "例外処理を外す判断は、グローバルな @ControllerAdvice などで DuplicateKeyException を 409 に変換していることが前提なら成立し得る。そのような処理があるか、PR の背景を確認したい。なければ上記のとおり戻すべき。",
+   "line": 33,
+   "evidence": "差分と提示ファイルに例外ハンドラは含まれておらず、変換の有無は確認できない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:33",
+   "message": "DuplicateKeyException を別の場所で変換しているか 例外処理を外す判断は、グローバルな @ControllerAdvice などで DuplicateKeyException を 409 に変換していることが前提なら成立し得る。そのような処理があるか、PR の背景を確認したい。なければ上記のとおり戻すべき。"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "auto",
+ "run": 3
+}

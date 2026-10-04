@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5338,
+   "output_tokens": 1029,
+   "cost_usd": 0.0325,
+   "seconds": 11.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0325,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "ID を long のまま渡すと 404 メッセージに桁区切りが入る（退行）",
+   "detail": "会員ID が 1000 以上のとき（例: 1234）、MessageFormat が Long を数値として整形し、「会員ID: 1,234」のようなメッセージが 404 レスポンスで返る。ロケールによっては区切り文字も変わる。ID は識別子なので表示が変わると、利用者の問い合わせやログ照合時に誤解を招く。今回の差分は、この問題を避けるために入れられていた String.valueOf を外している。",
+   "line": 23,
+   "evidence": "削除された行のコメントに「数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる」とある。変更後は orElseThrow(() -> new NotFoundException(MessageIds.MEMBER_NOT_FOUND, id)) で long が Long にボクシングされて Object として渡る。NotFoundException が Object を受け取ることは MessageFormat の挙動を変えない。ApiExceptionHandler の実装は差分に無いが、テストで StaticMessageSource の「{0}」を使っているため、同じ整形経路を通ると推測できる。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "ID を long のまま渡すと 404 メッセージに桁区切りが入る（退行） 会員ID が 1000 以上のとき（例: 1234）、MessageFormat が Long を数値として整形し、「会員ID: 1,234」のようなメッセージが 404 レスポンスで返る。ロケールによっては区切り文字も変わる。ID は識別子なので表示が変わると、利用者の問い合わせやログ照合時に誤解を招く。今回の差分は、この問題を避けるために入れられていた String.valueOf を外している。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "桁区切りの回帰テストを削除している",
+   "detail": "notFoundMessageHasNoThousandsSeparator を削除したため、ID が 1000 以上のときの表示崩れを CI が検知できなくなる。残っている notFoundReturns404WithMessageId は ID=42 のみで、桁区切りの問題は再現しない。コード側の退行と合わせると、問題が気付かれずにリリースされる。",
+   "line": 71,
+   "evidence": "差分で /api/v1/members/1234 を検証するテストが削除されている。変更後の全文にある 404 のテストは /api/v1/members/42 だけである。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:71",
+   "message": "桁区切りの回帰テストを削除している notFoundMessageHasNoThousandsSeparator を削除したため、ID が 1000 以上のときの表示崩れを CI が検知できなくなる。残っている notFoundReturns404WithMessageId は ID=42 のみで、桁区切りの問題は再現しない。コード側の退行と合わせると、問題が気付かれずにリリースされる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "String 変換は意図的な処理なので、戻すかコメントで理由を残す",
+   "detail": "「不要な変換」ではなく、整形の副作用を避けるための変換だった。戻す場合は、理由のコメントとテストも一緒に戻す。根本的に直すなら、NotFoundException 側かメッセージ整形の箇所で ID を文字列化する（または {0} を {0,number,#} にする）と、呼び出し側が毎回意識せずに済む。ただし、後者は差分外のコードが見えないため推測である。",
+   "line": 23,
+   "evidence": "差分で、String.valueOf(id) と理由を書いたコメントが同時に削除されている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "String 変換は意図的な処理なので、戻すかコメントで理由を残す 「不要な変換」ではなく、整形の副作用を避けるための変換だった。戻す場合は、理由のコメントとテストも一緒に戻す。根本的に直すなら、NotFoundException 側かメッセージ整形の箇所で ID を文字列化する（または {0} を {0,number,#} にする）と、呼び出し側が毎回意識せずに済む。ただし、後者は差分外のコードが見えないため推測である。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "standard",
+ "run": 1
+}

@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4704,
+   "output_tokens": 1261,
+   "cost_usd": 0.0166,
+   "seconds": 12.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0166,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同時登録で一意制約違反が 409 ではなく 500 になる",
+   "detail": "同じメールアドレスで 2 つのリクエストが同時に register を呼ぶと、両方が existsByEmail で false を受け取り、後から insert した側で DB の一意制約違反（Spring の DuplicateKeyException）が発生する。この例外はそのまま呼び出し元に伝播し、業務エラー(EMAIL_ALREADY_USED)ではなく 500 系の応答になる。二重クリックやリトライなど、実運用で普通に起きる入力である。PR 説明の「existsByEmail で確認済みなので不要」は、確認と insert の間に隙間があるため成り立たない。",
+   "line": 34,
+   "evidence": "existsByEmail と insert は別の SQL で、@Transactional のデフォルト分離レベル（多くの DB で READ COMMITTED）では他トランザクションの未コミット行が見えない。削除されたコメント「同時に登録されたときの最終的な判定は DB の一意制約に任せる」と、削除されたテスト register_concurrentDuplicateBecomesBusinessError がこの経路を想定していた。DB に一意制約があること（member_email_key）はテストの例外名から読み取れる（制約定義自体は差分外のため推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "同時登録で一意制約違反が 409 ではなく 500 になる 同じメールアドレスで 2 つのリクエストが同時に register を呼ぶと、両方が existsByEmail で false を受け取り、後から insert した側で DB の一意制約違反（Spring の DuplicateKeyException）が発生する。この例外はそのまま呼び出し元に伝播し、業務エラー(EMAIL_ALREADY_USED)ではなく 500 系の応答になる。二重クリックやリトライなど、実運用で普通に起きる入力である。PR 説明の「existsByEmail で確認済みなので不要」は、確認と insert の間に隙間があるため成り立たない。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "競合ケースの回帰テストが消え、不具合が検知できなくなる",
+   "detail": "事前チェックをすり抜けた重複を業務エラーに変換する唯一のテストが削除された。残っているのは事前チェックで弾く経路のテストだけなので、今回の退行は CI で検出されず、同じ修正が再び外されても気付けない。",
+   "line": 59,
+   "evidence": "差分で register_concurrentDuplicateBecomesBusinessError が丸ごと削除されている。残りのテストは InMemoryMapper が同期的に existsByEmail を返す経路のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:59",
+   "message": "競合ケースの回帰テストが消え、不具合が検知できなくなる 事前チェックをすり抜けた重複を業務エラーに変換する唯一のテストが削除された。残っているのは事前チェックで弾く経路のテストだけなので、今回の退行は CI で検出されず、同じ修正が再び外されても気付けない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "例外処理の復元と、必要なら例外ハンドラ側の対応",
+   "detail": "mapper.insert を try/catch で囲み DuplicateKeyException を BusinessException(EMAIL_ALREADY_USED) に変換する元の実装に戻すのが最小の修正。例外を握りつぶさず変換するだけなので、トランザクションもロールバックされる。あわせて、メール以外の一意制約がある場合に誤って「メール使用済み」と返さないか確認したい（制約が email のみなら問題なし。推測）。",
+   "line": 34,
+   "evidence": "削除された catch ブロックは DuplicateKeyException を全て EMAIL_ALREADY_USED にマップしていた。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "例外処理の復元と、必要なら例外ハンドラ側の対応 mapper.insert を try/catch で囲み DuplicateKeyException を BusinessException(EMAIL_ALREADY_USED) に変換する元の実装に戻すのが最小の修正。例外を握りつぶさず変換するだけなので、トランザクションもロールバックされる。あわせて、メール以外の一意制約がある場合に誤って「メール使用済み」と返さないか確認したい（制約が email のみなら問題なし。推測）。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "未使用 import が残る",
+   "detail": "テスト削除により DuplicateKeyException の import が未使用になる。静的解析やコンパイラ警告で CI が落ちる設定の場合は失敗する。テストを復元すれば解消する。",
+   "line": 13,
+   "evidence": "変更後のテスト全文に DuplicateKeyException の使用箇所がなく、import のみ残っている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:13",
+   "message": "未使用 import が残る テスト削除により DuplicateKeyException の import が未使用になる。静的解析やコンパイラ警告で CI が落ちる設定の場合は失敗する。テストを復元すれば解消する。"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "standard",
+ "run": 3
+}

@@ -1,0 +1,150 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4650,
+   "output_tokens": 1588,
+   "cost_usd": 0.0199,
+   "seconds": 14.6,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5005,
+   "output_tokens": 1599,
+   "cost_usd": 0.0696,
+   "seconds": 18.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0895,
+ "notes": [
+  "standard の MUST 1 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 1,
+  "uncertain": 1,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "古い前提のコメントが残っている",
+   "detail": "register_concurrentDuplicateBecomesBusinessError のコメントは「事前の確認をすり抜けた」と書かれているが、事前確認は削除された。さらに、このテストは重複テストと実質同じ経路になり、区別の意味が薄れている。",
+   "line": 74,
+   "evidence": "テスト内コメント「事前の確認をすり抜けた（同時に登録された）ケース」。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:74",
+   "message": "古い前提のコメントが残っている register_concurrentDuplicateBecomesBusinessError のコメントは「事前の確認をすり抜けた」と書かれているが、事前確認は削除された。さらに、このテストは重複テストと実質同じ経路になり、区別の意味が薄れている。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "DB 側に一意制約があることがこの差分から保証できない（制約が無いと重複登録される）",
+   "detail": "事前チェックを削除したため、member.email に一意制約/インデックスが無い、あるいは lower 正規化と合わない照合順序の環境では、同じメールで何件でも登録が成功し 409 が一切返らなくなる。コメントは制約の存在を前提にしているが、マイグレーションの確認が差分内でできない（推測）。",
+   "line": 33,
+   "evidence": "register() から existsByEmail の呼び出しが消え、重複判定は catch (DuplicateKeyException) だけになっている。DDL/マイグレーションは差分に含まれていない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "uncertain",
+   "verdict_note": "変更前のコードも catch (DuplicateKeyException) と「最終的な判定は DB の一意制約に任せる」というコメントで一意制約を前提にしていたので、今回の差分で新しく入った前提ではない。ただ、事前チェックがなくなったため、制約が無い場合の影響は大きくなる。member.email の一意制約が DDL にあるかは差分から確かめられないので、マイグレーションを人が確認する必要がある。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:33",
+   "message": "DB 側に一意制約があることがこの差分から保証できない（制約が無いと重複登録される） 事前チェックを削除したため、member.email に一意制約/インデックスが無い、あるいは lower 正規化と合わない照合順序の環境では、同じメールで何件でも登録が成功し 409 が一切返らなくなる。コメントは制約の存在を前提にしているが、マイグレーションの確認が差分内でできない（推測）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "DuplicateKeyException が別の制約違反でも「メール重複」として返る",
+   "detail": "DuplicateKeyException は email 以外の一意制約（将来追加される列や主キー衝突など）でも発生する。その場合も EMAIL_ALREADY_USED(409) になり、原因を誤認させる。また例外を握りつぶして cause を渡していないため、実際の制約名がログにも残らない。",
+   "line": 35,
+   "evidence": "catch (DuplicateKeyException e) で制約名を確認せず BusinessException を投げ、e を cause にしていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:35",
+   "message": "DuplicateKeyException が別の制約違反でも「メール重複」として返る DuplicateKeyException は email 以外の一意制約（将来追加される列や主キー衝突など）でも発生する。その場合も EMAIL_ALREADY_USED(409) になり、原因を誤認させる。また例外を握りつぶして cause を渡していないため、実際の制約名がログにも残らない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "PostgreSQL ではトランザクションが abort 状態のまま、後続処理がある場合に失敗する",
+   "detail": "制約名 member_email_key から PostgreSQL と推測される。一意制約違反後は同一トランザクションが abort され、以降の SQL は失敗する。現状は直後に例外を投げるので問題ないが、@Transactional のメソッド内で例外を変換して処理を続ける形に今後変えると壊れる。BusinessException が rollback 対象（RuntimeException）であることは確認が必要。",
+   "line": 35,
+   "evidence": "@Transactional 内で DuplicateKeyException を catch して BusinessException に変換している。BusinessException の継承元は差分から見えない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:35",
+   "message": "PostgreSQL ではトランザクションが abort 状態のまま、後続処理がある場合に失敗する 制約名 member_email_key から PostgreSQL と推測される。一意制約違反後は同一トランザクションが abort され、以降の SQL は失敗する。現状は直後に例外を投げるので問題ないが、@Transactional のメソッド内で例外を変換して処理を続ける形に今後変えると壊れる。BusinessException が rollback 対象（RuntimeException）であることは確認が必要。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "テストの InMemoryMapper が一意制約を模倣しているだけで、実際の DB・MyBatis の例外変換が検証されていない",
+   "detail": "本PRの正しさは「MyBatis 経由で実 DB の一意制約違反が DuplicateKeyException に変換される」ことに依存するが、単体テストはそれを自作のモックで再現しているだけ。制約の欠落や例外変換の不具合（SQLException のまま漏れるなど）はテストで検知できない。大文字小文字違いのケースも、サービス側の正規化に依存した擬似検証である。",
+   "line": 34,
+   "evidence": "InMemoryMapper.insert が existsByEmail を見て手動で DuplicateKeyException を投げている。DB を使う統合テスト（@MybatisTest 等）は差分にない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:34",
+   "message": "テストの InMemoryMapper が一意制約を模倣しているだけで、実際の DB・MyBatis の例外変換が検証されていない 本PRの正しさは「MyBatis 経由で実 DB の一意制約違反が DuplicateKeyException に変換される」ことに依存するが、単体テストはそれを自作のモックで再現しているだけ。制約の欠落や例外変換の不具合（SQLException のまま漏れるなど）はテストで検知できない。大文字小文字違いのケースも、サービス側の正規化に依存した擬似検証である。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "MemberMapper.existsByEmail は未使用になるのか",
+   "detail": "Mapper と XML に existsByEmail が残るなら死んだコードになる。他の用途（画面での事前確認など）があるのか、削除するのかを確認したい。",
+   "line": 31,
+   "evidence": "MemberService から呼び出しが消えた。テストの InMemoryMapper には実装が残っている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:31",
+   "message": "MemberMapper.existsByEmail は未使用になるのか Mapper と XML に existsByEmail が残るなら死んだコードになる。他の用途（画面での事前確認など）があるのか、削除するのかを確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "D01",
+ "config": "auto",
+ "run": 3
+}

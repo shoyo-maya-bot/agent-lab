@@ -1,0 +1,88 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 1,
+  "reasons": [
+   "+1 sample-app/build.gradle: 依存・ビルド"
+  ],
+  "risky_files": [
+   "sample-app/build.gradle"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3266,
+   "output_tokens": 1106,
+   "cost_usd": 0.0248,
+   "seconds": 13.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0248,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/build.gradle",
+   "title": "-DbaseUrl がテスト JVM に届かず、指定した接続先が無視される",
+   "detail": "`./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<dev-host>` と実行しても、-D は Gradle の JVM に設定されるだけでフォークされたテスト JVM には渡らない。そのため Karate 側で baseUrl を読めず、既定値（推測: karate-config.js の local 向け URL など）にフォールバックする。dev 向けのつもりのテストが localhost に向かい、接続エラーで落ちる。既定の接続先に別環境のアプリが動いていれば、意図しない環境に対してテストが走り、結果を取り違える。CI で接続先を -DbaseUrl で切り替えている場合（推測）は、そのジョブがすべて影響を受ける。",
+   "line": 55,
+   "evidence": "削除された行のコメントに「Gradle に渡した -DbaseUrl は、そのままではテストの JVM に届かないので明示的に渡す」とある。karate.env には同じ仕組みの `systemProperty` が残っており、Test タスクでは明示的に渡す必要があることを示している。タスク上のコメント（46 行目）も `-DbaseUrl=https://<your-dev-host>` の使い方を案内したまま。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/build.gradle:55",
+   "message": "-DbaseUrl がテスト JVM に届かず、指定した接続先が無視される `./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<dev-host>` と実行しても、-D は Gradle の JVM に設定されるだけでフォークされたテスト JVM には渡らない。そのため Karate 側で baseUrl を読めず、既定値（推測: karate-config.js の local 向け URL など）にフォールバックする。dev 向けのつもりのテストが localhost に向かい、接続エラーで落ちる。既定の接続先に別環境のアプリが動いていれば、意図しない環境に対してテストが走り、結果を取り違える。CI で接続先を -DbaseUrl で切り替えている場合（推測）は、そのジョブがすべて影響を受ける。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/build.gradle",
+   "title": "使い方コメントと実際の挙動が食い違う",
+   "detail": "今回の削除を維持するなら、46 行目の `-DbaseUrl=...` の案内が誤りになり、利用者は指定が効かないことに気づけない。削除を取り消して受け渡しを戻すか、別の受け渡し方法（例: 環境変数）にしてコメントも合わせて直すか、どちらかにする必要がある。",
+   "line": 46,
+   "evidence": "46 行目: `// 接続先を変えるとき: ./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<your-dev-host>`。一方、karateTest タスクには baseUrl を渡す記述が無い。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/build.gradle:46",
+   "message": "使い方コメントと実際の挙動が食い違う 今回の削除を維持するなら、46 行目の `-DbaseUrl=...` の案内が誤りになり、利用者は指定が効かないことに気づけない。削除を取り消して受け渡しを戻すか、別の受け渡し方法（例: 環境変数）にしてコメントも合わせて直すか、どちらかにする必要がある。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/build.gradle",
+   "title": "「不要そう」と判断した根拠の確認",
+   "detail": "Karate 側（karate-config.js など）が baseUrl を System プロパティから読まなくなった、などの根拠があれば教えてください。差分には参照側の変更が含まれていないため、受け渡しの経路だけが無くなったように見えます。",
+   "line": 55,
+   "evidence": "PR の説明は「不要そうな記述を削りました」のみで、karate-config.js や CI 設定の変更は差分に含まれていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/build.gradle:55",
+   "message": "「不要そう」と判断した根拠の確認 Karate 側（karate-config.js など）が baseUrl を System プロパティから読まなくなった、などの根拠があれば教えてください。差分には参照側の変更が含まれていないため、受け渡しの経路だけが無くなったように見えます。"
+  }
+ ],
+ "rejected": [],
+ "case": "P04",
+ "config": "deep",
+ "run": 2
+}

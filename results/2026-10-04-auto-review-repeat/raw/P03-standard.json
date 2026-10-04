@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6072,
+   "output_tokens": 1495,
+   "cost_usd": 0.0409,
+   "seconds": 14.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0409,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁数超過の行で取込全体がロールバックされる",
+   "detail": "order_no または product_code が 20 文字を超える行が 1 行でもあると、insertIfAbsent で DB が桁数超過の例外（PostgreSQL なら value too long、MySQL strict なら Data too long）を投げる。importLines は @Transactional で例外を捕捉していないため、それまでに登録した行も全部取り消され、ジョブは異常終了する。従来は該当行だけ「行番号: 理由」でスキップして続行できていたが、それができなくなる。PR 説明の「DB の定義に任せる」は、この「1 行の誤りで全体を落とさない」という仕様と両立しない。",
+   "line": 82,
+   "evidence": "削除前は code() で長さを検査し、IllegalArgumentException を errors に積んで continue していた。現在の code() は空チェックだけ。クラス Javadoc にも「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため、登録の前にここで確かめる」とあり、この変更はその設計意図に反する。importLines 内に insertIfAbsent を囲む try/catch はない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "桁数超過の行で取込全体がロールバックされる order_no または product_code が 20 文字を超える行が 1 行でもあると、insertIfAbsent で DB が桁数超過の例外（PostgreSQL なら value too long、MySQL strict なら Data too long）を投げる。importLines は @Transactional で例外を捕捉していないため、それまでに登録した行も全部取り消され、ジョブは異常終了する。従来は該当行だけ「行番号: 理由」でスキップして続行できていたが、それができなくなる。PR 説明の「DB の定義に任せる」は、この「1 行の誤りで全体を落とさない」という仕様と両立しない。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "クラス Javadoc が実装と食い違う",
+   "detail": "Javadoc は「桁数・外部キーの誤りは登録前にここで確かめる」と書いたままだが、桁数の検査は消えている。後続の保守者が桁数も検査済みと誤解し、同種の変更や例外処理の抜けを見逃しやすい。上限値を 2 か所で持つ問題を避けたいなら、検査を消すのではなく上限値の持ち方を変える（設定値化、または起動時に DB メタデータから取得する）か、Javadoc を直した上で DB 例外を行単位で扱う設計にする必要がある。",
+   "line": 18,
+   "evidence": "Javadoc に「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」とある。差分で CODE_MAX_LENGTH と長さ検査を削除している。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:18",
+   "message": "クラス Javadoc が実装と食い違う Javadoc は「桁数・外部キーの誤りは登録前にここで確かめる」と書いたままだが、桁数の検査は消えている。後続の保守者が桁数も検査済みと誤解し、同種の変更や例外処理の抜けを見逃しやすい。上限値を 2 か所で持つ問題を避けたいなら、検査を消すのではなく上限値の持ち方を変える（設定値化、または起動時に DB メタデータから取得する）か、Javadoc を直した上で DB 例外を行単位で扱う設計にする必要がある。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "桁数まわりの回帰テストを削除しただけで代替がない",
+   "detail": "tooLongCodeSkipsOnlyThatLine、parseRejects の 20 文字超ケース、parseAcceptsExactlyTwentyChars を削除した。長い値が来たときの挙動（スキップか、全体失敗か）を確認するテストが何も残らない。FakeOrderMapper は桁数を検査しないため、このユニットテストでは桁超過が絶対に再現できず、実 DB を使う統合テストもない（推測: 差分に含まれていないだけの可能性はある）。",
+   "line": 60,
+   "evidence": "変更後のテスト全文に桁数に関する記述がなく、FakeOrderMapper で保存した値は文字列のまま記録されるだけに見える（実装は差分外のため推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:60",
+   "message": "桁数まわりの回帰テストを削除しただけで代替がない tooLongCodeSkipsOnlyThatLine、parseRejects の 20 文字超ケース、parseAcceptsExactlyTwentyChars を削除した。長い値が来たときの挙動（スキップか、全体失敗か）を確認するテストが何も残らない。FakeOrderMapper は桁数を検査しないため、このユニットテストでは桁超過が絶対に再現できず、実 DB を使う統合テストもない（推測: 差分に含まれていないだけの可能性はある）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁超過の行は「スキップして続行」「全体失敗」のどちらを期待するのか",
+   "detail": "桁超過の入力時の仕様を確認したい。全体失敗を許容するなら、ジョブの終了コード、ログ、再実行手順（冪等なので再実行は可能）を整理する必要がある。続行が必要なら、Java 側の検査を維持するか、行ごとに DataIntegrityViolationException を捕捉する仕組みが要る。ただし PostgreSQL では例外後にトランザクションが aborted になるため、行ごとに REQUIRES_NEW か SAVEPOINT が必要になる。",
+   "line": 82,
+   "evidence": "importLines は 1 つの @Transactional で全行を処理し、例外処理は parse 時の IllegalArgumentException のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "桁超過の行は「スキップして続行」「全体失敗」のどちらを期待するのか 桁超過の入力時の仕様を確認したい。全体失敗を許容するなら、ジョブの終了コード、ログ、再実行手順（冪等なので再実行は可能）を整理する必要がある。続行が必要なら、Java 側の検査を維持するか、行ごとに DataIntegrityViolationException を捕捉する仕組みが要る。ただし PostgreSQL では例外後にトランザクションが aborted になるため、行ごとに REQUIRES_NEW か SAVEPOINT が必要になる。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "standard",
+ "run": 1
+}

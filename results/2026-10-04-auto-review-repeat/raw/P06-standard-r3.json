@@ -1,0 +1,139 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: エラー応答",
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: 例外の扱いの変更",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 4 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6511,
+   "output_tokens": 1833,
+   "cost_usd": 0.024,
+   "seconds": 16.0,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.024,
+ "notes": [],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 3
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "想定外の例外のハンドラ削除でエラー応答の形が崩れ、500 の扱いが不明確になる",
+   "detail": "DB 障害や NPE など想定外の例外が起きたとき、これまでは APPE9999 の ErrorResponse（details 空）を返していた。削除後は Spring 既定に落ちる。Spring Boot の BasicErrorController の応答は timestamp/status/error/path 形式で、messageId/message が無い。クラス Javadoc の「どの失敗でも ErrorResponse の形で返す」「APPE9999 だけを返す」という契約を破り、クライアントが 2 種類の形を扱う必要が出る。application.properties の設定次第では、例外メッセージやスタックトレースが応答に出る恐れもある（設定は差分に無く推測）。さらに、ログ出力（log.error + スタックトレース）の保証もなくなる。Spring 既定ではサーブレットコンテナの標準ログ頼みになり、障害調査と監視に影響しうる。",
+   "line": 53,
+   "evidence": "削除された unexpected(Exception) が body(INTERNAL_SERVER_ERROR, SYSTEM_ERROR) と log.error を行っていた。変更後の全文に Exception 用ハンドラが無い。クラス Javadoc の記述は残ったまま。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:53",
+   "message": "想定外の例外のハンドラ削除でエラー応答の形が崩れ、500 の扱いが不明確になる DB 障害や NPE など想定外の例外が起きたとき、これまでは APPE9999 の ErrorResponse（details 空）を返していた。削除後は Spring 既定に落ちる。Spring Boot の BasicErrorController の応答は timestamp/status/error/path 形式で、messageId/message が無い。クラス Javadoc の「どの失敗でも ErrorResponse の形で返す」「APPE9999 だけを返す」という契約を破り、クライアントが 2 種類の形を扱う必要が出る。application.properties の設定次第では、例外メッセージやスタックトレースが応答に出る恐れもある（設定は差分に無く推測）。さらに、ログ出力（log.error + スタックトレース）の保証もなくなる。Spring 既定ではサーブレットコンテナの標準ログ頼みになり、障害調査と監視に影響しうる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "400 系の入力エラー（型違い・壊れた JSON）の応答形式が変わる",
+   "detail": "/members/abc や壊れた JSON を送ると、これまで APPE0001 の ErrorResponse で 400 が返っていた。削除後は Spring 既定の応答（ProblemDetail か BasicErrorController 形式。設定により異なるが推測）になり、messageId・details を持たない。既存クライアントが messageId で分岐していると、壊れた入力を判別できなくなる。405 や 404 などのフレームワーク例外も同様に形式が変わる。",
+   "line": 53,
+   "evidence": "削除された typeMismatch / unreadable / unexpected 内の framework ErrorResponse 分岐。MethodArgumentNotValidException 以外の 400 ハンドラが残っていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:53",
+   "message": "400 系の入力エラー（型違い・壊れた JSON）の応答形式が変わる /members/abc や壊れた JSON を送ると、これまで APPE0001 の ErrorResponse で 400 が返っていた。削除後は Spring 既定の応答（ProblemDetail か BasicErrorController 形式。設定により異なるが推測）になり、messageId・details を持たない。既存クライアントが messageId で分岐していると、壊れた入力を判別できなくなる。405 や 404 などのフレームワーク例外も同様に形式が変わる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "削除した挙動のテストをまとめて消しており、回帰を検知できない",
+   "detail": "型違い 400、壊れた JSON 400、405 の形式維持、想定外エラー 500 で内部情報（secret-host:5432）が漏れないこと、の 4 テストが消えた。特に最後のテストは情報漏えい防止の確認だった。ハンドラ削除後は、例外メッセージが応答に出ないことを保証する手段が無い。",
+   "line": 60,
+   "evidence": "差分で削除された 4 テスト。残るのは正常系・404・入力検証 400 のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:60",
+   "message": "削除した挙動のテストをまとめて消しており、回帰を検知できない 型違い 400、壊れた JSON 400、405 の形式維持、想定外エラー 500 で内部情報（secret-host:5432）が漏れないこと、の 4 テストが消えた。特に最後のテストは情報漏えい防止の確認だった。ハンドラ削除後は、例外メッセージが応答に出ないことを保証する手段が無い。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "未使用 import が残り、Javadoc も実態と合わない",
+   "detail": "HttpMessageNotReadableException と MethodArgumentTypeMismatchException の import が未使用のまま残る。Javadoc の「想定外のエラーは 500 と APPE9999 だけを返す」も事実でなくなった。Checkstyle などの未使用 import 検査があればビルドが失敗しうる（設定は推測）。",
+   "line": 1,
+   "evidence": "変更後の全文の import 行と、ハンドラが 3 つしかないクラス本体。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:1",
+   "message": "未使用 import が残り、Javadoc も実態と合わない HttpMessageNotReadableException と MethodArgumentTypeMismatchException の import が未使用のまま残る。Javadoc の「想定外のエラーは 500 と APPE9999 だけを返す」も事実でなくなった。Checkstyle などの未使用 import 検査があればビルドが失敗しうる（設定は推測）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "Spring 既定に任せる際の設定と、クライアントとの合意はあるか",
+   "detail": "spring.mvc.problemdetails.enabled や server.error.include-message / include-stacktrace / include-exception の設定、既存クライアントが ErrorResponse 形式に依存しているかを確認したい。これらによって影響範囲が変わる。簡素化が目的なら、Exception 用の 500 ハンドラと ResponseEntityExceptionHandler の継承のどちらかは残す案を検討してほしい。",
+   "line": 53,
+   "evidence": "PR 説明の「それ以外は Spring の既定に任せます」。設定ファイルは差分に含まれず、内容は不明。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:53",
+   "message": "Spring 既定に任せる際の設定と、クライアントとの合意はあるか spring.mvc.problemdetails.enabled や server.error.include-message / include-stacktrace / include-exception の設定、既存クライアントが ErrorResponse 形式に依存しているかを確認したい。これらによって影響範囲が変わる。簡素化が目的なら、Exception 用の 500 ハンドラと ResponseEntityExceptionHandler の継承のどちらかは残す案を検討してほしい。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "削除後に空行が残り、未使用 import もある",
+   "detail": "クラス末尾に連続した空行が残る。Optional のインポートは、削除したテストでしか使われておらず未使用になった。",
+   "line": 76,
+   "evidence": "変更後の全文の末尾付近と import java.util.Optional。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:76",
+   "message": "削除後に空行が残り、未使用 import もある クラス末尾に連続した空行が残る。Optional のインポートは、削除したテストでしか使われておらず未使用になった。"
+  }
+ ],
+ "rejected": [],
+ "case": "P06",
+ "config": "standard",
+ "run": 3
+}

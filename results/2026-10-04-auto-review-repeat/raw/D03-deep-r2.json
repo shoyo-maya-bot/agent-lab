@@ -1,0 +1,68 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4248,
+   "output_tokens": 2100,
+   "cost_usd": 0.0457,
+   "seconds": 22.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0457,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "product_code の上限境界（21 文字で拒否）が固定されていない",
+   "detail": "この PR は product_code の 20 文字の受け入れを追加したが、拒否側のテストは 22 文字だけ。実装の判定が誤って `length() > 21` になっていても、20 文字は受け入れ、22 文字は拒否するので、両方のテストが通る。その結果、21 文字の product_code が取り込まれる off-by-one の不具合を見逃す。order_no は tooLongCodeSkipsOnlyThatLine で 21 文字を確かめているのに、product_code だけ境界の外側が 1 文字ずれている。parseRejects に 21 文字のケースを足し、期待メッセージを「product_code は 20 文字以内です（21 文字）」にするのがよい。",
+   "line": 86,
+   "evidence": "parseRejects の拒否ケースは `\"A001,1,P-01234567890123456789,1 | product_code は 20 文字以内です（22 文字）\"`（22 文字）だけ。受け入れ側は新しいテストの `\"1,20\"` と `\"20,20\"` で 20 文字。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:86",
+   "message": "product_code の上限境界（21 文字で拒否）が固定されていない この PR は product_code の 20 文字の受け入れを追加したが、拒否側のテストは 22 文字だけ。実装の判定が誤って `length() > 21` になっていても、20 文字は受け入れ、22 文字は拒否するので、両方のテストが通る。その結果、21 文字の product_code が取り込まれる off-by-one の不具合を見逃す。order_no は tooLongCodeSkipsOnlyThatLine で 21 文字を確かめているのに、product_code だけ境界の外側が 1 文字ずれている。parseRejects に 21 文字のケースを足し、期待メッセージを「product_code は 20 文字以内です（21 文字）」にするのがよい。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "値の一致検証から長さ検証に弱まっている",
+   "detail": "変更前は `orderNo()` を `isEqualTo(twenty)` で検証していたが、変更後は `hasSize` だけになった。parse が中身を書き換えても、長さが同じならテストは通る。たとえば正規化（大文字化・置換）を入れた場合や、1 文字ずつずれた切り出しをした場合がこれにあたる。`isEqualTo(\"B\".repeat(orderNoLength))` と `isEqualTo(\"P\".repeat(productLength))` にすれば、長さと中身の両方を確かめられる。",
+   "line": 96,
+   "evidence": "削除行は `.orderNo()).isEqualTo(twenty)`、追加行は `assertThat(o.orderNo()).hasSize(orderNoLength);` と `assertThat(o.productCode()).hasSize(productLength);`。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:96",
+   "message": "値の一致検証から長さ検証に弱まっている 変更前は `orderNo()` を `isEqualTo(twenty)` で検証していたが、変更後は `hasSize` だけになった。parse が中身を書き換えても、長さが同じならテストは通る。たとえば正規化（大文字化・置換）を入れた場合や、1 文字ずつずれた切り出しをした場合がこれにあたる。`isEqualTo(\"B\".repeat(orderNoLength))` と `isEqualTo(\"P\".repeat(productLength))` にすれば、長さと中身の両方を確かめられる。"
+  }
+ ],
+ "rejected": [],
+ "case": "D03",
+ "config": "deep",
+ "run": 2
+}

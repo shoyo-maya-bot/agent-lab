@@ -1,0 +1,88 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3594,
+   "output_tokens": 1035,
+   "cost_usd": 0.0133,
+   "seconds": 10.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0133,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、ID 検知の監視・アラートが外れる恐れ",
+   "detail": "異常終了時（ファイル取得失敗・DB 障害など任意の Exception）のログ行から MessageIds.BATCH_FAILED が外れた。運用側が BATCH_FAILED の ID をキーにログ監視やアラート通知をしている場合、ジョブが終了コード 8 で落ちても通知が飛ばず、障害に気づけない。同じクラス内の他のログ（引数エラー、開始、終了、スキップ）はすべてメッセージ ID を先頭に付けており、異常終了だけ形式が不揃いになる。なお、監視の実態は差分からは見えないため、影響範囲は推測。",
+   "line": 62,
+   "evidence": "変更前: log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e); 変更後: log.error(\"JOB0001 異常終了\", e);。他の呼び出しは MessageIds.BATCH_INVALID_ARGS / IMPORT_STARTED / IMPORT_FINISHED / IMPORT_LINE_SKIPPED を付けている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、ID 検知の監視・アラートが外れる恐れ 異常終了時（ファイル取得失敗・DB 障害など任意の Exception）のログ行から MessageIds.BATCH_FAILED が外れた。運用側が BATCH_FAILED の ID をキーにログ監視やアラート通知をしている場合、ジョブが終了コード 8 で落ちても通知が飛ばず、障害に気づけない。同じクラス内の他のログ（引数エラー、開始、終了、スキップ）はすべてメッセージ ID を先頭に付けており、異常終了だけ形式が不揃いになる。なお、監視の実態は差分からは見えないため、影響範囲は推測。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "MessageIds.BATCH_FAILED が未使用になる可能性（定数の孤立）",
+   "detail": "この変更で本クラスから BATCH_FAILED への参照が消えた。他で使われていなければ定数が孤立し、メッセージ定義と実ログが乖離する。ID を戻せばこの問題も解消する。他クラスでの利用有無は差分から見えないため推測。",
+   "line": 5,
+   "evidence": "変更後の全文に MessageIds.BATCH_FAILED の参照がない（MessageIds 自体は他のログ用に import が残っている）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:5",
+   "message": "MessageIds.BATCH_FAILED が未使用になる可能性（定数の孤立） この変更で本クラスから BATCH_FAILED への参照が消えた。他で使われていなければ定数が孤立し、メッセージ定義と実ログが乖離する。ID を戻せばこの問題も解消する。他クラスでの利用有無は差分から見えないため推測。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "ID を外した意図の確認（「読みやすさ」の対象は何か）",
+   "detail": "PR の説明は「異常終了のログを読みやすくした」だが、ID を外すと運用上の検索性・監視性が下がる。読みにくさの原因が ID の見た目なら、ID は残してフォーマットを整える方法もある。BATCH_FAILED を意図的に廃止するなら、監視設定やメッセージ定義書も同時に更新されているか確認したい。",
+   "line": 62,
+   "evidence": "差分は BATCH_FAILED の削除のみで、監視設定・MessageIds の変更は含まれていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "ID を外した意図の確認（「読みやすさ」の対象は何か） PR の説明は「異常終了のログを読みやすくした」だが、ID を外すと運用上の検索性・監視性が下がる。読みにくさの原因が ID の見た目なら、ID は残してフォーマットを整える方法もある。BATCH_FAILED を意図的に廃止するなら、監視設定やメッセージ定義書も同時に更新されているか確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "standard",
+ "run": 3
+}

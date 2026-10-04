@@ -1,0 +1,20 @@
+diff --git a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+index f400e9b..e52d64f 100644
+--- a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+@@ -89,9 +89,11 @@ class OrderImportServiceTest {
+         assertThatThrownBy(() -> OrderImportService.parse(line)).hasMessage(message);
+     }
+ 
+-    @Test
+-    void parseAcceptsExactlyTwentyChars() {
+-        String twenty = "B".repeat(20);
+-        assertThat(OrderImportService.parse(twenty + ",1," + twenty + ",1").orderNo()).isEqualTo(twenty);
++    @ParameterizedTest
++    @CsvSource({"20,1", "1,20", "20,20"})
++    void parseAcceptsCodesUpToTwentyChars(int orderNoLength, int productLength) {
++        Order o = OrderImportService.parse("B".repeat(orderNoLength) + ",1," + "P".repeat(productLength) + ",1");
++        assertThat(o.orderNo()).hasSize(orderNoLength);
++        assertThat(o.productCode()).hasSize(productLength);
+     }
+ }

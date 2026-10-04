@@ -1,0 +1,120 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6072,
+   "output_tokens": 1459,
+   "cost_usd": 0.0202,
+   "seconds": 15.5,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 6897,
+   "output_tokens": 799,
+   "cost_usd": 0.0704,
+   "seconds": 10.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0906,
+ "notes": [
+  "standard の MUST 2 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 2,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁数超過の 1 行で取込全体が失敗・ロールバックする",
+   "detail": "order_no または product_code が 21 文字以上の行が CSV に 1 行でもあると、insertIfAbsent で DB が桁数超過の例外（VARCHAR(20) 超過）を投げる。importLines は @Transactional で、この例外は IllegalArgumentException ではないため parse 側の catch に入らず、ループを抜けて全体がロールバックされる。それまでに成功した行もすべて取り消され、行番号付きのエラー報告も残らない。「誤りの行は飛ばして続行し、行番号と理由を残す」という仕様が崩れる。DB によっては（設定次第で）切り詰めて登録される可能性もあり、その場合は別の注文番号と衝突して誤って重複扱いになる（推測）。",
+   "line": 85,
+   "evidence": "削除した if (v.length() > CODE_MAX_LENGTH) が唯一の事前チェックだった。クラスの Javadoc にも「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため、登録の前にここで確かめる」とあり、この PR はその方針と矛盾する。importLines に DB 例外を捕捉する処理は無い。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "PR は code() から唯一の桁数チェックを削除した。このため 21 文字以上の値はそのまま insertIfAbsent に渡る。importLines が捕まえるのは parse の IllegalArgumentException だけで、DB 例外はループの外へ抜けて @Transactional 全体を巻き戻す。これは Javadoc に書かれた「1 行の誤りで全体が取り消されないよう事前に確かめる」という方針と矛盾する。なお、切り詰めて登録されるかどうかは DDL や DB 設定が見えないため推測。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:85",
+   "message": "桁数超過の 1 行で取込全体が失敗・ロールバックする order_no または product_code が 21 文字以上の行が CSV に 1 行でもあると、insertIfAbsent で DB が桁数超過の例外（VARCHAR(20) 超過）を投げる。importLines は @Transactional で、この例外は IllegalArgumentException ではないため parse 側の catch に入らず、ループを抜けて全体がロールバックされる。それまでに成功した行もすべて取り消され、行番号付きのエラー報告も残らない。「誤りの行は飛ばして続行し、行番号と理由を残す」という仕様が崩れる。DB によっては（設定次第で）切り詰めて登録される可能性もあり、その場合は別の注文番号と衝突して誤って重複扱いになる（推測）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "クラスの Javadoc が実装と食い違っている",
+   "detail": "Javadoc は「桁数・外部キーは登録の前にここで確かめる」と書いたままで、桁数の確認だけが消えた。後からコードを読む人が桁数も検証されていると誤解する。検証を戻すなら Javadoc はそのままでよい。外す方針を維持するなら、桁数は検証されず超過時は全体失敗になる旨に直す必要がある。",
+   "line": 13,
+   "evidence": "Javadoc の「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」と、変更後の code() が空チェックしかしていない点。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "Javadoc の「桁数…登録の前にここで確かめる」は、変更後の code() が空チェックしかしていない実装と食い違っている。ただし s1 を直せば（チェックを戻せば）Javadoc の修正は要らない。s1 から派生した問題なので、単独では MUST より WANT が妥当。",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:13",
+   "message": "クラスの Javadoc が実装と食い違っている Javadoc は「桁数・外部キーは登録の前にここで確かめる」と書いたままで、桁数の確認だけが消えた。後からコードを読む人が桁数も検証されていると誤解する。検証を戻すなら Javadoc はそのままでよい。外す方針を維持するなら、桁数は検証されず超過時は全体失敗になる旨に直す必要がある。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "桁数まわりのテストをすべて削除しており、境界の回帰を検知できない",
+   "detail": "21 文字の行だけが飛ばされること、20 文字ちょうどは受理されることを確かめるテストが無くなった。桁数の二重管理を避けたいなら、上限を 1 か所（定数、またはエンティティ・DDL と突き合わせるテスト）に集約したうえで、境界テストは残すべき。現状は上記の全体失敗が起きても CI で気づけない。FakeOrderMapper は桁数を検査しないため、ユニットテストでは DB 側の挙動も再現されない。",
+   "line": 72,
+   "evidence": "tooLongCodeSkipsOnlyThatLine、parseAcceptsExactlyTwentyChars、parseRejects の 20 文字超ケースが削除されている。代わりのテストは追加されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:72",
+   "message": "桁数まわりのテストをすべて削除しており、境界の回帰を検知できない 21 文字の行だけが飛ばされること、20 文字ちょうどは受理されることを確かめるテストが無くなった。桁数の二重管理を避けたいなら、上限を 1 か所（定数、またはエンティティ・DDL と突き合わせるテスト）に集約したうえで、境界テストは残すべき。現状は上記の全体失敗が起きても CI で気づけない。FakeOrderMapper は桁数を検査しないため、ユニットテストでは DB 側の挙動も再現されない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "「DB の定義に任せる」場合の想定する失敗の扱いは？",
+   "detail": "桁数超過を DB 例外として扱う意図なら、1 行ごとに例外を捕捉して続行する（ただし PostgreSQL 等ではトランザクションが中断状態になるため、行ごとに別トランザクションか SAVEPOINT が必要）のか、全体失敗を許容するのかを確認したい。DDL を唯一の定義にしたいだけなら、Java 側の定数を DDL から生成する、または桁数を検証するテストを置く方法もある。",
+   "line": 85,
+   "evidence": "PR 説明は「Java 側のチェックを外しました」とだけあり、超過時の挙動の説明が無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:85",
+   "message": "「DB の定義に任せる」場合の想定する失敗の扱いは？ 桁数超過を DB 例外として扱う意図なら、1 行ごとに例外を捕捉して続行する（ただし PostgreSQL 等ではトランザクションが中断状態になるため、行ごとに別トランザクションか SAVEPOINT が必要）のか、全体失敗を許容するのかを確認したい。DDL を唯一の定義にしたいだけなら、Java 側の定数を DDL から生成する、または桁数を検証するテストを置く方法もある。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "auto",
+ "run": 2
+}

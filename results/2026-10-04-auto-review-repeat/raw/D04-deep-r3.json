@@ -1,0 +1,68 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 2920,
+   "output_tokens": 894,
+   "cost_usd": 0.0202,
+   "seconds": 10.6,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0202,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "名前解決の退行を検知するテストが差分に無い",
+   "detail": "将来ビルド設定から -parameters が外れたり、コンパイラが変わったりすると、照会 API（API0001）だけが実行時に 500 になります。コンパイルは通るため、テストが無いと気付けません。MockMvc などで GET /api/v1/members/{id} が 200 または 404 を返すことを確かめるテストがあれば、この退行を検知できます。既存テストがあるかはこの差分からは不明です（推測）。",
+   "line": 32,
+   "evidence": "今回の変更で、引数名の解決がコンパイラオプションに依存するようになりました。一方、差分にはテストの追加・変更がありません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "名前解決の退行を検知するテストが差分に無い 将来ビルド設定から -parameters が外れたり、コンパイラが変わったりすると、照会 API（API0001）だけが実行時に 500 になります。コンパイルは通るため、テストが無いと気付けません。MockMvc などで GET /api/v1/members/{id} が 200 または 404 を返すことを確かめるテストがあれば、この退行を検知できます。既存テストがあるかはこの差分からは不明です（推測）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "-parameters が全ビルド経路で効いているか（未確認）",
+   "detail": "Spring Framework 6.1 以降は、LocalVariableTableParameterNameDiscoverer（-g のデバッグ情報から引数名を推定する仕組み）が削除されています。そのため、-parameters なしでコンパイルされたクラスでは、GET /api/v1/members/{id} の呼び出しが毎回 500 になります（引数名を解決できない旨の IllegalArgumentException）。PR 説明では build.gradle で -parameters を付けているとしていますが、この差分からは確認できません。また、Gradle を通さない実行経路では -parameters が付かないことがあります。例として、IDE の独自コンパイラによる実行や、別のビルド設定を持つサブプロジェクトがあります（推測）。build.gradle の該当箇所の提示か、Spring Boot Gradle プラグインの自動設定に頼っているかの確認をお願いします。",
+   "line": 32,
+   "evidence": "変更行は `@PathVariable long id` で、名前の指定がありません。build.gradle はこの差分に含まれていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "-parameters が全ビルド経路で効いているか（未確認） Spring Framework 6.1 以降は、LocalVariableTableParameterNameDiscoverer（-g のデバッグ情報から引数名を推定する仕組み）が削除されています。そのため、-parameters なしでコンパイルされたクラスでは、GET /api/v1/members/{id} の呼び出しが毎回 500 になります（引数名を解決できない旨の IllegalArgumentException）。PR 説明では build.gradle で -parameters を付けているとしていますが、この差分からは確認できません。また、Gradle を通さない実行経路では -parameters が付かないことがあります。例として、IDE の独自コンパイラによる実行や、別のビルド設定を持つサブプロジェクトがあります（推測）。build.gradle の該当箇所の提示か、Spring Boot Gradle プラグインの自動設定に頼っているかの確認をお願いします。"
+  }
+ ],
+ "rejected": [],
+ "case": "D04",
+ "config": "deep",
+ "run": 3
+}

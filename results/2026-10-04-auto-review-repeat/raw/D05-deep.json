@@ -1,0 +1,89 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 4,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: トランザクション境界の変更"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 2970,
+   "output_tokens": 1368,
+   "cost_usd": 0.0474,
+   "seconds": 17.0,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0474,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "方針の変更として、ほかの照会メソッドやチームの規約との一貫性を確認したい",
+   "detail": "このクラスでは照会にだけ指定が無く、更新には @Transactional が付いています。このメソッドだけ外すと、今後追加する照会で付けるかどうかが人によって変わります。SQL が複数本になったときに付け忘れる原因にもなります。外す方針なら、規約やコメントに残しておくことを勧めます。",
+   "line": 21,
+   "evidence": "register には @Transactional が残っており、get からだけ注釈が消えています。import の org.springframework.transaction.annotation.Transactional も残っています。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "方針の変更として、ほかの照会メソッドやチームの規約との一貫性を確認したい このクラスでは照会にだけ指定が無く、更新には @Transactional が付いています。このメソッドだけ外すと、今後追加する照会で付けるかどうかが人によって変わります。SQL が複数本になったときに付け忘れる原因にもなります。外す方針なら、規約やコメントに残しておくことを勧めます。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly を前提にした参照系ルーティングや DB 設定が無いか確認したい",
+   "detail": "AbstractRoutingDataSource などで「readOnly トランザクションならリードレプリカへ振る」仕組みがあると、今回の変更で照会がプライマリへ流れ、負荷の配分が変わります。Connection#setReadOnly(true) を前提にした DB 側の最適化（PostgreSQL の read only トランザクションなど）や、誤った書き込みを防ぐ効果も無くなります。SELECT 1 本であっても、トランザクション指定には「1 本に閉じる」以外の意味が付いていることがあります。",
+   "line": 21,
+   "evidence": "差分で外したのは @Transactional(readOnly = true) です。DataSource の構成は差分に含まれていないので、ここに書いた影響は推測です。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly を前提にした参照系ルーティングや DB 設定が無いか確認したい AbstractRoutingDataSource などで「readOnly トランザクションならリードレプリカへ振る」仕組みがあると、今回の変更で照会がプライマリへ流れ、負荷の配分が変わります。Connection#setReadOnly(true) を前提にした DB 側の最適化（PostgreSQL の read only トランザクションなど）や、誤った書き込みを防ぐ効果も無くなります。SELECT 1 本であっても、トランザクション指定には「1 本に閉じる」以外の意味が付いていることがあります。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "findById が遅延ロードやネストした select を使っていないか確認したい",
+   "detail": "mybatis-spring では、トランザクションの外で Mapper を呼ぶたびに SqlSession を開き、呼び出しが終わると閉じます。findById の resultMap が association や collection の fetchType=lazy（または lazyLoadingEnabled）を使っている場合、呼び出し元で遅延プロパティに触れた時点でセッションがすでに閉じています。そのため例外になるか、別のコネクションで不整合な読み取りになるおそれがあります。ネストした select で SQL が複数本になる場合も、同じ時点の一貫した読み取りでなくなります。",
+   "line": 24,
+   "evidence": "PR の説明は「照会は SELECT 1 本」です。ただ、MemberMapper の XML（resultMap）は差分に含まれていないため確認できず、推測です。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:24",
+   "message": "findById が遅延ロードやネストした select を使っていないか確認したい mybatis-spring では、トランザクションの外で Mapper を呼ぶたびに SqlSession を開き、呼び出しが終わると閉じます。findById の resultMap が association や collection の fetchType=lazy（または lazyLoadingEnabled）を使っている場合、呼び出し元で遅延プロパティに触れた時点でセッションがすでに閉じています。そのため例外になるか、別のコネクションで不整合な読み取りになるおそれがあります。ネストした select で SQL が複数本になる場合も、同じ時点の一貫した読み取りでなくなります。"
+  }
+ ],
+ "rejected": [],
+ "case": "D05",
+ "config": "deep",
+ "run": 1
+}

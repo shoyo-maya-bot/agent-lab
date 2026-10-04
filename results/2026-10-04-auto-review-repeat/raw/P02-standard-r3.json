@@ -1,0 +1,122 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5958,
+   "output_tokens": 1527,
+   "cost_usd": 0.0207,
+   "seconds": 16.0,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0207,
+ "notes": [],
+ "summary": {
+  "findings": 5,
+  "shown": 5,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない member_id の行で FK 違反となり、取込全体がロールバックされる",
+   "detail": "CSV に存在しない member_id が 1 行でも含まれると、insertIfAbsent が外部キー違反の例外（DataIntegrityViolationException 等）を投げる。importLines は @Transactional で、例外は行単位では捕捉されないため、それまでに取り込んだ全行が取り消され、ジョブも異常終了する。従来の「該当行だけ飛ばして続行し、行番号付きでエラー報告」という仕様が失われる。さらに PostgreSQL の場合、トランザクション内で制約違反が起きると以降の SQL も失敗する状態になるため、行単位で握りつぶして続行する対応も単純にはできない。再実行しても同じ行で同じ失敗を繰り返す。",
+   "line": 51,
+   "evidence": "差分で memberExists による事前確認とエラー追加（continue）を削除。クラスの Javadoc に「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため、登録の前にここで確かめる」とある。PR 説明の「FK で守られている」は不整合を防ぐだけで、行単位のスキップは保証しない。insertIfAbsent 周辺に try/catch はない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "存在しない member_id の行で FK 違反となり、取込全体がロールバックされる CSV に存在しない member_id が 1 行でも含まれると、insertIfAbsent が外部キー違反の例外（DataIntegrityViolationException 等）を投げる。importLines は @Transactional で、例外は行単位では捕捉されないため、それまでに取り込んだ全行が取り消され、ジョブも異常終了する。従来の「該当行だけ飛ばして続行し、行番号付きでエラー報告」という仕様が失われる。さらに PostgreSQL の場合、トランザクション内で制約違反が起きると以降の SQL も失敗する状態になるため、行単位で握りつぶして続行する対応も単純にはできない。再実行しても同じ行で同じ失敗を繰り返す。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "存在しない会員の行を扱うテストが削除され、仕様の検証が無くなった",
+   "detail": "unknownMemberSkipsOnlyThatLine を消したことで、存在しない会員の行の扱い（スキップ・エラー報告・他行は取込継続）を検証するテストが無くなった。上記の退行がテストで検知されない。FakeOrderMapper は FK 違反を再現しないため、現状のテストは通ってしまう。",
+   "line": 52,
+   "evidence": "差分で当該テストを削除。残っているテストに member の存在しないケースは無い。Javadoc には「存在しない会員の行は飛ばして続行し」と仕様が残っている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:52",
+   "message": "存在しない会員の行を扱うテストが削除され、仕様の検証が無くなった unknownMemberSkipsOnlyThatLine を消したことで、存在しない会員の行の扱い（スキップ・エラー報告・他行は取込継続）を検証するテストが無くなった。上記の退行がテストで検知されない。FakeOrderMapper は FK 違反を再現しないため、現状のテストは通ってしまう。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc が実装と食い違っている",
+   "detail": "Javadoc は「存在しない会員の行は飛ばして続行」「外部キーに当たる誤りは登録の前にここで確かめる」と書いているが、確認は削除された。保守者が誤解する。",
+   "line": 13,
+   "evidence": "クラス Javadoc の記述と、importLines から memberExists 呼び出しが消えていること。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:13",
+   "message": "Javadoc が実装と食い違っている Javadoc は「存在しない会員の行は飛ばして続行」「外部キーに当たる誤りは登録の前にここで確かめる」と書いているが、確認は削除された。保守者が誤解する。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化するなら仕様を保てる別の方法を使う",
+   "detail": "遅さの原因が行ごとの SELECT なら、先に CSV 内の member_id を重複排除し、IN 句で一括確認して Set に持つ方法が使える（従来のキャッシュでも会員ごとに 1 回で済んでいた）。または insert を ON CONFLICT DO NOTHING とし、FK 違反を SAVEPOINT／行単位の挿入で処理する案もある。いずれも測定で本当に存在確認が支配的だったか確認したい。",
+   "line": 38,
+   "evidence": "削除前は memberCache で会員ごとに 1 回の確認だった（テストの memberLookups が 2 回を期待）。性能計測の結果は PR に無い（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:38",
+   "message": "高速化するなら仕様を保てる別の方法を使う 遅さの原因が行ごとの SELECT なら、先に CSV 内の member_id を重複排除し、IN 句で一括確認して Set に持つ方法が使える（従来のキャッシュでも会員ごとに 1 回で済んでいた）。または insert を ON CONFLICT DO NOTHING とし、FK 違反を SAVEPOINT／行単位の挿入で処理する案もある。いずれも測定で本当に存在確認が支配的だったか確認したい。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない会員を含むファイルは全体失敗にしてよい、という合意はあるか",
+   "detail": "仕様を「1 件でも不正会員があればファイル全体を失敗にする」に変えるなら、運用（終了コード、エラーメッセージに行番号を出すか）と利用者への周知が必要。その合意があるか確認したい。",
+   "line": 51,
+   "evidence": "PR 説明に仕様変更の言及がない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "存在しない会員を含むファイルは全体失敗にしてよい、という合意はあるか 仕様を「1 件でも不正会員があればファイル全体を失敗にする」に変えるなら、運用（終了コード、エラーメッセージに行番号を出すか）と利用者への周知が必要。その合意があるか確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "standard",
+ "run": 3
+}

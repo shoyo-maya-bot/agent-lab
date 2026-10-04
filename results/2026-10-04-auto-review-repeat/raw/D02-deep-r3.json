@@ -1,0 +1,72 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3501,
+   "output_tokens": 1172,
+   "cost_usd": 0.0263,
+   "seconds": 14.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0263,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "Set にする狙いと、テストで同等性を確認しているか",
+   "detail": "run() は 1 回しか呼ばれず、Set は毎回作り直されて 1 回しか引かれません。このため、計算量の面でも読みやすさの面でも anyMatch より良くなる点が見当たりません。書き換えた狙いを教えてください。また「動作は同じ」をテストで確認しているかも教えてください。差分にテストの変更はありません。確認したい入力は、未指定（空文字）、前後に空白があるもの、存在しない ID、一致する ID です。テストがあるかどうかは差分からは推測できません。",
+   "line": 46,
+   "evidence": "`Set<String> known = ...` は run() のローカル変数で、使っているのは `contains` の 1 回だけ。差分にテストファイルが含まれていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:46",
+   "message": "Set にする狙いと、テストで同等性を確認しているか run() は 1 回しか呼ばれず、Set は毎回作り直されて 1 回しか引かれません。このため、計算量の面でも読みやすさの面でも anyMatch より良くなる点が見当たりません。書き換えた狙いを教えてください。また「動作は同じ」をテストで確認しているかも教えてください。差分にテストの変更はありません。確認したい入力は、未指定（空文字）、前後に空白があるもの、存在しない ID、一致する ID です。テストがあるかどうかは差分からは推測できません。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "jobId() が null のジョブがあるとき、変更前と挙動が変わる",
+   "detail": "PR の説明は「動作は同じ」ですが、jobId() が null を返すジョブが登録されていると結果が変わります。変更前の anyMatch は、そのジョブを照合する時点で null.equals(...) を呼んで NPE になり、起動が失敗していました。ただし anyMatch は途中で打ち切るので、NPE になるのは一致するジョブより前に null のジョブが並んでいる場合だけでした。変更後は HashSet が null を受け付けるので例外になりません。null の jobId を持つジョブは黙って無視され、設定ミスに気付けなくなります。",
+   "line": 46,
+   "evidence": "変更前は `j.jobId().equals(requested)`（null の jobId に equals を呼ぶ）。変更後は `map(BatchJob::jobId).collect(Collectors.toSet())` と `known.contains(requested)` で、HashSet には null が入り、requested は空文字に正規化済みなので null にならない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:46",
+   "message": "jobId() が null のジョブがあるとき、変更前と挙動が変わる PR の説明は「動作は同じ」ですが、jobId() が null を返すジョブが登録されていると結果が変わります。変更前の anyMatch は、そのジョブを照合する時点で null.equals(...) を呼んで NPE になり、起動が失敗していました。ただし anyMatch は途中で打ち切るので、NPE になるのは一致するジョブより前に null のジョブが並んでいる場合だけでした。変更後は HashSet が null を受け付けるので例外になりません。null の jobId を持つジョブは黙って無視され、設定ミスに気付けなくなります。"
+  }
+ ],
+ "rejected": [],
+ "case": "D02",
+ "config": "deep",
+ "run": 3
+}

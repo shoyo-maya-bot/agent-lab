@@ -1,0 +1,30 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberService.java b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+index 2912e45..e833a71 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberService.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+@@ -28,10 +28,7 @@ public class MemberService {
+     @Transactional
+     public Member register(String name, String email) {
+         String normalized = email.trim().toLowerCase(Locale.ROOT);
+-        // 事前の確認は「よくある重複」を早く返すため。同時に登録されたときの最終的な判定は DB の一意制約に任せる
+-        if (mapper.existsByEmail(normalized)) {
+-            throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized);
+-        }
++        // 重複の判定は DB の一意制約に任せる（同時に登録されても 409 になる）
+         MemberRecord rec = new MemberRecord(name.trim(), normalized);
+         try {
+             mapper.insert(rec);
+diff --git a/sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java b/sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java
+index 69d73d7..976cdad 100644
+--- a/sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java
+@@ -31,6 +31,9 @@ class MemberServiceTest {
+ 
+         @Override
+         public int insert(MemberRecord member) {
++            if (existsByEmail(member.getEmail())) {
++                throw new org.springframework.dao.DuplicateKeyException("member_email_key");
++            }
+             member.setId(++seq);
+             rows.put(member.getId(), member.toMember());
+             return 1;

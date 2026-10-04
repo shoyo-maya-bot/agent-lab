@@ -1,0 +1,69 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2926,
+   "output_tokens": 602,
+   "cost_usd": 0.0083,
+   "seconds": 7.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0083,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "-parameters 前提が差分から確認できない（ビルド・実行経路の依存）",
+   "detail": "名前省略は javac に -parameters が渡されたクラスでのみ動く。PR 説明どおり build.gradle に設定されていても、IDE の独自ビルド、別モジュール化、bootJar 以外の実行経路（例: 設定を引き継がない別ビルド）で付かない場合、実行時に id を解決できず GET /api/v1/members/{id} が 500 (IllegalArgumentException) になる。",
+   "line": 32,
+   "evidence": "差分は @PathVariable(\"id\") を @PathVariable に変更しただけ。build.gradle は差分・提供ファイルに含まれず、設定の存在は PR 説明の記述のみで確認できない（推測）。Spring Boot の Gradle プラグイン使用時は -parameters が自動付与されるため実害は小さい見込みだが、確認してほしい。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "-parameters 前提が差分から確認できない（ビルド・実行経路の依存） 名前省略は javac に -parameters が渡されたクラスでのみ動く。PR 説明どおり build.gradle に設定されていても、IDE の独自ビルド、別モジュール化、bootJar 以外の実行経路（例: 設定を引き継がない別ビルド）で付かない場合、実行時に id を解決できず GET /api/v1/members/{id} が 500 (IllegalArgumentException) になる。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "名前解決を検証するテストが差分にない",
+   "detail": "名前省略に変えたことで、-parameters が外れた際に GET /{id} が壊れる。MockMvc 等で GET /api/v1/members/{id} が 200 を返すことを確認するテストがあれば、設定の抜けを CI で検知できる。",
+   "line": 32,
+   "evidence": "差分にテストの追加・変更がない。既存テストの有無は提供ファイルから不明（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "名前解決を検証するテストが差分にない 名前省略に変えたことで、-parameters が外れた際に GET /{id} が壊れる。MockMvc 等で GET /api/v1/members/{id} が 200 を返すことを確認するテストがあれば、設定の抜けを CI で検知できる。"
+  }
+ ],
+ "rejected": [],
+ "case": "D04",
+ "config": "auto",
+ "run": 3
+}

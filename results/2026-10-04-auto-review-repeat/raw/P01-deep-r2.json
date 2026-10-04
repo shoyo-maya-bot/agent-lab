@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4698,
+   "output_tokens": 1530,
+   "cost_usd": 0.0346,
+   "seconds": 16.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0346,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同じメールで同時に登録すると 409 ではなく 500 になる",
+   "detail": "同じメールアドレスで 2 件のリクエストがほぼ同時に来ると、両方とも existsByEmail が false になり、両方が insert に進みます。後から insert した側は DB の一意制約で DuplicateKeyException になります。今回この例外を BusinessException(EMAIL_ALREADY_USED) に変換する処理を外したため、例外がそのまま上に伝わり、500（システムエラー）として返ります。その結果、利用者には 409 の業務エラーではなく障害として見え、エラーログやアラートにも誤って載ります。PR の説明にある「existsByEmail で確認済みなので不要」は、同時実行を考えていない判断です。@Transactional を付けていても、確認してから insert する流れでは競合を防げません（一般的な READ COMMITTED の場合。分離レベルの設定は推測）。try/catch(DuplicateKeyException) を元に戻してください。",
+   "line": 34,
+   "evidence": "削除されたコメント「同時に登録されたときの最終的な判定は DB の一意制約に任せる」と、削除された catch (DuplicateKeyException e) { throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized); }。変更後は 34 行目で mapper.insert(rec) を例外処理なしで呼んでいる。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "同じメールで同時に登録すると 409 ではなく 500 になる 同じメールアドレスで 2 件のリクエストがほぼ同時に来ると、両方とも existsByEmail が false になり、両方が insert に進みます。後から insert した側は DB の一意制約で DuplicateKeyException になります。今回この例外を BusinessException(EMAIL_ALREADY_USED) に変換する処理を外したため、例外がそのまま上に伝わり、500（システムエラー）として返ります。その結果、利用者には 409 の業務エラーではなく障害として見え、エラーログやアラートにも誤って載ります。PR の説明にある「existsByEmail で確認済みなので不要」は、同時実行を考えていない判断です。@Transactional を付けていても、確認してから insert する流れでは競合を防げません（一般的な READ COMMITTED の場合。分離レベルの設定は推測）。try/catch(DuplicateKeyException) を元に戻してください。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "同時登録の回帰テストを消しており、上の不具合をテストで検出できない",
+   "detail": "register_concurrentDuplicateBecomesBusinessError は、insert が DuplicateKeyException を投げたときに EMAIL_ALREADY_USED の業務エラーになることを確かめるテストでした。このテストは、まさに今回壊れる挙動を守るためのものです。テストを消して仕様側を変えたため、CI が通っても同時登録時の 500 を検出できません。例外処理を戻すのに合わせて、テストも戻してください。",
+   "line": 61,
+   "evidence": "差分で @Test register_concurrentDuplicateBecomesBusinessError（insert が throw new DuplicateKeyException(\"member_email_key\") するスタブを使い、BusinessException / EMAIL_ALREADY_USED を検証）が丸ごと削除されている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:61",
+   "message": "同時登録の回帰テストを消しており、上の不具合をテストで検出できない register_concurrentDuplicateBecomesBusinessError は、insert が DuplicateKeyException を投げたときに EMAIL_ALREADY_USED の業務エラーになることを確かめるテストでした。このテストは、まさに今回壊れる挙動を守るためのものです。テストを消して仕様側を変えたため、CI が通っても同時登録時の 500 を検出できません。例外処理を戻すのに合わせて、テストも戻してください。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "使われなくなった DuplicateKeyException の import が残っている",
+   "detail": "テストを消したため、この import はどこからも使われていません。静的解析で未使用 import をエラーにしている場合は、ビルドが失敗する可能性があります（設定は推測）。上の MUST に従ってテストを戻せば、この指摘は解消します。",
+   "line": 13,
+   "evidence": "13 行目の import org.springframework.dao.DuplicateKeyException; が、変更後の全文のどこからも参照されていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:13",
+   "message": "使われなくなった DuplicateKeyException の import が残っている テストを消したため、この import はどこからも使われていません。静的解析で未使用 import をエラーにしている場合は、ビルドが失敗する可能性があります（設定は推測）。上の MUST に従ってテストを戻せば、この指摘は解消します。"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "deep",
+ "run": 2
+}

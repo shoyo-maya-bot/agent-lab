@@ -1,0 +1,88 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3594,
+   "output_tokens": 892,
+   "cost_usd": 0.0119,
+   "seconds": 9.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0119,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、監視・検索に引っかからなくなる",
+   "detail": "異常終了（exitCode=8）時のエラーログだけメッセージ ID が付かなくなる。ログ監視やアラートが MessageIds.BATCH_FAILED のコードで検知している場合、取込中に例外が発生しても通知されず、障害に気づけない。他のログ行（引数エラー・開始・終了・行スキップ）はすべて MessageIds の ID を先頭に付けており、このログだけ形式が不揃いになる。「読みやすくする」目的でも、運用上の検索キーを削るのは副作用が大きい。",
+   "line": 62,
+   "evidence": "変更前: log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e) → 変更後: log.error(\"JOB0001 異常終了\", e)。同ファイル内の他の log 呼び出しは全て MessageIds.* を先頭に出力している。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、監視・検索に引っかからなくなる 異常終了（exitCode=8）時のエラーログだけメッセージ ID が付かなくなる。ログ監視やアラートが MessageIds.BATCH_FAILED のコードで検知している場合、取込中に例外が発生しても通知されず、障害に気づけない。他のログ行（引数エラー・開始・終了・行スキップ）はすべて MessageIds の ID を先頭に付けており、このログだけ形式が不揃いになる。「読みやすくする」目的でも、運用上の検索キーを削るのは副作用が大きい。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "ID を外した意図の確認",
+   "detail": "BATCH_FAILED を外したのは意図的か。例えば ID が出力されて読みにくかった（メッセージが二重に見えるなど）といった理由なら、ID を残したまま文言側を整える方法を検討できる。例外のスタックトレースはそのまま出力されているため、その点は問題ない。",
+   "line": 62,
+   "evidence": "PR 説明は「異常終了のログを読みやすくしました」のみで、ID を削除する理由の記載がない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "ID を外した意図の確認 BATCH_FAILED を外したのは意図的か。例えば ID が出力されて読みにくかった（メッセージが二重に見えるなど）といった理由なら、ID を残したまま文言側を整える方法を検討できる。例外のスタックトレースはそのまま出力されているため、その点は問題ない。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "BATCH_FAILED を使わなくなっても MessageIds の定義が残る（他で未使用なら死にコード）",
+   "detail": "このクラスでは BATCH_FAILED を参照しなくなる。他から使われていなければ未使用定数になる。ID を戻す方針ならこの指摘は不要。",
+   "line": 5,
+   "evidence": "差分で BATCH_FAILED の参照が削除されている。MessageIds の他の利用箇所は差分からは見えないため推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:5",
+   "message": "BATCH_FAILED を使わなくなっても MessageIds の定義が残る（他で未使用なら死にコード） このクラスでは BATCH_FAILED を参照しなくなる。他から使われていなければ未使用定数になる。ID を戻す方針ならこの指摘は不要。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "standard",
+ "run": 2
+}

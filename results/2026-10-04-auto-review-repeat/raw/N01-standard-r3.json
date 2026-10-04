@@ -1,0 +1,68 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4129,
+   "output_tokens": 662,
+   "cost_usd": 0.0102,
+   "seconds": 8.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0102,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "下限側の境界 0 は既存テストで検証されるが、上限 999 / 1000 の組と下限 1 / 0 の対がテスト間で分散している",
+   "detail": "今回追加したテストは 1 と 999 の「受理」のみを確認している。拒否側は 0 が badLinesAreReportedWithLineNumbersAndOthersContinue（importLines 経由）、1000 が parseRejects にある。0 は parse 単体の拒否テストが無く、importLines の結合テスト内にしか無いので、parse の下限判定が壊れたとき失敗原因の切り分けが難しい。また、境界の受理テストを足した目的（境界値の網羅）に対して、parseRejects に 0 のケースが無いのは対称性を欠く。",
+   "line": 93,
+   "evidence": "parseRejects の CsvSource に quantity 1000 のケースはあるが 0 のケースが無い。0 は importLines のテスト（\"A002,1,P-02,0\"）でのみ検証されている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:93",
+   "message": "下限側の境界 0 は既存テストで検証されるが、上限 999 / 1000 の組と下限 1 / 0 の対がテスト間で分散している 今回追加したテストは 1 と 999 の「受理」のみを確認している。拒否側は 0 が badLinesAreReportedWithLineNumbersAndOthersContinue（importLines 経由）、1000 が parseRejects にある。0 は parse 単体の拒否テストが無く、importLines の結合テスト内にしか無いので、parse の下限判定が壊れたとき失敗原因の切り分けが難しい。また、境界の受理テストを足した目的（境界値の網羅）に対して、parseRejects に 0 のケースが無いのは対称性を欠く。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "@CsvSource の単一列に int を渡す書き方は @ValueSource(ints = {1, 999}) の方が意図に合う",
+   "detail": "動作上は問題ない（暗黙の型変換で int になる）。ただ CSV としての区切りや引用の意味を持たない値なので、@ValueSource を使う方が読みやすく、将来列を足したときの誤解も避けられる。好みの範囲なので必須ではない。",
+   "line": 92,
+   "evidence": "@CsvSource({\"1\", \"999\"}) で単一値のみを渡している。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "@CsvSource の単一列に int を渡す書き方は @ValueSource(ints = {1, 999}) の方が意図に合う 動作上は問題ない（暗黙の型変換で int になる）。ただ CSV としての区切りや引用の意味を持たない値なので、@ValueSource を使う方が読みやすく、将来列を足したときの誤解も避けられる。好みの範囲なので必須ではない。"
+  }
+ ],
+ "rejected": [],
+ "case": "N01",
+ "config": "standard",
+ "run": 3
+}

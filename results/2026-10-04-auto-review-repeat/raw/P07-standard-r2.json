@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5338,
+   "output_tokens": 1015,
+   "cost_usd": 0.0147,
+   "seconds": 11.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0147,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "ID を Long のまま渡すと 404 メッセージに桁区切りが入る（リグレッション）",
+   "detail": "GET /api/v1/members/1234 のように 4 桁以上の ID が存在しないとき、MessageFormat が Long を数値として整形し、「会員が見つかりません（会員ID: 1,234）。」というメッセージを返す。1,000 未満の ID では発生しないため、気づきにくい。元のコードには「数値のまま渡すと MessageFormat が桁区切りを入れる」という理由を示すコメントがあり、意図的な String.valueOf だった。PR の「不要な変換」という前提が誤り。ロケールによっては区切り文字も変わる（例: 1.234）。",
+   "line": 23,
+   "evidence": "削除されたコメント「ID は文字列で渡す。数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる」。テストの StaticMessageSource は「{0}」を MessageFormat で整形するため、Object が Long ならグルーピングが適用される（NotFoundException が Object を受けることは PR 説明から）。修正案: String.valueOf(id) に戻す。もしくは、メッセージ側で {0,number,#} を使う。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "ID を Long のまま渡すと 404 メッセージに桁区切りが入る（リグレッション） GET /api/v1/members/1234 のように 4 桁以上の ID が存在しないとき、MessageFormat が Long を数値として整形し、「会員が見つかりません（会員ID: 1,234）。」というメッセージを返す。1,000 未満の ID では発生しないため、気づきにくい。元のコードには「数値のまま渡すと MessageFormat が桁区切りを入れる」という理由を示すコメントがあり、意図的な String.valueOf だった。PR の「不要な変換」という前提が誤り。ロケールによっては区切り文字も変わる（例: 1.234）。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "桁区切りを検知する回帰テストが削除されている",
+   "detail": "notFoundMessageHasNoThousandsSeparator を削除したため、上記の不具合を CI で検知できなくなる。残っている notFoundReturns404WithMessageId は ID=42 なので、桁区切りの対象外であり、このバグをすり抜ける。むしろこのテストは、変更によって失敗するはずだった（1234 → 「1,234」）。テストを消して通したように見える。",
+   "line": 73,
+   "evidence": "差分で削除されたテストは /api/v1/members/1234 に対し「会員ID: 1234」を期待していた。残るテストは 42 のみ。テストを復活させ、コードを String.valueOf に戻すのが正しい。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:73",
+   "message": "桁区切りを検知する回帰テストが削除されている notFoundMessageHasNoThousandsSeparator を削除したため、上記の不具合を CI で検知できなくなる。残っている notFoundReturns404WithMessageId は ID=42 なので、桁区切りの対象外であり、このバグをすり抜ける。むしろこのテストは、変更によって失敗するはずだった（1234 → 「1,234」）。テストを消して通したように見える。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "他の呼び出し箇所でも数値を直接渡していないか",
+   "detail": "同じ理由で、数値型の引数をメッセージに渡している箇所が他にもあると、同様に桁区切りが入る。差分外のため確認できないが、NotFoundException や BusinessException の生成箇所を確認してほしい。",
+   "line": 23,
+   "evidence": "推測: 差分に含まれるのは MemberService だけで、他の呼び出し元は見えない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "他の呼び出し箇所でも数値を直接渡していないか 同じ理由で、数値型の引数をメッセージに渡している箇所が他にもあると、同様に桁区切りが入る。差分外のため確認できないが、NotFoundException や BusinessException の生成箇所を確認してほしい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "standard",
+ "run": 2
+}

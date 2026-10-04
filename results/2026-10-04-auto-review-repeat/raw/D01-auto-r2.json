@@ -1,0 +1,183 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4650,
+   "output_tokens": 1957,
+   "cost_usd": 0.0236,
+   "seconds": 17.3,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5559,
+   "output_tokens": 2097,
+   "cost_usd": 0.0844,
+   "seconds": 22.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.108,
+ "notes": [
+  "standard の MUST 2 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 8,
+  "shown": 6,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 2,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "email 以外の一意制約違反も「メールアドレス使用済み」として扱われる",
+   "detail": "DuplicateKeyException は制約名を区別せずに全て EMAIL_ALREADY_USED に変換される。主キーの衝突や将来追加される別の一意制約（例: 電話番号）でも、利用者には『メールが使用済み』と誤った 409 が返る。事前チェック時代は email のみが対象だったので、挙動が広がっている。",
+   "line": 38,
+   "evidence": "catch (DuplicateKeyException e) で原因（e.getCause()／制約名）を見ずに BusinessException(EMAIL_ALREADY_USED, normalized) を投げている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:38",
+   "message": "email 以外の一意制約違反も「メールアドレス使用済み」として扱われる DuplicateKeyException は制約名を区別せずに全て EMAIL_ALREADY_USED に変換される。主キーの衝突や将来追加される別の一意制約（例: 電話番号）でも、利用者には『メールが使用済み』と誤った 409 が返る。事前チェック時代は email のみが対象だったので、挙動が広がっている。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "例外の原因を捨てている（ログ・cause なし）",
+   "detail": "BusinessException に cause を渡さず、ログも出さないため、想定外の制約違反が起きたときに調査できない。",
+   "line": 38,
+   "evidence": "catch 節で e を使用していない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:38",
+   "message": "例外の原因を捨てている（ログ・cause なし） BusinessException に cause を渡さず、ログも出さないため、想定外の制約違反が起きたときに調査できない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "テストのコメントと実態がずれている／重複テストになっている",
+   "detail": "register_concurrentDuplicateBecomesBusinessError のコメントは『事前の確認をすり抜けた』としているが、事前確認は削除済み。また InMemoryMapper.insert が既に重複で例外を投げるようになったため、register_rejectsDuplicateEmailIgnoringCase と並行テストの意味が実質同じになり、同時実行の観点は何も検証していない。",
+   "line": 74,
+   "evidence": "コメント『事前の確認をすり抜けた』が残っている。両テストとも最終的に DuplicateKeyException → BusinessException を確認するだけ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:74",
+   "message": "テストのコメントと実態がずれている／重複テストになっている register_concurrentDuplicateBecomesBusinessError のコメントは『事前の確認をすり抜けた』としているが、事前確認は削除済み。また InMemoryMapper.insert が既に重複で例外を投げるようになったため、register_rejectsDuplicateEmailIgnoringCase と並行テストの意味が実質同じになり、同時実行の観点は何も検証していない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "シーケンス消費や負荷面で SELECT 1 回削減に見合うか",
+   "detail": "重複登録のたびに INSERT が失敗するため、シーケンス（採番）が無駄に消費され、失敗 INSERT のコストやエラーログが DB 側に出る。重複が多い運用ではかえって不利になりうる。意図した判断か確認したい。",
+   "line": 31,
+   "evidence": "PR 説明は『SELECT が 1 回減る』のみを根拠としている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s7",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:31",
+   "message": "シーケンス消費や負荷面で SELECT 1 回削減に見合うか 重複登録のたびに INSERT が失敗するため、シーケンス（採番）が無駄に消費され、失敗 INSERT のコストやエラーログが DB 側に出る。重複が多い運用ではかえって不利になりうる。意図した判断か確認したい。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "完全修飾名を使っている",
+   "detail": "DuplicateKeyException は既に import 済みなのに org.springframework.dao.DuplicateKeyException を完全修飾で書いている。",
+   "line": 35,
+   "evidence": "import org.springframework.dao.DuplicateKeyException; が存在する。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:35",
+   "message": "完全修飾名を使っている DuplicateKeyException は既に import 済みなのに org.springframework.dao.DuplicateKeyException を完全修飾で書いている。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "concurrent テストのコメントが古い（事前確認はもう無い）",
+   "detail": "この PR で事前確認（existsByEmail）を削除したため、「事前の確認をすり抜けた」という説明は今のコードと合いません。重複はすべて一意制約で判定されるので、コメントを直すか、register_rejectsDuplicateEmailIgnoringCase と役割が重なっているならテストの整理を検討してください。",
+   "line": 66,
+   "evidence": "// 事前の確認をすり抜けた（同時に登録された）ケース: DB の一意制約で失敗しても 409 の業務エラーにする",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "d1",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:66",
+   "message": "concurrent テストのコメントが古い（事前確認はもう無い） この PR で事前確認（existsByEmail）を削除したため、「事前の確認をすり抜けた」という説明は今のコードと合いません。重複はすべて一意制約で判定されるので、コメントを直すか、register_rejectsDuplicateEmailIgnoringCase と役割が重なっているならテストの整理を検討してください。"
+  }
+ ],
+ "rejected": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "@Transactional 内で DuplicateKeyException を catch しているが、例外変換がトランザクション境界で起きると 409 にならない可能性がある（推測）",
+   "detail": "MyBatis-Spring の例外変換（DuplicateKeyException への変換）は SqlSessionTemplate 経由で mapper 呼び出し時に起きるため通常は catch できる。ただし、PostgreSQL ではトランザクション内で一意制約違反が起きるとそのトランザクションは abort 状態になる。catch 後に BusinessException を投げるのでロールバックされ問題は小さいが、将来 catch 後に DB 操作を足すと 'current transaction is aborted' になる。また、MyBatis の flush/バッチ executor を使う設定だと insert 時ではなくコミット時に例外が出て catch をすり抜け 500 になる。実 DB を使った検証がない。",
+   "line": 33,
+   "evidence": "register は @Transactional、insert を try/catch で囲んでいる。テストは InMemoryMapper が直接 DuplicateKeyException を投げるだけで、実 DB・Spring の例外変換・一意制約を通っていない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "rejected",
+   "verdict_note": "insert を囲む try/catch と catch 後に DB を触らない構造はこの PR より前からあり、差分は事前確認を消しただけです。catch 後に DB 操作がないので abort 状態の問題は起きず、バッチ executor の設定もこのメッセージからは見えない推測にとどまります。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:33",
+   "message": "@Transactional 内で DuplicateKeyException を catch しているが、例外変換がトランザクション境界で起きると 409 にならない可能性がある（推測） MyBatis-Spring の例外変換（DuplicateKeyException への変換）は SqlSessionTemplate 経由で mapper 呼び出し時に起きるため通常は catch できる。ただし、PostgreSQL ではトランザクション内で一意制約違反が起きるとそのトランザクションは abort 状態になる。catch 後に BusinessException を投げるのでロールバックされ問題は小さいが、将来 catch 後に DB 操作を足すと 'current transaction is aborted' になる。また、MyBatis の flush/バッチ executor を使う設定だと insert 時ではなくコミット時に例外が出て catch をすり抜け 500 になる。実 DB を使った検証がない。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "テストが DB の一意制約を再現しておらず、PR の前提（一意制約が存在し大文字小文字を吸収する）が検証されていない",
+   "detail": "この PR は重複判定を DB の一意制約だけに依存させる。しかし制約が email カラムに存在するか、また正規化後の小文字値で効くかはこの差分から確認できない。制約が無い、または別名・別カラムだと、重複登録が無言で成功する（事前チェックが無いので防御ゼロ）。テストはモックが existsByEmail で擬似的に例外を出すだけで、スキーマ（マイグレーション）の検証にならない。",
+   "line": 34,
+   "evidence": "差分に schema/マイグレーションの変更も確認も無い。InMemoryMapper.insert が existsByEmail を呼んで例外を投げる実装で、本番の制約とは無関係に通る。DuplicateKeyException のメッセージ 'member_email_key' も固定文字列。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "rejected",
+   "verdict_note": "変更前のコメント（同時登録の最終判定は DB の一意制約に任せる）と既存の concurrent テストが、一意制約がある前提で書かれています。保存値は正規化済みの小文字なので、通常の一意制約で大文字小文字の違いも吸収できます。スキーマの検証はサービス単体テストの役割ではないため、MUST とする根拠になりません。",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:34",
+   "message": "テストが DB の一意制約を再現しておらず、PR の前提（一意制約が存在し大文字小文字を吸収する）が検証されていない この PR は重複判定を DB の一意制約だけに依存させる。しかし制約が email カラムに存在するか、また正規化後の小文字値で効くかはこの差分から確認できない。制約が無い、または別名・別カラムだと、重複登録が無言で成功する（事前チェックが無いので防御ゼロ）。テストはモックが existsByEmail で擬似的に例外を出すだけで、スキーマ（マイグレーション）の検証にならない。"
+  }
+ ],
+ "case": "D01",
+ "config": "auto",
+ "run": 2
+}

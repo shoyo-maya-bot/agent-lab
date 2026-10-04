@@ -1,0 +1,85 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4129,
+   "output_tokens": 880,
+   "cost_usd": 0.0123,
+   "seconds": 10.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0123,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "下限側の境界（0）と上限側の境界（1000）の拒否テストが非対称で、0 は別テスト経由でのみ確認されている",
+   "detail": "このPRは 1 と 999 の受理を追加したが、拒否側は 1000 が parseRejects にあるだけで、0 は badLinesAreReportedWithLineNumbersAndOthersContinue の中で間接的に確認されているにすぎない。将来 parse の条件が `quantity < 1` から `quantity < 0` に変わっても、メッセージ照合を含む直接のテストがなく、気づきにくい。負数（-1）や数値でない quantity（例: 'x'、空文字）も parse 単体では未検証。",
+   "line": 93,
+   "evidence": "parseRejects の @CsvSource には quantity 0 / 負数 / 非数値の行がなく、1000 のみ。0 は importLines 経由のテスト（\"A002,1,P-02,0\"）に現れるだけ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:93",
+   "message": "下限側の境界（0）と上限側の境界（1000）の拒否テストが非対称で、0 は別テスト経由でのみ確認されている このPRは 1 と 999 の受理を追加したが、拒否側は 1000 が parseRejects にあるだけで、0 は badLinesAreReportedWithLineNumbersAndOthersContinue の中で間接的に確認されているにすぎない。将来 parse の条件が `quantity < 1` から `quantity < 0` に変わっても、メッセージ照合を含む直接のテストがなく、気づきにくい。負数（-1）や数値でない quantity（例: 'x'、空文字）も parse 単体では未検証。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "受理テストは parse の結果のうち quantity しか検証していない",
+   "detail": "境界値の受理確認としては quantity の一致で目的は満たせるが、他のフィールド（orderNo, memberId, productCode）が正しく解釈されたかは確認されない。意図的に quantity のみに絞っているのか確認したい。",
+   "line": 94,
+   "evidence": "`OrderImportService.parse(\"A001,1,P-01,\" + quantity).quantity()` のみを assert している。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:94",
+   "message": "受理テストは parse の結果のうち quantity しか検証していない 境界値の受理確認としては quantity の一致で目的は満たせるが、他のフィールド（orderNo, memberId, productCode）が正しく解釈されたかは確認されない。意図的に quantity のみに絞っているのか確認したい。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "@CsvSource の単一列に @ParameterizedTest を使っており @ValueSource の方が意図に合う",
+   "detail": "動作上は問題ないが、`@CsvSource({\"1\", \"999\"})` は単一値のため `@ValueSource(ints = {1, 999})` で足りる。CSV としての解釈（引用符・空白トリム）に依存せず、型も明確になる。",
+   "line": 92,
+   "evidence": "追加行: `@CsvSource({\"1\", \"999\"})` と `int quantity` の1引数メソッド。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "@CsvSource の単一列に @ParameterizedTest を使っており @ValueSource の方が意図に合う 動作上は問題ないが、`@CsvSource({\"1\", \"999\"})` は単一値のため `@ValueSource(ints = {1, 999})` で足りる。CSV としての解釈（引用符・空白トリム）に依存せず、型も明確になる。"
+  }
+ ],
+ "rejected": [],
+ "case": "N01",
+ "config": "auto",
+ "run": 3
+}

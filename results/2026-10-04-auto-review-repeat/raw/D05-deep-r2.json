@@ -1,0 +1,73 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 4,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: トランザクション境界の変更"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 2970,
+   "output_tokens": 1043,
+   "cost_usd": 0.0232,
+   "seconds": 13.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0232,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly を前提にした接続の振り分けや DB 設定が無いか確認したい",
+   "detail": "AbstractRoutingDataSource などで、トランザクションが readOnly のときに参照用レプリカへ振り分けている場合があります。その場合、今回の変更で get() はプライマリへ流れ、負荷の配分が変わります。また readOnly=true のとき、Spring は Connection#setReadOnly(true) を呼びます。ドライバや DB によっては、これが読み取り専用の最適化や誤った書き込みの防止として働きます。その効果もなくなります。こうした仕組みが無ければ、SELECT 1 本なので外しても動作は変わりません。",
+   "line": 21,
+   "evidence": "差分で get() から @Transactional(readOnly = true) を削除。DataSource の構成はこのメッセージに含まれないため推測です。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly を前提にした接続の振り分けや DB 設定が無いか確認したい AbstractRoutingDataSource などで、トランザクションが readOnly のときに参照用レプリカへ振り分けている場合があります。その場合、今回の変更で get() はプライマリへ流れ、負荷の配分が変わります。また readOnly=true のとき、Spring は Connection#setReadOnly(true) を呼びます。ドライバや DB によっては、これが読み取り専用の最適化や誤った書き込みの防止として働きます。その効果もなくなります。こうした仕組みが無ければ、SELECT 1 本なので外しても動作は変わりません。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "照会に後から処理を足すと、読み取りの一貫性が黙って失われる",
+   "detail": "トランザクションが無いと、MyBatis-Spring は Mapper 呼び出しごとに SqlSession を作り、自動コミットで実行します。今後 get() に関連データの取得など 2 本目の SELECT を足すと、別々のスナップショットを読みます。その間に更新が挟まると、整合しない組み合わせを返すおそれがあります。readOnly 指定はコストが小さく、意図も明示できるので、残す選択肢も検討してください。",
+   "line": 21,
+   "evidence": "get() は mapper.findById(id) の 1 回だけ。クラスにも @Transactional が無いため、get() は非トランザクションで実行される。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "照会に後から処理を足すと、読み取りの一貫性が黙って失われる トランザクションが無いと、MyBatis-Spring は Mapper 呼び出しごとに SqlSession を作り、自動コミットで実行します。今後 get() に関連データの取得など 2 本目の SELECT を足すと、別々のスナップショットを読みます。その間に更新が挟まると、整合しない組み合わせを返すおそれがあります。readOnly 指定はコストが小さく、意図も明示できるので、残す選択肢も検討してください。"
+  }
+ ],
+ "rejected": [],
+ "case": "D05",
+ "config": "deep",
+ "run": 2
+}

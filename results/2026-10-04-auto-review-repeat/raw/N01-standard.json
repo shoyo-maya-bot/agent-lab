@@ -1,0 +1,68 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4129,
+   "output_tokens": 628,
+   "cost_usd": 0.0228,
+   "seconds": 8.0,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0228,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "下限・上限の外側（0 と 1000）の拒否がテストで対にならない",
+   "detail": "追加テストは 1 と 999 の受理だけを確かめる。quantity の判定が `>= 1 && <= 999` から `> 1` や `< 999` に変わると、このテストが落ちて気づける。一方、既存の拒否テストは 1000 と、importLines 経由の 0 だけである。0 は parse 単体の parseRejects には無く、境界の内側と外側が同じ粒度で揃っていない。parse 単体で 0 を拒否することは、importLines 経由のテスト（badLinesAreReportedWithLineNumbersAndOthersContinue）でしか確かめていない。",
+   "line": 93,
+   "evidence": "parseRejects の CsvSource に quantity のケースは `1000` のみ。0 は badLinesAreReported... の `A002,1,P-02,0` で間接的に確認されているだけ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:93",
+   "message": "下限・上限の外側（0 と 1000）の拒否がテストで対にならない 追加テストは 1 と 999 の受理だけを確かめる。quantity の判定が `>= 1 && <= 999` から `> 1` や `< 999` に変わると、このテストが落ちて気づける。一方、既存の拒否テストは 1000 と、importLines 経由の 0 だけである。0 は parse 単体の parseRejects には無く、境界の内側と外側が同じ粒度で揃っていない。parse 単体で 0 を拒否することは、importLines 経由のテスト（badLinesAreReportedWithLineNumbersAndOthersContinue）でしか確かめていない。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "単一引数の @CsvSource は @ValueSource(ints = {1, 999}) で足りる",
+   "detail": "引数が 1 つで CSV の機能（区切り・引用）を使っていない。@ValueSource の方が意図が明確で、型変換の誤読（例: 将来 `'1,5'` のような値を足したときに列が分かれる）も避けられる。動作上の問題は無い。",
+   "line": 92,
+   "evidence": "`@CsvSource({\"1\", \"999\"})` と `int quantity` の 1 引数のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "単一引数の @CsvSource は @ValueSource(ints = {1, 999}) で足りる 引数が 1 つで CSV の機能（区切り・引用）を使っていない。@ValueSource の方が意図が明確で、型変換の誤読（例: 将来 `'1,5'` のような値を足したときに列が分かれる）も避けられる。動作上の問題は無い。"
+  }
+ ],
+ "rejected": [],
+ "case": "N01",
+ "config": "standard",
+ "run": 1
+}

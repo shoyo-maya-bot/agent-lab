@@ -1,0 +1,85 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3594,
+   "output_tokens": 886,
+   "cost_usd": 0.0118,
+   "seconds": 9.4,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4221,
+   "output_tokens": 343,
+   "cost_usd": 0.0375,
+   "seconds": 6.0,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0493,
+ "notes": [
+  "standard の MUST 1 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 1,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、ID ベースの監視で検知できなくなる",
+   "detail": "取込処理中に例外（ファイル取得失敗、DB エラーなど）が発生して終了コード 8 で落ちたとき、ログに MessageIds.BATCH_FAILED が出力されなくなる。運用監視やアラートがメッセージ ID（BATCH_FAILED）を検索条件にしている場合、異常終了が通知されず、検知漏れにつながる。同ファイルの他のログ（BATCH_INVALID_ARGS, IMPORT_STARTED, IMPORT_FINISHED, IMPORT_LINE_SKIPPED）はすべて先頭にメッセージ ID を付けており、異常終了だけ形式が不揃いになる。「読みやすくした」という PR の目的に対して、ID を外す理由は説明されていない。",
+   "line": 62,
+   "evidence": "差分で `log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e)` が `log.error(\"JOB0001 異常終了\", e)` に変わっている。ファイル内の他の log 呼び出しはすべて `\"{} JOB0001 ...\"` 形式で MessageIds を先頭に出している。MessageIds.BATCH_FAILED は他に使われている箇所が見えないため、未使用になる可能性がある（推測）。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "差分で異常終了ログだけから MessageIds.BATCH_FAILED が消えており、ファイル内の他のログはすべて ID を先頭に付けているため、ID を前提にした監視や検索では異常終了を拾えなくなる。監視設定そのものは見えないので、影響の大きさは推測。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、ID ベースの監視で検知できなくなる 取込処理中に例外（ファイル取得失敗、DB エラーなど）が発生して終了コード 8 で落ちたとき、ログに MessageIds.BATCH_FAILED が出力されなくなる。運用監視やアラートがメッセージ ID（BATCH_FAILED）を検索条件にしている場合、異常終了が通知されず、検知漏れにつながる。同ファイルの他のログ（BATCH_INVALID_ARGS, IMPORT_STARTED, IMPORT_FINISHED, IMPORT_LINE_SKIPPED）はすべて先頭にメッセージ ID を付けており、異常終了だけ形式が不揃いになる。「読みやすくした」という PR の目的に対して、ID を外す理由は説明されていない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "BATCH_FAILED を外した意図の確認（監視ルール・他ジョブとの整合）",
+   "detail": "BATCH_FAILED を外した意図を確認したい。監視設定（CloudWatch Logs のメトリクスフィルタ等）が BATCH_FAILED を条件にしていないか、他のバッチジョブや BatchJobGuard が同じ ID を出していて、共通の検索条件が崩れないかも確認が必要。意図的なら、監視側の条件を同時に更新したか、PR 説明に記載してほしい。",
+   "line": 62,
+   "evidence": "差分内にログ監視設定や MessageIds の変更は含まれていない。監視側の設定はこのメッセージからは見えない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "BATCH_FAILED を外した意図の確認（監視ルール・他ジョブとの整合） BATCH_FAILED を外した意図を確認したい。監視設定（CloudWatch Logs のメトリクスフィルタ等）が BATCH_FAILED を条件にしていないか、他のバッチジョブや BatchJobGuard が同じ ID を出していて、共通の検索条件が崩れないかも確認が必要。意図的なら、監視側の条件を同時に更新したか、PR 説明に記載してほしい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "auto",
+ "run": 1
+}

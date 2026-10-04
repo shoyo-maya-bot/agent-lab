@@ -1,0 +1,56 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3501,
+   "output_tokens": 856,
+   "cost_usd": 0.02,
+   "seconds": 10.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.02,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "jobId() が null を返すジョブがあると、変更の前後で動作が変わる（「動作は同じ」ではない）",
+   "detail": "jobId() が null を返す BatchJob Bean が 1 つでもある場合の動作が変わる。変更前は、そのジョブを照合した時点で NullPointerException になり、起動が失敗していた。ただし anyMatch は一致した時点で止まるので、それより前に一致するジョブがあれば例外にならなかった。変更後は HashSet に null がそのまま入るため、例外にならず黙って通る。実装ミスで jobId が null になったジョブが、起動時に表に出なくなる。通常の入力では結果は同じで、実害はほぼ無い。ただ PR 説明の「動作は同じです」とは厳密には一致しない。",
+   "line": 46,
+   "evidence": "変更前は `j.jobId().equals(requested)` で、jobId() の戻り値に対して equals を呼んでいた。変更後は `jobs.stream().map(BatchJob::jobId).collect(Collectors.toSet())` で、Collectors.toSet() は HashSet を返し、null 要素を受け付ける。`requested` はコンストラクタで null が空文字に置き換えられるので、contains(requested) が null に一致することは無い。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:46",
+   "message": "jobId() が null を返すジョブがあると、変更の前後で動作が変わる（「動作は同じ」ではない） jobId() が null を返す BatchJob Bean が 1 つでもある場合の動作が変わる。変更前は、そのジョブを照合した時点で NullPointerException になり、起動が失敗していた。ただし anyMatch は一致した時点で止まるので、それより前に一致するジョブがあれば例外にならなかった。変更後は HashSet に null がそのまま入るため、例外にならず黙って通る。実装ミスで jobId が null になったジョブが、起動時に表に出なくなる。通常の入力では結果は同じで、実害はほぼ無い。ただ PR 説明の「動作は同じです」とは厳密には一致しない。"
+  }
+ ],
+ "rejected": [],
+ "case": "D02",
+ "config": "deep",
+ "run": 2
+}

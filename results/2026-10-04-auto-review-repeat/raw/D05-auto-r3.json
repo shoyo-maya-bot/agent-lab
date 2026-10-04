@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 4,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: トランザクション境界の変更"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2976,
+   "output_tokens": 884,
+   "cost_usd": 0.0112,
+   "seconds": 9.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0112,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "照会から @Transactional(readOnly = true) を外す根拠が弱く、副作用の確認も無い",
+   "detail": "現状の get() は SELECT 1 本なので、外しても結果は変わらない可能性が高い。ただし readOnly = true は、(1) 読み取り専用接続・レプリカ振り分け（AbstractRoutingDataSource 等でルーティングしている場合）、(2) JDBC ドライバ/DB への read-only ヒント、(3) 将来 get() に SELECT が追加されたときの一貫したスナップショット、に効く。プロジェクトでこれらを使っている場合、外すと照会がプライマリに流れる、またはヒントが失われる。使っていなければ実害は無い。PR 説明の「SELECT 1 本だから不要」は、これらを使っていないことの確認にはなっていない。",
+   "line": 21,
+   "evidence": "差分は get() の @Transactional(readOnly = true) の削除のみ。DataSource の設定やルーティングはこの差分に含まれず見えないため、影響の有無は推測。register() は @Transactional のままなので、クラス内で読み書きの指定方針が揃わなくなる。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "照会から @Transactional(readOnly = true) を外す根拠が弱く、副作用の確認も無い 現状の get() は SELECT 1 本なので、外しても結果は変わらない可能性が高い。ただし readOnly = true は、(1) 読み取り専用接続・レプリカ振り分け（AbstractRoutingDataSource 等でルーティングしている場合）、(2) JDBC ドライバ/DB への read-only ヒント、(3) 将来 get() に SELECT が追加されたときの一貫したスナップショット、に効く。プロジェクトでこれらを使っている場合、外すと照会がプライマリに流れる、またはヒントが失われる。使っていなければ実害は無い。PR 説明の「SELECT 1 本だから不要」は、これらを使っていないことの確認にはなっていない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly 指定を前提にした設定（ルーティング・OSIV・テスト）が無いか",
+   "detail": "プロジェクトに readOnly で読み取り先を切り替える設定、または readOnly を前提にしたテストや AOP があるかを確認してほしい。無ければこの変更は問題ない。あるなら外すのは不具合になる。",
+   "line": 21,
+   "evidence": "差分からは設定ファイルや他クラスは見えない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly 指定を前提にした設定（ルーティング・OSIV・テスト）が無いか プロジェクトに readOnly で読み取り先を切り替える設定、または readOnly を前提にしたテストや AOP があるかを確認してほしい。無ければこの変更は問題ない。あるなら外すのは不具合になる。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "外した理由がコードに残らない",
+   "detail": "今後「照会に readOnly が無いのは漏れ」と見なされて再び付けられる、または逆に他の照会からも外される可能性がある。意図的に外すなら、理由（レプリカ未使用など）を PR 説明か簡単なコメントに残すとよい。",
+   "line": 21,
+   "evidence": "get() にはトランザクション指定が無く、そのことの説明も無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "外した理由がコードに残らない 今後「照会に readOnly が無いのは漏れ」と見なされて再び付けられる、または逆に他の照会からも外される可能性がある。意図的に外すなら、理由（レプリカ未使用など）を PR 説明か簡単なコメントに残すとよい。"
+  }
+ ],
+ "rejected": [],
+ "case": "D05",
+ "config": "auto",
+ "run": 3
+}

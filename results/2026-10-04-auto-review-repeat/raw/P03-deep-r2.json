@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 6066,
+   "output_tokens": 1879,
+   "cost_usd": 0.0432,
+   "seconds": 21.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0432,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "21 文字以上のコードが 1 行あるだけで、取込全体が取り消される",
+   "detail": "order_no か product_code が 21 文字以上の行が CSV に 1 行でもあると、parse() を通ってしまい、mapper.insertIfAbsent() で DB の VARCHAR(20) 制約違反になります（PostgreSQL などの厳格な DB の場合）。この例外は importLines の catch に入らず @Transactional のメソッドの外へ出るため、その行より前に登録した正しい行も含めて全件がロールバックされます。結果として、これまで『その行だけ飛ばして行番号付きで報告し、続行する』だった動きが『ジョブ全体が失敗する』に変わります。呼び出し側で終了コードやエラー応答がどう変わるかも、ここからは見えません（推測）。",
+   "line": 82,
+   "evidence": "差分で code() から `v.length() > CODE_MAX_LENGTH` のチェックが消えています。importLines の try/catch は parse(line) だけを囲んでおり、mapper.insertIfAbsent(order) は囲んでいません。メソッドには @Transactional が付いています。削除前のテスト tooLongCodeSkipsOnlyThatLine は、この『その行だけ飛ばす』仕様を確かめるものでした。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "21 文字以上のコードが 1 行あるだけで、取込全体が取り消される order_no か product_code が 21 文字以上の行が CSV に 1 行でもあると、parse() を通ってしまい、mapper.insertIfAbsent() で DB の VARCHAR(20) 制約違反になります（PostgreSQL などの厳格な DB の場合）。この例外は importLines の catch に入らず @Transactional のメソッドの外へ出るため、その行より前に登録した正しい行も含めて全件がロールバックされます。結果として、これまで『その行だけ飛ばして行番号付きで報告し、続行する』だった動きが『ジョブ全体が失敗する』に変わります。呼び出し側で終了コードやエラー応答がどう変わるかも、ここからは見えません（推測）。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "クラスの設計方針と矛盾する変更で、Javadoc も実装と食い違ったまま",
+   "detail": "Javadoc には『DB の制約（桁数・外部キー）に当たる誤りは登録の前にここで確かめる。DB の例外に任せると 1 行の誤りでトランザクション全体が取り消されるため』と書かれています。このクラスは、まさに今回の PR の方針（DB に任せる）を避けるために作られています。PR の動機は『上限を 2 か所で持つと食い違う』ことですが、外したことで上の不具合が出ています。チェックは戻すべきです。そのうえで食い違いを防ぎたいなら、DDL と Java の値が一致しているかを確かめるテストを足す（例: DB を使う統合テストで、20 文字は登録でき 21 文字は行エラーになることを確かめる）などの方法で対応してください。",
+   "line": 16,
+   "evidence": "変更後のクラス Javadoc の 2 段落目が残ったままです。一方で、桁数チェックと CODE_MAX_LENGTH は削除されています。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:16",
+   "message": "クラスの設計方針と矛盾する変更で、Javadoc も実装と食い違ったまま Javadoc には『DB の制約（桁数・外部キー）に当たる誤りは登録の前にここで確かめる。DB の例外に任せると 1 行の誤りでトランザクション全体が取り消されるため』と書かれています。このクラスは、まさに今回の PR の方針（DB に任せる）を避けるために作られています。PR の動機は『上限を 2 か所で持つと食い違う』ことですが、外したことで上の不具合が出ています。チェックは戻すべきです。そのうえで食い違いを防ぎたいなら、DDL と Java の値が一致しているかを確かめるテストを足す（例: DB を使う統合テストで、20 文字は登録でき 21 文字は行エラーになることを確かめる）などの方法で対応してください。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "DB の設定によっては、長いコードが黙って切り詰められ、別の注文と重複扱いになる（推測）",
+   "detail": "DB が MySQL の非 strict モードのように、長すぎる値をエラーにせず切り詰める設定の場合、21 文字以上の order_no は先頭 20 文字で登録されます。そのため、先頭 20 文字が同じ別の注文が duplicated として黙って飛ばされたり、誤った product_code で登録されたりする可能性があります。どちらもエラーには残りません。使っている DB 製品と設定は、差分からは確認できません。",
+   "line": 57,
+   "evidence": "削除された定数のコメントに local/db/init/01_schema.sql の VARCHAR(20) とあるだけで、DB 製品やモードは見えていません。insertIfAbsent の戻り値 0 は、すべて duplicated として数えています。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:57",
+   "message": "DB の設定によっては、長いコードが黙って切り詰められ、別の注文と重複扱いになる（推測） DB が MySQL の非 strict モードのように、長すぎる値をエラーにせず切り詰める設定の場合、21 文字以上の order_no は先頭 20 文字で登録されます。そのため、先頭 20 文字が同じ別の注文が duplicated として黙って飛ばされたり、誤った product_code で登録されたりする可能性があります。どちらもエラーには残りません。使っている DB 製品と設定は、差分からは確認できません。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "境界と異常系のテストを消しただけで、新しい動きを確かめるテストがない",
+   "detail": "tooLongCodeSkipsOnlyThatLine、21/22 文字の parseRejects、parseAcceptsExactlyTwentyChars が削除されています。その代わりに『長いコードの行を取り込んだときに何が起きるか（全体ロールバックなのか、行エラーなのか）』を確かめるテストがありません。FakeOrderMapper は桁数制約を持たないため、ユニットテストは長いコードを含む行も正常に登録できる扱いになり、本番との違いが隠れてしまいます。",
+   "line": 60,
+   "evidence": "テストの差分は削除だけです。変更後のテストには、21 文字以上の入力を扱うケースがありません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:60",
+   "message": "境界と異常系のテストを消しただけで、新しい動きを確かめるテストがない tooLongCodeSkipsOnlyThatLine、21/22 文字の parseRejects、parseAcceptsExactlyTwentyChars が削除されています。その代わりに『長いコードの行を取り込んだときに何が起きるか（全体ロールバックなのか、行エラーなのか）』を確かめるテストがありません。FakeOrderMapper は桁数制約を持たないため、ユニットテストは長いコードを含む行も正常に登録できる扱いになり、本番との違いが隠れてしまいます。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "deep",
+ "run": 2
+}

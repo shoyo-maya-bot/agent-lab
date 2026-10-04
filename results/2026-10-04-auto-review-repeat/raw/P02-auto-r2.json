@@ -1,0 +1,152 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5958,
+   "output_tokens": 1671,
+   "cost_usd": 0.0221,
+   "seconds": 16.9,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 6777,
+   "output_tokens": 1497,
+   "cost_usd": 0.0832,
+   "seconds": 16.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.1053,
+ "notes": [
+  "standard の MUST 2 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 2,
+  "uncertain": 1,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない会員の行が 1 行あるだけで取込全体がロールバックされる",
+   "detail": "CSV に DB に存在しない member_id の行が 1 行でも含まれると、insertIfAbsent が外部キー違反の例外を投げる。importLines は @Transactional で、例外は行単位では捕捉されていないため、トランザクション全体が取り消され、それまでに取り込んだ行も全て失われる。ジョブは異常終了し、利用者には「何行目の何が悪いか」が残らない。従来は該当行だけを errors に記録して続行していた挙動が壊れる。さらにクラスの Javadoc にも「存在しない会員の行は飛ばして続行」と明記されており、仕様と実装が食い違う。",
+   "line": 51,
+   "evidence": "差分で memberExists による確認と errors.add を削除。残った mapper.insertIfAbsent(order) の呼び出しに try/catch がない。クラス Javadoc には「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため」とあり、元の確認がこの目的で存在していたことを示している。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "PR 説明とクラス Javadoc の両方で member_id に外部キーがあると確認できます。そのため、存在しない会員の行では insertIfAbsent が例外を投げ、try/catch のないまま @Transactional の importLines 全体が取り消されます。これは Javadoc が明記している「飛ばして続行」という仕様にも反します。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "存在しない会員の行が 1 行あるだけで取込全体がロールバックされる CSV に DB に存在しない member_id の行が 1 行でも含まれると、insertIfAbsent が外部キー違反の例外を投げる。importLines は @Transactional で、例外は行単位では捕捉されていないため、トランザクション全体が取り消され、それまでに取り込んだ行も全て失われる。ジョブは異常終了し、利用者には「何行目の何が悪いか」が残らない。従来は該当行だけを errors に記録して続行していた挙動が壊れる。さらにクラスの Javadoc にも「存在しない会員の行は飛ばして続行」と明記されており、仕様と実装が食い違う。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "存在しない会員のテストを削除しただけで、代わりの検証がない",
+   "detail": "unknownMemberSkipsOnlyThatLine を削除したため、会員不在時の挙動（飛ばして続行するか、全体失敗するか）を確かめるテストが無くなった。今回の変更で挙動が変わった箇所なのに、変更後の挙動を固定するものが何も残っていない。FakeOrderMapper には外部キーの再現がなく、実 DB の外部キー動作は単体テストでは確認できない。",
+   "line": 52,
+   "evidence": "差分でテストメソッドが丸ごと削除され、変更後の全文に会員不在のケースが存在しない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:52",
+   "message": "存在しない会員のテストを削除しただけで、代わりの検証がない unknownMemberSkipsOnlyThatLine を削除したため、会員不在時の挙動（飛ばして続行するか、全体失敗するか）を確かめるテストが無くなった。今回の変更で挙動が変わった箇所なのに、変更後の挙動を固定するものが何も残っていない。FakeOrderMapper には外部キーの再現がなく、実 DB の外部キー動作は単体テストでは確認できない。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "insertIfAbsent の実装次第で、外部キー違反が「重複」として黙って扱われる恐れ",
+   "detail": "insertIfAbsent の SQL が ON CONFLICT DO NOTHING や INSERT IGNORE のように、制約違反全般を握りつぶす書き方だと、外部キー違反でも戻り値が 0 になり、duplicated に数えられる。その場合、存在しない会員の注文が「重複」として黙って欠落し、errors にも出ない。例外で落ちるより発見が遅れて悪質。Mapper の SQL が差分に含まれていないため推測。",
+   "line": 51,
+   "evidence": "戻り値 1 なら imported、それ以外は else で duplicated++ としている。Mapper の XML・アノテーションは差分に無く、確認できない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "uncertain",
+   "verdict_note": "PostgreSQL の ON CONFLICT DO NOTHING は外部キー違反を握りつぶしません（その場合は s1 の挙動になります）。一方、MySQL の INSERT IGNORE は外部キー違反を警告扱いにして 0 件を返します。Mapper の SQL も DB 製品も差分に無いので、ここでは決められません。",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "insertIfAbsent の実装次第で、外部キー違反が「重複」として黙って扱われる恐れ insertIfAbsent の SQL が ON CONFLICT DO NOTHING や INSERT IGNORE のように、制約違反全般を握りつぶす書き方だと、外部キー違反でも戻り値が 0 になり、duplicated に数えられる。その場合、存在しない会員の注文が「重複」として黙って欠落し、errors にも出ない。例外で落ちるより発見が遅れて悪質。Mapper の SQL が差分に含まれていないため推測。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化の目的なら、1 行ごとの SELECT ではなく一括確認にする方が安全",
+   "detail": "遅さの原因が行ごとの SELECT なら、先に全行を parse して member_id の重複を除き、IN 句で 1 回（または少数回）問い合わせて存在する ID の集合を得る方法で、行単位のエラー報告を保ったまま往復回数を減らせる。あるいは insert を行単位のセーブポイントで包み、外部キー違反だけを errors に変換する方法もあるが、PostgreSQL ではセーブポイントのコストが増えるため前者が無難。",
+   "line": 51,
+   "evidence": "元のコードは memberCache で同一会員を 1 回しか問い合わせないようにしていたため、遅さの主因はキャッシュ後の distinct な会員数分の SELECT と推測。性能の計測値は PR に示されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "高速化の目的なら、1 行ごとの SELECT ではなく一括確認にする方が安全 遅さの原因が行ごとの SELECT なら、先に全行を parse して member_id の重複を除き、IN 句で 1 回（または少数回）問い合わせて存在する ID の集合を得る方法で、行単位のエラー報告を保ったまま往復回数を減らせる。あるいは insert を行単位のセーブポイントで包み、外部キー違反だけを errors に変換する方法もあるが、PostgreSQL ではセーブポイントのコストが増えるため前者が無難。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "外部キー違反時の運用上の期待動作は何か",
+   "detail": "会員不在が起きたとき、全体失敗（要再実行）で良いという合意があるのか確認したい。合意がある場合でも、Javadoc、ジョブの終了コード、エラーメッセージ（どの行が原因か）を整合させる必要がある。",
+   "line": 51,
+   "evidence": "PR 説明は「member_id は DB の外部キーで守られている」とだけ述べ、違反時の挙動には触れていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "外部キー違反時の運用上の期待動作は何か 会員不在が起きたとき、全体失敗（要再実行）で良いという合意があるのか確認したい。合意がある場合でも、Javadoc、ジョブの終了コード、エラーメッセージ（どの行が原因か）を整合させる必要がある。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "「行ごとの SELECT が遅い」という前提が、削除前のコードと合っていない",
+   "detail": "削除前のコードは memberCache（HashMap と computeIfAbsent）を使い、会員ごとに 1 回だけ memberExists を呼んでいました。行ごとに SELECT していたわけではありません。削除前のテストも「同じ会員は 1 回だけ確かめる」と確かめています。遅さの原因と効果の測定結果を示してください。改善が必要なら、存在確認を外すのではなく、全 member_id をまとめて 1 回の SELECT で確かめる方法も考えられます。",
+   "line": 39,
+   "evidence": "削除行: Map<Long, Boolean> memberCache = new HashMap<>(); / memberCache.computeIfAbsent(order.memberId(), mapper::memberExists)。削除テスト: assertThat(mapper.memberLookups).as(\"同じ会員は 1 回だけ確かめる\")。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "d2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:39",
+   "message": "「行ごとの SELECT が遅い」という前提が、削除前のコードと合っていない 削除前のコードは memberCache（HashMap と computeIfAbsent）を使い、会員ごとに 1 回だけ memberExists を呼んでいました。行ごとに SELECT していたわけではありません。削除前のテストも「同じ会員は 1 回だけ確かめる」と確かめています。遅さの原因と効果の測定結果を示してください。改善が必要なら、存在確認を外すのではなく、全 member_id をまとめて 1 回の SELECT で確かめる方法も考えられます。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "auto",
+ "run": 2
+}

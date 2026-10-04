@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5332,
+   "output_tokens": 1270,
+   "cost_usd": 0.03,
+   "seconds": 14.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.03,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "ID が 1000 以上になると 404 のメッセージに桁区切りが入る",
+   "detail": "ID を long のまま渡すため、MessageSource（MessageFormat）が数値として整形します。そのため ID 1234 の会員が見つからないと、応答 message は「会員が見つかりません（会員ID: 1,234）。」になります。利用者やログ検索で ID を照合できなくなり、API の応答内容も変わります。引数の型が Object であっても、String に変換していたのは表示形式を固定するためでした。String.valueOf(id) に戻すべきです。",
+   "line": 23,
+   "evidence": "削除されたコメント「数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる」。テストの StaticMessageSource には \"会員が見つかりません（会員ID: {0}）。\" が登録されており、{0} に Long を渡すと MessageFormat が NumberFormat で整形します。変更後に残っている notFoundReturns404WithMessageId は ID 42（3 桁未満）しか使っていないため、この退行を検出できません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "ID が 1000 以上になると 404 のメッセージに桁区切りが入る ID を long のまま渡すため、MessageSource（MessageFormat）が数値として整形します。そのため ID 1234 の会員が見つからないと、応答 message は「会員が見つかりません（会員ID: 1,234）。」になります。利用者やログ検索で ID を照合できなくなり、API の応答内容も変わります。引数の型が Object であっても、String に変換していたのは表示形式を固定するためでした。String.valueOf(id) に戻すべきです。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "桁区切りの回帰テストを削除して退行を隠している",
+   "detail": "notFoundMessageHasNoThousandsSeparator は ID 1234 で「会員ID: 1234」を検証していました。今回の本体変更をそのまま入れるとこのテストは失敗するはずで、テストを消したことで不具合が見えなくなっています。本体を元に戻し、テストも残すべきです。",
+   "line": 74,
+   "evidence": "差分で @Test notFoundMessageHasNoThousandsSeparator（get(\"/api/v1/members/1234\") → \"会員が見つかりません（会員ID: 1234）。\"）が削除されています。PR の説明には、このテストを削除する理由が書かれていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:74",
+   "message": "桁区切りの回帰テストを削除して退行を隠している notFoundMessageHasNoThousandsSeparator は ID 1234 で「会員ID: 1234」を検証していました。今回の本体変更をそのまま入れるとこのテストは失敗するはずで、テストを消したことで不具合が見えなくなっています。本体を元に戻し、テストも残すべきです。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "数値引数の整形を例外ハンドラ側でまとめて防ぐか",
+   "detail": "呼び出し側ごとに String へ変換するやり方は、今回のように善意のリファクタリングで簡単に崩れます。ApiExceptionHandler でメッセージ引数の Number を String に変換するか、メッセージ定義を {0,number,#} にすれば、再発を防げます。他の NotFoundException / BusinessException の呼び出し箇所で数値をそのまま渡しているかどうかは、この差分からは見えません（推測）。",
+   "line": 23,
+   "evidence": "MemberService の String.valueOf はコメントだけで守られていました。ApiExceptionHandler の実装はこの差分に含まれていないため、引数の扱いは推測です。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "数値引数の整形を例外ハンドラ側でまとめて防ぐか 呼び出し側ごとに String へ変換するやり方は、今回のように善意のリファクタリングで簡単に崩れます。ApiExceptionHandler でメッセージ引数の Number を String に変換するか、メッセージ定義を {0,number,#} にすれば、再発を防げます。他の NotFoundException / BusinessException の呼び出し箇所で数値をそのまま渡しているかどうかは、この差分からは見えません（推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "deep",
+ "run": 3
+}

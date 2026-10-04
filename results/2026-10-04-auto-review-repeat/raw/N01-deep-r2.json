@@ -1,0 +1,52 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4123,
+   "output_tokens": 678,
+   "cost_usd": 0.0171,
+   "seconds": 9.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0171,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "quantity が数値でない・空のときのテストがない",
+   "detail": "今回の PR で quantity の受け付け側の境界（1, 999）と拒否側の境界（0, 1000）はテストできている。ただし quantity 列が \"x\" や空文字、\"-1\" のときに、行番号付きのエラーとして報告されるか（NumberFormatException がそのまま漏れて取り込み全体が止まらないか）は確かめられていない。実装が見えないため、例外の扱いは推測。",
+   "line": 92,
+   "evidence": "member_id の非数値は badLinesAreReportedWithLineNumbersAndOthersContinue で \"A001,x,P-01,2\" として検証している。一方、parseRejects には quantity の非数値・空のケースがなく、追加された parseAcceptsQuantityBoundaries も受け付け側だけを見ている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "quantity が数値でない・空のときのテストがない 今回の PR で quantity の受け付け側の境界（1, 999）と拒否側の境界（0, 1000）はテストできている。ただし quantity 列が \"x\" や空文字、\"-1\" のときに、行番号付きのエラーとして報告されるか（NumberFormatException がそのまま漏れて取り込み全体が止まらないか）は確かめられていない。実装が見えないため、例外の扱いは推測。"
+  }
+ ],
+ "rejected": [],
+ "case": "N01",
+ "config": "deep",
+ "run": 2
+}

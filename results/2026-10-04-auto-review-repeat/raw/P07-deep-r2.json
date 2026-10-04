@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5332,
+   "output_tokens": 1273,
+   "cost_usd": 0.0301,
+   "seconds": 14.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0301,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "4 桁以上の ID で、404 のメッセージに桁区切りが入る",
+   "detail": "ID が 1000 以上の会員（例: 1234）を取得して見つからないと、メッセージが「会員が見つかりません（会員ID: 1,234）。」になる。表示や問い合わせのときに ID がそのまま照合できず、メッセージを使った検索や監視でも一致しなくなる。ロケールによっては区切り文字が変わり（例: 「1.234」）、出力が環境に左右される。PR の「引数は Object なので変換は不要」という前提は誤り。MessageFormat は Number 型の引数を NumberFormat で整形するため、型が Object かどうかに関係なく整形が入る。String.valueOf(id) に戻すべき。",
+   "line": 23,
+   "evidence": "削除されたコメントに「数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる」とあり、今回の差分は long の id をそのまま渡している（オートボクシングで Long になる）。テストの StaticMessageSource のテンプレートは「{0}」で、書式指定が無いため数値は既定の書式で整形される。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "4 桁以上の ID で、404 のメッセージに桁区切りが入る ID が 1000 以上の会員（例: 1234）を取得して見つからないと、メッセージが「会員が見つかりません（会員ID: 1,234）。」になる。表示や問い合わせのときに ID がそのまま照合できず、メッセージを使った検索や監視でも一致しなくなる。ロケールによっては区切り文字が変わり（例: 「1.234」）、出力が環境に左右される。PR の「引数は Object なので変換は不要」という前提は誤り。MessageFormat は Number 型の引数を NumberFormat で整形するため、型が Object かどうかに関係なく整形が入る。String.valueOf(id) に戻すべき。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "退行を検出する唯一のテストを削除している",
+   "detail": "notFoundMessageHasNoThousandsSeparator は、ID 1234 のときに桁区切りが入らないことを確かめる唯一のテストだった。このテストが消えたため、上の退行は CI で検出されない。残っている notFoundReturns404WithMessageId は ID が 42（3 桁以下）なので、桁区切りの有無を確かめられない。おそらく実装を変えた結果このテストが失敗し、それを消したものと思われる（推測）。テストは残し、実装を元に戻すべき。",
+   "line": 74,
+   "evidence": "差分で @Test void notFoundMessageHasNoThousandsSeparator()（get(\"/api/v1/members/1234\") で「会員ID: 1234」を期待）が削除されている。変更後の全文で、404 を確かめるテストは /members/42 の 1 件だけ。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:74",
+   "message": "退行を検出する唯一のテストを削除している notFoundMessageHasNoThousandsSeparator は、ID 1234 のときに桁区切りが入らないことを確かめる唯一のテストだった。このテストが消えたため、上の退行は CI で検出されない。残っている notFoundReturns404WithMessageId は ID が 42（3 桁以下）なので、桁区切りの有無を確かめられない。おそらく実装を変えた結果このテストが失敗し、それを消したものと思われる（推測）。テストは残し、実装を元に戻すべき。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "ほかの呼び出し元でも、数値をそのままメッセージ引数に渡していないか",
+   "detail": "今回と同じ考え方で、NotFoundException や BusinessException に数値の引数をそのまま渡している箇所がほかにもあれば、同じ桁区切りの問題が起きる。数値を渡すのを禁止するか、ApiExceptionHandler の側で引数を文字列に変換するなど、仕組みで防ぐかどうかを確認したい（ほかのファイルは見えないため推測）。",
+   "line": 23,
+   "evidence": "このファイルの register は normalized（String）を渡しているので問題ない。ほかのサービスと ApiExceptionHandler の実装は、このメッセージには含まれていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "ほかの呼び出し元でも、数値をそのままメッセージ引数に渡していないか 今回と同じ考え方で、NotFoundException や BusinessException に数値の引数をそのまま渡している箇所がほかにもあれば、同じ桁区切りの問題が起きる。数値を渡すのを禁止するか、ApiExceptionHandler の側で引数を文字列に変換するなど、仕組みで防ぐかどうかを確認したい（ほかのファイルは見えないため推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "deep",
+ "run": 2
+}

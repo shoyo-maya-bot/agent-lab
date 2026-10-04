@@ -1,0 +1,73 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 4,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: トランザクション境界の変更"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2976,
+   "output_tokens": 687,
+   "cost_usd": 0.0093,
+   "seconds": 9.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0093,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly トランザクションを外したことによる影響の確認が不足",
+   "detail": "get() は SELECT 1 本なので、現状の単純な実装では機能上の不具合は出にくい。ただし @Transactional(readOnly = true) を外すと、(1) 読み取り専用のヒント（JDBC の setReadOnly、リードレプリカへのルーティング、ORM のフラッシュ抑止など）が効かなくなる、(2) 将来 get() に追加の SELECT（例: 関連テーブルの取得）が足されたとき、一貫したスナップショットで読めず、呼び出しごとに別コネクション・別トランザクションになる、という影響がある。環境によっては DataSource が readOnly でレプリカに振り分ける構成の場合、照会が primary に集中する。",
+   "line": 21,
+   "evidence": "差分で get() から @Transactional(readOnly = true) が削除されている。register() は @Transactional のままで、クラス全体の方針（クラスレベル指定がないこと）は変わらない。DataSource/ルーティング設定は差分に含まれず、レプリカ構成の有無は推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly トランザクションを外したことによる影響の確認が不足 get() は SELECT 1 本なので、現状の単純な実装では機能上の不具合は出にくい。ただし @Transactional(readOnly = true) を外すと、(1) 読み取り専用のヒント（JDBC の setReadOnly、リードレプリカへのルーティング、ORM のフラッシュ抑止など）が効かなくなる、(2) 将来 get() に追加の SELECT（例: 関連テーブルの取得）が足されたとき、一貫したスナップショットで読めず、呼び出しごとに別コネクション・別トランザクションになる、という影響がある。環境によっては DataSource が readOnly でレプリカに振り分ける構成の場合、照会が primary に集中する。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly 指定を外す根拠（計測・設定）の確認",
+   "detail": "PR 説明は「SELECT 1 本だから不要」とのみ。外す目的（性能、プロキシ起因の問題、接続保持の回避など）が不明。目的がなければ、変更せず残す方が将来の変更に安全。他の照会系サービスメソッドとの方針の整合も確認したい。",
+   "line": 21,
+   "evidence": "PR 説明の文面のみ。計測結果や関連 Issue の記載なし。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly 指定を外す根拠（計測・設定）の確認 PR 説明は「SELECT 1 本だから不要」とのみ。外す目的（性能、プロキシ起因の問題、接続保持の回避など）が不明。目的がなければ、変更せず残す方が将来の変更に安全。他の照会系サービスメソッドとの方針の整合も確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "D05",
+ "config": "standard",
+ "run": 2
+}

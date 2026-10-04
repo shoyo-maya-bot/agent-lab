@@ -1,0 +1,69 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2926,
+   "output_tokens": 714,
+   "cost_usd": 0.0094,
+   "seconds": 8.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0094,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "-parameters の設定が差分から確認できない（PR 説明の前提）",
+   "detail": "PR 説明は build.gradle の -parameters を根拠にしているが、build.gradle は差分にもファイルにも含まれておらず確認できない。実際に -parameters が javac に渡っていない場合（例: compileJava の options.compilerArgs に未設定、Spring Boot Gradle プラグインを使わずに設定している、IDE や別ビルドで実行している）、GET /api/v1/members/{id} は IllegalArgumentException（Name for argument of type [long] not specified...）となり 500 を返す。Spring Framework 6.1 以降は名前解決のフォールバック（-debug による LocalVariableTable）が廃止されているため、-parameters が無いと動かない。作者に、実際にビルドして GET が 200 を返すことの確認（または該当テストの有無）を確認したい。",
+   "line": 32,
+   "evidence": "変更は @PathVariable(\"id\") → @PathVariable のみ。-parameters を保証する記述は差分内になく、PR 説明の記述のみが根拠。jakarta.validation パッケージ使用から Spring Boot 3 系（Spring 6.x）と推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "-parameters の設定が差分から確認できない（PR 説明の前提） PR 説明は build.gradle の -parameters を根拠にしているが、build.gradle は差分にもファイルにも含まれておらず確認できない。実際に -parameters が javac に渡っていない場合（例: compileJava の options.compilerArgs に未設定、Spring Boot Gradle プラグインを使わずに設定している、IDE や別ビルドで実行している）、GET /api/v1/members/{id} は IllegalArgumentException（Name for argument of type [long] not specified...）となり 500 を返す。Spring Framework 6.1 以降は名前解決のフォールバック（-debug による LocalVariableTable）が廃止されているため、-parameters が無いと動かない。作者に、実際にビルドして GET が 200 を返すことの確認（または該当テストの有無）を確認したい。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "GET エンドポイントのテストが差分に含まれない",
+   "detail": "名前解決に依存する変更なのに、MockMvc 等で GET /{id} を叩くテストが差分に無い。-parameters が外れる（ビルド設定の変更など）と実行時まで気付けず、将来の退行を CI で検知できない。ただし既存テストが別にあれば不要（推測）。",
+   "line": 32,
+   "evidence": "差分は MemberController.java のみで、テストファイルの変更・全文は提示されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "GET エンドポイントのテストが差分に含まれない 名前解決に依存する変更なのに、MockMvc 等で GET /{id} を叩くテストが差分に無い。-parameters が外れる（ビルド設定の変更など）と実行時まで気付けず、将来の退行を CI で検知できない。ただし既存テストが別にあれば不要（推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "D04",
+ "config": "auto",
+ "run": 2
+}

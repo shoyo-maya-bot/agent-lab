@@ -1,0 +1,74 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 4,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: トランザクション境界の変更"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2976,
+   "output_tokens": 805,
+   "cost_usd": 0.0104,
+   "seconds": 9.6,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0104,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly トランザクション指定を外したことによる副作用の確認が不足している",
+   "detail": "get() は現状 SELECT 1 本なので、通常は結果は変わらない。ただし @Transactional(readOnly = true) には、(1) 読み取り専用であることの明示、(2) JDBC の readOnly ヒントによる読み取りレプリカ/ルーティングデータソース（使っている場合）への振り分け、(3) 将来 get() に処理が追加されたときの一貫したスナップショット、といった役割がある。もしプロジェクトで AbstractRoutingDataSource や readOnly ベースのレプリカ振り分けを使っている場合、この変更で照会がプライマリに流れる。また MyBatis は Spring のトランザクション外だと呼び出しごとに SqlSession を開閉するため、今後 get() 内でマッパー呼び出しが複数になると、呼び出し間で整合しない読み取りになり得る。現在の差分だけでは実害は確認できないため、影響が無いことの確認が欲しい。",
+   "line": 21,
+   "evidence": "差分で get() の @Transactional(readOnly = true) が削除されている。クラス内の他メソッド register() には @Transactional が残っており、方針として照会だけ外す理由が PR 説明の「SELECT 1 本だから不要」のみ。DataSource 設定は差分に含まれず見えない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly トランザクション指定を外したことによる副作用の確認が不足している get() は現状 SELECT 1 本なので、通常は結果は変わらない。ただし @Transactional(readOnly = true) には、(1) 読み取り専用であることの明示、(2) JDBC の readOnly ヒントによる読み取りレプリカ/ルーティングデータソース（使っている場合）への振り分け、(3) 将来 get() に処理が追加されたときの一貫したスナップショット、といった役割がある。もしプロジェクトで AbstractRoutingDataSource や readOnly ベースのレプリカ振り分けを使っている場合、この変更で照会がプライマリに流れる。また MyBatis は Spring のトランザクション外だと呼び出しごとに SqlSession を開閉するため、今後 get() 内でマッパー呼び出しが複数になると、呼び出し間で整合しない読み取りになり得る。現在の差分だけでは実害は確認できないため、影響が無いことの確認が欲しい。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "データソースのルーティングや他サービスとの方針は確認済みか",
+   "detail": "プロジェクト内に readOnly を見て接続先を切り替える設定、あるいは他の照会メソッドが readOnly を付ける規約があるかを確認したい。あるなら、この変更は規約から外れ、本番でプライマリへの負荷増や設定意図とのずれが起きる。無ければ今回の変更で問題ないと思われる。",
+   "line": 21,
+   "evidence": "DataSource 設定・他サービスのコードはこのレビューの入力に含まれず、確認できない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "データソースのルーティングや他サービスとの方針は確認済みか プロジェクト内に readOnly を見て接続先を切り替える設定、あるいは他の照会メソッドが readOnly を付ける規約があるかを確認したい。あるなら、この変更は規約から外れ、本番でプライマリへの負荷増や設定意図とのずれが起きる。無ければ今回の変更で問題ないと思われる。"
+  }
+ ],
+ "rejected": [],
+ "case": "D05",
+ "config": "auto",
+ "run": 2
+}

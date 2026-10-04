@@ -1,0 +1,69 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4129,
+   "output_tokens": 579,
+   "cost_usd": 0.0093,
+   "seconds": 7.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0093,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "下限側の境界 0 と上限側の 1000 は既存だが、境界テストが accept 側だけで reject 側の 0 が parse 単体で未検証",
+   "detail": "既存の parseRejects は 1000 のみ。0 は importLines 経由（badLinesAreReported…）でしか確認されず、parse 単体での下限 reject の境界（0 / 負数 / 非数値の quantity）が抜けている。今回の PR は境界テストの追加が目的なので、1 と 0、999 と 1000 の対が揃っていない点が残る。0 の検証は importLines 経由で行われているため、致命的ではない。",
+   "line": 93,
+   "evidence": "parseRejects の @CsvSource に quantity 1000 の行しかない。0 は badLinesAreReportedWithLineNumbersAndOthersContinue の \"A002,1,P-02,0\" にのみ登場する。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:93",
+   "message": "下限側の境界 0 と上限側の 1000 は既存だが、境界テストが accept 側だけで reject 側の 0 が parse 単体で未検証 既存の parseRejects は 1000 のみ。0 は importLines 経由（badLinesAreReported…）でしか確認されず、parse 単体での下限 reject の境界（0 / 負数 / 非数値の quantity）が抜けている。今回の PR は境界テストの追加が目的なので、1 と 0、999 と 1000 の対が揃っていない点が残る。0 の検証は importLines 経由で行われているため、致命的ではない。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "単一カラムの @CsvSource より @ValueSource の方が意図に合う",
+   "detail": "値が 1 列の int だけなので動作に問題はない。@ValueSource(ints = {1, 999}) の方が意図が明確で、将来カラムを増やすときの誤解も避けられる。",
+   "line": 92,
+   "evidence": "@CsvSource({\"1\", \"999\"}) で int 1 引数のみを受けている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "単一カラムの @CsvSource より @ValueSource の方が意図に合う 値が 1 列の int だけなので動作に問題はない。@ValueSource(ints = {1, 999}) の方が意図が明確で、将来カラムを増やすときの誤解も避けられる。"
+  }
+ ],
+ "rejected": [],
+ "case": "N01",
+ "config": "auto",
+ "run": 1
+}

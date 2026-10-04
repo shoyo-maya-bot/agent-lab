@@ -172,3 +172,86 @@ cases:
                   Member member = service.register(req.name(), req.email());
                   // Location ヘッダーに、登録した会員を照会する URL を入れる
                   return ResponseEntity.created(URI.create("/api/v1/members/" + member.id())).body(member);
+
+  # ---- おとり（D0x）: 危なそうに見えるが正しい変更. MUST が出たら誤り. Opus の検証が却下できるかを見る
+  - id: D01
+    decoy: true
+    title: 会員登録の重複確認を一意制約に一本化
+    description: 事前の existsByEmail をやめ、DB の一意制約（DuplicateKeyException → 409）だけで判定します。SELECT が 1 回減ります。
+    why_correct: insert の DuplicateKeyException を 409（APPE0003）に変換する処理は残っているので、重複時の結果は変わらない
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+        old: |2
+                  // 事前の確認は「よくある重複」を早く返すため。同時に登録されたときの最終的な判定は DB の一意制約に任せる
+                  if (mapper.existsByEmail(normalized)) {
+                      throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized);
+                  }
+        new: |2
+                  // 重複の判定は DB の一意制約に任せる（同時に登録されても 409 になる）
+      - file: sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java
+        old: |2
+                  @Override
+                  public int insert(MemberRecord member) {
+                      member.setId(++seq);
+        new: |2
+                  @Override
+                  public int insert(MemberRecord member) {
+                      if (existsByEmail(member.getEmail())) {
+                          throw new org.springframework.dao.DuplicateKeyException("member_email_key");
+                      }
+                      member.setId(++seq);
+
+  - id: D02
+    decoy: true
+    title: ジョブ ID の照合を Set に
+    description: 照合を Set で行うように書き換えました。動作は同じです。
+    why_correct: 有効なジョブ ID の集合に要求された ID が含まれるかを見ており、anyMatch と同じ結果になる
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+        old: "        boolean found = jobs.stream().anyMatch(j -> j.jobId().equals(requested));\n"
+        new: "        Set<String> known = jobs.stream().map(BatchJob::jobId).collect(Collectors.toSet());\n        boolean found = known.contains(requested);\n"
+      - file: sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+        old: "import java.util.List;\n"
+        new: "import java.util.List;\nimport java.util.Set;\nimport java.util.stream.Collectors;\n"
+
+  - id: D03
+    decoy: true
+    title: 境界値のテストをパラメータ化
+    description: 20 文字ちょうどのテストを、order_no と product_code の両方を見るパラメータ化テストにまとめました。
+    why_correct: 削除したテストの確認内容（20 文字ちょうどを受け付ける）は、新しいテストがより広く確かめている
+    edits:
+      - file: sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+        old: |2
+              @Test
+              void parseAcceptsExactlyTwentyChars() {
+                  String twenty = "B".repeat(20);
+                  assertThat(OrderImportService.parse(twenty + ",1," + twenty + ",1").orderNo()).isEqualTo(twenty);
+              }
+        new: |2
+              @ParameterizedTest
+              @CsvSource({"20,1", "1,20", "20,20"})
+              void parseAcceptsCodesUpToTwentyChars(int orderNoLength, int productLength) {
+                  Order o = OrderImportService.parse("B".repeat(orderNoLength) + ",1," + "P".repeat(productLength) + ",1");
+                  assertThat(o.orderNo()).hasSize(orderNoLength);
+                  assertThat(o.productCode()).hasSize(productLength);
+              }
+
+  - id: D04
+    decoy: true
+    title: PathVariable の名前指定を省略
+    description: build.gradle で -parameters を付けているので、@PathVariable の名前は省略できます。
+    why_correct: build.gradle の compilerArgs に -parameters があり、引数名が実行時に取れる
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/member/MemberController.java
+        old: '@PathVariable("id") long id'
+        new: "@PathVariable long id"
+
+  - id: D05
+    decoy: true
+    title: 照会のトランザクション指定を外す
+    description: 照会は SELECT 1 本なので、@Transactional(readOnly = true) は不要と判断して外しました。
+    why_correct: 1 回の SELECT だけで、トランザクションが無くても結果は同じ（読み取りの一貫性の問題が起きない）
+    edits:
+      - file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+        old: "    @Transactional(readOnly = true)\n    public Member get(long id) {\n"
+        new: "    public Member get(long id) {\n"

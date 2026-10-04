@@ -1,0 +1,138 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5952,
+   "output_tokens": 3181,
+   "cost_usd": 0.069,
+   "seconds": 32.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.069,
+ "notes": [],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない会員の行が 1 行あるだけで取込全体が取り消される",
+   "detail": "CSV に存在しない member_id（例: 999）の行が 1 行でもあると、insertIfAbsent が外部キー違反で例外になります（Spring なら DataIntegrityViolationException と推測）。例外は捕捉されずに @Transactional の外まで伝わるため、それまでに登録した正しい行もすべてロールバックされ、ジョブは失敗します。変更前は、その行だけを飛ばして残りを登録していました。誤りの行を直さない限り、再実行しても毎回同じように全件失敗します。insertIfAbsent が ON CONFLICT DO NOTHING / INSERT IGNORE 系だとしても、無視されるのは一意制約だけで外部キー違反は無視されません（SQL は見えないため推測）。なお、ここで例外を catch して続行するように直す方法は、PostgreSQL ではトランザクションが aborted 状態になるため、SAVEPOINT を使わない限り成り立ちません。",
+   "line": 52,
+   "evidence": "削除された memberCache.computeIfAbsent(order.memberId(), mapper::memberExists) のチェック。importLines は @Transactional で、insertIfAbsent の呼び出しを try で囲んでいない。クラスの Javadoc にも「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため」と書かれている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "存在しない会員の行が 1 行あるだけで取込全体が取り消される CSV に存在しない member_id（例: 999）の行が 1 行でもあると、insertIfAbsent が外部キー違反で例外になります（Spring なら DataIntegrityViolationException と推測）。例外は捕捉されずに @Transactional の外まで伝わるため、それまでに登録した正しい行もすべてロールバックされ、ジョブは失敗します。変更前は、その行だけを飛ばして残りを登録していました。誤りの行を直さない限り、再実行しても毎回同じように全件失敗します。insertIfAbsent が ON CONFLICT DO NOTHING / INSERT IGNORE 系だとしても、無視されるのは一意制約だけで外部キー違反は無視されません（SQL は見えないため推測）。なお、ここで例外を catch して続行するように直す方法は、PostgreSQL ではトランザクションが aborted 状態になるため、SAVEPOINT を使わない限り成り立ちません。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "会員不在の誤りが行番号付きの結果として返らなくなる",
+   "detail": "変更前は「3: member_id の会員が存在しません（999）」が ImportResult.errors に入り、他の行の取込結果と一緒に返っていました。変更後は例外で処理が終わるため ImportResult は返りません。運用者は DB の制約違反メッセージしか受け取れず、CSV の何行目が原因かを特定できません。ジョブの終了コードやログの出方も、形式エラーとは別の経路になります（呼び出し側のコードは見えないため推測）。",
+   "line": 52,
+   "evidence": "errors.add(lineNo + ...) は parse 失敗のときにしか呼ばれない。insert で失敗したときの errors への追加と行番号の記録が無い。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "会員不在の誤りが行番号付きの結果として返らなくなる 変更前は「3: member_id の会員が存在しません（999）」が ImportResult.errors に入り、他の行の取込結果と一緒に返っていました。変更後は例外で処理が終わるため ImportResult は返りません。運用者は DB の制約違反メッセージしか受け取れず、CSV の何行目が原因かを特定できません。ジョブの終了コードやログの出方も、形式エラーとは別の経路になります（呼び出し側のコードは見えないため推測）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "挙動を変えたのに、存在しない会員のテストを消しただけで代わりのテストが無い",
+   "detail": "unknownMemberSkipsOnlyThatLine を削除しましたが、存在しない会員の行を含む CSV でどうなるか（全件ロールバックか、その行だけ飛ばすか）を確かめるテストがありません。FakeOrderMapper は外部キー制約を再現していないと考えられるため（推測）、単体テストは通ってしまい、上の不具合を見逃します。実 DB を使う結合テストで、会員不在の行が混ざったケースを確認する必要があります。",
+   "line": 49,
+   "evidence": "差分で @Test unknownMemberSkipsOnlyThatLine が削除され、テストは追加されていない。テストは new FakeOrderMapper() だけで動いている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:49",
+   "message": "挙動を変えたのに、存在しない会員のテストを消しただけで代わりのテストが無い unknownMemberSkipsOnlyThatLine を削除しましたが、存在しない会員の行を含む CSV でどうなるか（全件ロールバックか、その行だけ飛ばすか）を確かめるテストがありません。FakeOrderMapper は外部キー制約を再現していないと考えられるため（推測）、単体テストは通ってしまい、上の不具合を見逃します。実 DB を使う結合テストで、会員不在の行が混ざったケースを確認する必要があります。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc の仕様と実装が食い違っている",
+   "detail": "Javadoc には「存在しない会員の行は飛ばして続行」「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」と書かれていますが、外部キーの確認は削除されました。仕様として正しいのが Javadoc なら実装が不具合で、実装が正しいなら Javadoc が誤りです。",
+   "line": 12,
+   "evidence": "12 行目と 14〜15 行目の Javadoc。memberExists の呼び出しが削除されている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:12",
+   "message": "Javadoc の仕様と実装が食い違っている Javadoc には「存在しない会員の行は飛ばして続行」「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」と書かれていますが、外部キーの確認は削除されました。仕様として正しいのが Javadoc なら実装が不具合で、実装が正しいなら Javadoc が誤りです。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化の前提の確認と、確認を残したままの代案",
+   "detail": "変更前もキャッシュがあり、SELECT は「異なる member_id の数」だけしか発行されていませんでした（削除されたテストでも 3 行に対して 2 回）。遅さの原因が本当にこの SELECT だったのか、計測結果を教えてください。もしそうなら、確認をやめるのではなく、CSV に含まれる member_id を先に集めて WHERE id IN (...) で一括取得し、存在する ID の Set と照合すれば、行ごとに飛ばす仕様を保ったまま往復を 1 回（またはチャンク数）に減らせます。",
+   "line": 52,
+   "evidence": "削除されたコード memberCache.computeIfAbsent(...)。削除されたテストのアサーション memberLookups isEqualTo(2)「同じ会員は 1 回だけ確かめる」。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "高速化の前提の確認と、確認を残したままの代案 変更前もキャッシュがあり、SELECT は「異なる member_id の数」だけしか発行されていませんでした（削除されたテストでも 3 行に対して 2 回）。遅さの原因が本当にこの SELECT だったのか、計測結果を教えてください。もしそうなら、確認をやめるのではなく、CSV に含まれる member_id を先に集めて WHERE id IN (...) で一括取得し、存在する ID の Set と照合すれば、行ごとに飛ばす仕様を保ったまま往復を 1 回（またはチャンク数）に減らせます。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "memberExists とテスト用カウンタが使われずに残る（推測）",
+   "detail": "OrderMapper.memberExists、それに対応する Mapper XML の SQL、FakeOrderMapper.memberLookups は、この変更でどこからも呼ばれなくなったと考えられます。方針を確定させるなら、残すのか削除するのかを揃えてください。",
+   "line": 52,
+   "evidence": "サービスから mapper::memberExists の参照が削除された。Mapper と Fake の本体は差分に含まれていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "memberExists とテスト用カウンタが使われずに残る（推測） OrderMapper.memberExists、それに対応する Mapper XML の SQL、FakeOrderMapper.memberLookups は、この変更でどこからも呼ばれなくなったと考えられます。方針を確定させるなら、残すのか削除するのかを揃えてください。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "deep",
+ "run": 3
+}

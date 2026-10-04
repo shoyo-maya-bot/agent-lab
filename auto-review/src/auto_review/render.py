@@ -5,7 +5,7 @@ from __future__ import annotations
 from .review import Result
 
 MARKER = "<!-- auto-review -->"
-STATUS_LABEL = {"confirmed": "検証済み", "unverified": "未検証", "rejected": "却下"}
+STATUS_LABEL = {"confirmed": "検証済み", "uncertain": "要確認", "unverified": "未検証", "rejected": "却下"}
 
 
 def _short(model: str) -> str:
@@ -68,6 +68,7 @@ def to_report(r: Result) -> dict:
             "findings": len(r.findings),
             "shown": sum(1 for f in r.findings if f.status != "rejected"),
             "confirmed": sum(1 for f in r.findings if f.status == "confirmed"),
+            "uncertain": sum(1 for f in r.findings if f.status == "uncertain"),
             "rejected": sum(1 for f in r.findings if f.status == "rejected"),
             "open_must": r.open_must,
         },

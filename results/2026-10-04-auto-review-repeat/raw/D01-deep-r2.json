@@ -1,0 +1,136 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4644,
+   "output_tokens": 2957,
+   "cost_usd": 0.0632,
+   "seconds": 32.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0632,
+ "notes": [],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "メール以外の一意制約違反も「メール使用済み」の 409 になる",
+   "detail": "これまでは、よくある重複は事前の existsByEmail で判定していました。この変更で、重複の判定は catch (DuplicateKeyException) だけになります。members テーブルにメール以外の一意制約（ID の衝突、他の業務キーなど）がある場合、その違反も EMAIL_ALREADY_USED の 409 として返ります。利用者には誤ったメッセージが出て、運用側は本当の原因に気付けません。ほかの制約があるかどうかは差分からは見えません（推測）。",
+   "line": 35,
+   "evidence": "catch 節は例外の制約名（member_email_key など）を確認せず、DuplicateKeyException ならすべて EMAIL_ALREADY_USED に変換している。事前確認が無くなったので、この catch が通常の重複でも唯一の判定経路になった。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:35",
+   "message": "メール以外の一意制約違反も「メール使用済み」の 409 になる これまでは、よくある重複は事前の existsByEmail で判定していました。この変更で、重複の判定は catch (DuplicateKeyException) だけになります。members テーブルにメール以外の一意制約（ID の衝突、他の業務キーなど）がある場合、その違反も EMAIL_ALREADY_USED の 409 として返ります。利用者には誤ったメッセージが出て、運用側は本当の原因に気付けません。ほかの制約があるかどうかは差分からは見えません（推測）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "外側のトランザクションから呼ぶと、重複のあとトランザクション全体が使えなくなる（PostgreSQL 想定）",
+   "detail": "PostgreSQL では、一意制約違反が起きた時点でトランザクションが aborted 状態になります。register が外側のトランザクションに参加している場合（REQUIRED の既定動作）、呼び出し側が BusinessException を捕まえて処理を続けると、次の SQL が『current transaction is aborted』で失敗し、500 になります。これまでは、よくある重複は SELECT だけで検出されていたので起きませんでした。使っている DB と呼び出し元は差分からは見えません（推測。制約名 member_email_key は PostgreSQL の命名に見えます）。",
+   "line": 28,
+   "evidence": "@Transactional（伝播の指定なし）の中で、通常の重複も INSERT の失敗として扱うようになった。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:28",
+   "message": "外側のトランザクションから呼ぶと、重複のあとトランザクション全体が使えなくなる（PostgreSQL 想定） PostgreSQL では、一意制約違反が起きた時点でトランザクションが aborted 状態になります。register が外側のトランザクションに参加している場合（REQUIRED の既定動作）、呼び出し側が BusinessException を捕まえて処理を続けると、次の SQL が『current transaction is aborted』で失敗し、500 になります。これまでは、よくある重複は SELECT だけで検出されていたので起きませんでした。使っている DB と呼び出し元は差分からは見えません（推測。制約名 member_email_key は PostgreSQL の命名に見えます）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "実際の DB 一意制約を確かめるテストが無い",
+   "detail": "重複の判定は DB の一意制約だけに頼るようになりました。しかしテストは、InMemoryMapper が自分で DuplicateKeyException を投げることで制約を模しています。マイグレーションで制約が消えたり、名前や対象の列が違ったりしても、テストはすべて通り、本番では重複した会員が登録されます。実 DB（Testcontainers など）を使って、同じメールを 2 回登録すると 2 回目が BusinessException になることを確かめる結合テストが要ります。",
+   "line": 34,
+   "evidence": "テスト側の insert に `if (existsByEmail(...)) throw new DuplicateKeyException(...)` が追加され、制約の振る舞いをテスト用の Mapper が肩代わりしている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:34",
+   "message": "実際の DB 一意制約を確かめるテストが無い 重複の判定は DB の一意制約だけに頼るようになりました。しかしテストは、InMemoryMapper が自分で DuplicateKeyException を投げることで制約を模しています。マイグレーションで制約が消えたり、名前や対象の列が違ったりしても、テストはすべて通り、本番では重複した会員が登録されます。実 DB（Testcontainers など）を使って、同じメールを 2 回登録すると 2 回目が BusinessException になることを確かめる結合テストが要ります。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "一意制約と existsByEmail の比較方法は同じか",
+   "detail": "existsByEmail の SQL が lower(email) = #{email} のような大文字小文字を区別しない比較で、一意制約は email 列そのものにかかっている場合を想定しています。正規化される前に入った大文字混じりの既存データ（例: Taro@Example.com）があると、これまでは事前確認で 409 になっていた登録が、この変更後はそのまま通り、実質的に重複した会員ができます。マッパーの SQL と DDL は差分に含まれていません（推測）。一意制約が lower(email) の式インデックスになっているか、既存データが正規化済みかを確認させてください。",
+   "line": 31,
+   "evidence": "削除された行 `if (mapper.existsByEmail(normalized))` は、判定を Mapper の SQL に委ねていた。テストの InMemoryMapper.insert は existsByEmail と同じ比較で重複を作っているため、実際の DB 制約との違いはテストでは検出できない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:31",
+   "message": "一意制約と existsByEmail の比較方法は同じか existsByEmail の SQL が lower(email) = #{email} のような大文字小文字を区別しない比較で、一意制約は email 列そのものにかかっている場合を想定しています。正規化される前に入った大文字混じりの既存データ（例: Taro@Example.com）があると、これまでは事前確認で 409 になっていた登録が、この変更後はそのまま通り、実質的に重複した会員ができます。マッパーの SQL と DDL は差分に含まれていません（推測）。一意制約が lower(email) の式インデックスになっているか、既存データが正規化済みかを確認させてください。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "重複のたびに DB のエラーログが出て、ID の番号も消費される",
+   "detail": "よくある重複（ユーザーの再送や二重登録）がすべて INSERT の失敗になります。PostgreSQL の既定設定ではサーバーログに ERROR が 1 件ずつ出て、監視のノイズになります。また、シーケンスで ID を採番している場合は、失敗した INSERT でも番号が進むため、欠番が増えます（推測）。SELECT を 1 回減らす利点と比べて、許容できるかを判断してください。",
+   "line": 34,
+   "evidence": "事前確認が削除され、重複はすべて mapper.insert(rec) の失敗として扱われる。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "重複のたびに DB のエラーログが出て、ID の番号も消費される よくある重複（ユーザーの再送や二重登録）がすべて INSERT の失敗になります。PostgreSQL の既定設定ではサーバーログに ERROR が 1 件ずつ出て、監視のノイズになります。また、シーケンスで ID を採番している場合は、失敗した INSERT でも番号が進むため、欠番が増えます（推測）。SELECT を 1 回減らす利点と比べて、許容できるかを判断してください。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "テストのコメントと、使われなくなった existsByEmail が残っている",
+   "detail": "register_concurrentDuplicateBecomesBusinessError のコメントは、もう存在しない『事前の確認をすり抜けた』場合を説明していて、読む人を誤解させます。また、本番コードから MemberMapper.existsByEmail を呼ぶ箇所が無くなりました。ほかに使われていなければ、Mapper の定義と SQL を削除できます（ほかの利用箇所の有無は推測）。",
+   "line": 67,
+   "evidence": "MemberService の変更後の全文に existsByEmail の呼び出しが無い。テストのコメントは『事前の確認をすり抜けた（同時に登録された）ケース』のまま。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:67",
+   "message": "テストのコメントと、使われなくなった existsByEmail が残っている register_concurrentDuplicateBecomesBusinessError のコメントは、もう存在しない『事前の確認をすり抜けた』場合を説明していて、読む人を誤解させます。また、本番コードから MemberMapper.existsByEmail を呼ぶ箇所が無くなりました。ほかに使われていなければ、Mapper の定義と SQL を削除できます（ほかの利用箇所の有無は推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "D01",
+ "config": "deep",
+ "run": 2
+}

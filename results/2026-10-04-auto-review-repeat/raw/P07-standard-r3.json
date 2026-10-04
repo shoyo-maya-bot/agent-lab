@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5338,
+   "output_tokens": 980,
+   "cost_usd": 0.0144,
+   "seconds": 10.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0144,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "ID を long のまま渡すと 404 メッセージに桁区切りが入る（回帰）",
+   "detail": "存在しない会員 ID が 1000 以上（例: 1234）のとき、MessageFormat が Long を数値として整形するため、メッセージが「会員ID: 1,234」になる。ロケールによっては区切り文字も変わる。ID は識別子なので桁区切りは不正で、利用者や問い合わせ対応で ID の読み違えが起きる。削除された元のコードのコメントがこの挙動を明示的に防ぐ意図だった。",
+   "line": 23,
+   "evidence": "削除された行のコメント「数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる」と String.valueOf(id)。ApiExceptionHandler は MessageSource に引数を渡す構成（テストで StaticMessageSource を使用）で、{0} は MessageFormat で整形される。NotFoundException が Object を受け取ることは、整形されないことの根拠にならない。ApiExceptionHandler 本体は差分に無いため、整形経路は推測を含む。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "ID を long のまま渡すと 404 メッセージに桁区切りが入る（回帰） 存在しない会員 ID が 1000 以上（例: 1234）のとき、MessageFormat が Long を数値として整形するため、メッセージが「会員ID: 1,234」になる。ロケールによっては区切り文字も変わる。ID は識別子なので桁区切りは不正で、利用者や問い合わせ対応で ID の読み違えが起きる。削除された元のコードのコメントがこの挙動を明示的に防ぐ意図だった。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "回帰を検知するテストを削除している",
+   "detail": "notFoundMessageHasNoThousandsSeparator は上記の桁区切りを検知する唯一のテストだった。これを消したため、挙動が壊れても CI が通る。残る notFoundReturns404WithMessageId は ID=42 なので 3 桁以下では差が出ず、問題を検知できない。むしろ、このテストを残していれば本 PR のコード変更で失敗したはずである。",
+   "line": 72,
+   "evidence": "差分で当該テスト（/api/v1/members/1234 で「会員ID: 1234」を期待）が削除されている。残存テストは /members/42 のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:72",
+   "message": "回帰を検知するテストを削除している notFoundMessageHasNoThousandsSeparator は上記の桁区切りを検知する唯一のテストだった。これを消したため、挙動が壊れても CI が通る。残る notFoundReturns404WithMessageId は ID=42 なので 3 桁以下では差が出ず、問題を検知できない。むしろ、このテストを残していれば本 PR のコード変更で失敗したはずである。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "String 変換を戻し、理由をコメントで残す",
+   "detail": "String.valueOf(id) に戻し、1000 以上の ID を使う回帰テストも復活させる。「不要な変換」に見えて再び消されないよう、コメントも残す。別の方法として、NotFoundException 側で引数を String 化すれば、全呼び出し箇所で同じ問題を防げる。",
+   "line": 23,
+   "evidence": "元のコードは意図的な String 変換で、コメントに理由が書かれていた。今回の PR 説明にはその理由への言及がない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "String 変換を戻し、理由をコメントで残す String.valueOf(id) に戻し、1000 以上の ID を使う回帰テストも復活させる。「不要な変換」に見えて再び消されないよう、コメントも残す。別の方法として、NotFoundException 側で引数を String 化すれば、全呼び出し箇所で同じ問題を防げる。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "standard",
+ "run": 3
+}

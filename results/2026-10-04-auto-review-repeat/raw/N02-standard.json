@@ -1,0 +1,52 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "skip",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": "文書・ロックファイルだけの変更"
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3710,
+   "output_tokens": 364,
+   "cost_usd": 0.0183,
+   "seconds": 5.6,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0183,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "README.md",
+   "title": "PR 説明（誤字修正）と実際の変更内容が一致していない",
+   "detail": "PR タイトル・説明は「README の誤字／表記ゆれの修正」だが、実際の差分は「（どちらか片方だけでも使えます）」という新しい説明の追加で、誤字の修正は含まれていない。レビュアーや後から履歴を追う人が、内容の追加を単なる誤字修正と誤解する。また、この追記が事実として正しいかは差分からは確認できない。例えば cloud/ の結合テスト手順や ai-coding が local/ の構成を前提にしているなら、「片方だけでも使える」とは限らない（推測）。",
+   "line": 4,
+   "evidence": "差分は 4 行目に「（どちらか片方だけでも使えます）」を追記するのみ。同ファイル内で関連リポジトリ ai-coding が「このリポジトリの構成を前提にする」と記載されている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "README.md:4",
+   "message": "PR 説明（誤字修正）と実際の変更内容が一致していない PR タイトル・説明は「README の誤字／表記ゆれの修正」だが、実際の差分は「（どちらか片方だけでも使えます）」という新しい説明の追加で、誤字の修正は含まれていない。レビュアーや後から履歴を追う人が、内容の追加を単なる誤字修正と誤解する。また、この追記が事実として正しいかは差分からは確認できない。例えば cloud/ の結合テスト手順や ai-coding が local/ の構成を前提にしているなら、「片方だけでも使える」とは限らない（推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "N02",
+ "config": "standard",
+ "run": 1
+}

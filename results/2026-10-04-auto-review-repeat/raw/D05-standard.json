@@ -1,0 +1,57 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 4,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: トランザクション境界の変更"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2976,
+   "output_tokens": 832,
+   "cost_usd": 0.0193,
+   "seconds": 9.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0193,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly 指定に依存する構成（レプリカ振り分けなど）が無いか確認したい",
+   "detail": "get() は SELECT 1 本なので、トランザクションを外しても結果は変わらない。MyBatis-Spring はトランザクションが無いとき、Mapper 呼び出しごとに SqlSession を開いて auto-commit で実行する。ただし、readOnly=true に依存する仕組みがこのプロジェクトにあると、削除で挙動が変わる。例は、readOnly で参照用 DataSource（レプリカ）へ振り分ける AbstractRoutingDataSource、接続の readOnly ヒント、DB 側の読み取り専用最適化。その場合、照会が主系に流れて負荷が増える。将来 get() が複数クエリになったときも、一貫した読み取りスナップショットが得られなくなる。",
+   "line": 21,
+   "evidence": "差分で @Transactional(readOnly = true) が get() から削除された。register() には @Transactional が残っているため import は未使用にならない。DataSource の設定や振り分けの有無は差分とファイルから見えないので、影響の有無は推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly 指定に依存する構成（レプリカ振り分けなど）が無いか確認したい get() は SELECT 1 本なので、トランザクションを外しても結果は変わらない。MyBatis-Spring はトランザクションが無いとき、Mapper 呼び出しごとに SqlSession を開いて auto-commit で実行する。ただし、readOnly=true に依存する仕組みがこのプロジェクトにあると、削除で挙動が変わる。例は、readOnly で参照用 DataSource（レプリカ）へ振り分ける AbstractRoutingDataSource、接続の readOnly ヒント、DB 側の読み取り専用最適化。その場合、照会が主系に流れて負荷が増える。将来 get() が複数クエリになったときも、一貫した読み取りスナップショットが得られなくなる。"
+  }
+ ],
+ "rejected": [],
+ "case": "D05",
+ "config": "standard",
+ "run": 1
+}

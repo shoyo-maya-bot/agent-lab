@@ -1,0 +1,84 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4248,
+   "output_tokens": 2245,
+   "cost_usd": 0.0763,
+   "seconds": 23.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0763,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "値の一致ではなく長さだけを確かめているため、元のテストより検証が弱い",
+   "detail": "parse が値を変えて返しても、長さが同じならテストは通る。たとえば文字を置き換える、別の列の値を入れる、order_no と product_code を取り違える、といった不具合を見逃す。今回はどちらも同じ長さになる \"20,20\" のケースがあり、取り違えは特に検出できない。変更前の isEqualTo(twenty) は値の一致を見ていたので、その保証が失われている。",
+   "line": 96,
+   "evidence": "変更前は assertThat(...orderNo()).isEqualTo(twenty) だった。変更後は assertThat(o.orderNo()).hasSize(orderNoLength) と assertThat(o.productCode()).hasSize(productLength) で、長さしか見ていない。入力文字列を変数に持ち、isEqualTo で比べるべき。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:96",
+   "message": "値の一致ではなく長さだけを確かめているため、元のテストより検証が弱い parse が値を変えて返しても、長さが同じならテストは通る。たとえば文字を置き換える、別の列の値を入れる、order_no と product_code を取り違える、といった不具合を見逃す。今回はどちらも同じ長さになる \"20,20\" のケースがあり、取り違えは特に検出できない。変更前の isEqualTo(twenty) は値の一致を見ていたので、その保証が失われている。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "product_code の上限側の境界（21 文字）を拒否するテストが無い",
+   "detail": "PR は「order_no と product_code の両方の境界を見る」としているが、拒否側のテストは product_code が 22 文字のものしかない。上限判定が誤って `> 21` になっていると、21 文字が受け付けられてもどのテストも失敗しない。order_no のほうは tooLongCodeSkipsOnlyThatLine で 21 文字を確かめている。",
+   "line": 86,
+   "evidence": "parseRejects の \"A001,1,P-01234567890123456789,1 | product_code は 20 文字以内です（22 文字）\" は 'P-' + 20 文字 = 22 文字。21 文字の product_code を使うケースはファイルのどこにも無い。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:86",
+   "message": "product_code の上限側の境界（21 文字）を拒否するテストが無い PR は「order_no と product_code の両方の境界を見る」としているが、拒否側のテストは product_code が 22 文字のものしかない。上限判定が誤って `> 21` になっていると、21 文字が受け付けられてもどのテストも失敗しない。order_no のほうは tooLongCodeSkipsOnlyThatLine で 21 文字を確かめている。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "parse の戻り値の型が Order で、productCode() を持つか",
+   "detail": "parse の戻り値の型が Order でない場合や、productCode() というアクセサが無い場合は、テストがコンパイルエラーになる。変更前はメソッドを連ねて呼んでいたので、型名を書く必要が無かった。",
+   "line": 95,
+   "evidence": "Order o = OrderImportService.parse(...) と o.productCode() を新しく使っている。OrderImportService と Order のソースは差分に無いため、型名とアクセサ名は推測。同じパッケージなので import が無いこと自体は問題にならない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:95",
+   "message": "parse の戻り値の型が Order で、productCode() を持つか parse の戻り値の型が Order でない場合や、productCode() というアクセサが無い場合は、テストがコンパイルエラーになる。変更前はメソッドを連ねて呼んでいたので、型名を書く必要が無かった。"
+  }
+ ],
+ "rejected": [],
+ "case": "D03",
+ "config": "deep",
+ "run": 1
+}

@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4704,
+   "output_tokens": 909,
+   "cost_usd": 0.0131,
+   "seconds": 10.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0131,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同時登録で DuplicateKeyException がそのまま漏れ、409 ではなく 500 になる",
+   "detail": "同じメールアドレスの登録リクエストが同時に来ると、両方が existsByEmail で false を返して insert に進む。後から insert したほうは DB の一意制約違反で DuplicateKeyException になる。catch を外したためこれが BusinessException に変換されず、グローバル例外ハンドラ（推測: 見えていない）で想定外の例外として 500 になる。クライアントには EMAIL_ALREADY_USED の業務エラーではなく内部エラーが返り、ログにもエラーとして残る。PR の「existsByEmail で確認済みなので不要」は、確認と insert が原子的でないため成り立たない。",
+   "line": 34,
+   "evidence": "register は existsByEmail → insert の check-then-act で、間にロックも SERIALIZABLE 指定もない（@Transactional は既定の分離レベル）。削除された元コードのコメントにも「同時に登録されたときの最終的な判定は DB の一意制約に任せる」とあり、catch がその受け皿だった。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "同時登録で DuplicateKeyException がそのまま漏れ、409 ではなく 500 になる 同じメールアドレスの登録リクエストが同時に来ると、両方が existsByEmail で false を返して insert に進む。後から insert したほうは DB の一意制約違反で DuplicateKeyException になる。catch を外したためこれが BusinessException に変換されず、グローバル例外ハンドラ（推測: 見えていない）で想定外の例外として 500 になる。クライアントには EMAIL_ALREADY_USED の業務エラーではなく内部エラーが返り、ログにもエラーとして残る。PR の「existsByEmail で確認済みなので不要」は、確認と insert が原子的でないため成り立たない。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "同時重複登録の回帰テストが削除され、この経路が無検証になった",
+   "detail": "register_concurrentDuplicateBecomesBusinessError を消したことで、事前チェックをすり抜けた重複が業務エラー（409）になるという仕様がテストで守られなくなった。上記の変換を戻しても、今後また外されたときに検知できない。",
+   "line": 60,
+   "evidence": "差分でテストメソッドが丸ごと削除されている。残りのテストは事前チェックで弾く経路（register_rejectsDuplicateEmailIgnoringCase）のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:60",
+   "message": "同時重複登録の回帰テストが削除され、この経路が無検証になった register_concurrentDuplicateBecomesBusinessError を消したことで、事前チェックをすり抜けた重複が業務エラー（409）になるという仕様がテストで守られなくなった。上記の変換を戻しても、今後また外されたときに検知できない。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "未使用の import が残る",
+   "detail": "テスト削除により DuplicateKeyException が未使用になる。コンパイルは通るが、警告や lint（未使用 import チェック）で失敗する可能性がある。テストを復活させる場合は不要。",
+   "line": 13,
+   "evidence": "変更後の全文に import org.springframework.dao.DuplicateKeyException があるが、本文中で参照されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:13",
+   "message": "未使用の import が残る テスト削除により DuplicateKeyException が未使用になる。コンパイルは通るが、警告や lint（未使用 import チェック）で失敗する可能性がある。テストを復活させる場合は不要。"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "standard",
+ "run": 2
+}

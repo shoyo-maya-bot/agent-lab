@@ -1,0 +1,103 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）",
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: 終了コード",
+   "+3 sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java: テストの削除"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3699,
+   "output_tokens": 1051,
+   "cost_usd": 0.0135,
+   "seconds": 9.5,
+   "estimated": false
+  },
+  {
+   "step": "deep",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4787,
+   "output_tokens": 857,
+   "cost_usd": 0.0527,
+   "seconds": 10.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0662,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 2,
+  "uncertain": 1,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "「未使用」ではなく Spring が自動検出する ApplicationRunner/ExitCodeGenerator を削除しており、ジョブ ID 誤りが終了コード 0 で終わる",
+   "detail": "BatchJobGuard は @Component + @Profile(\"batch\") で、コードから直接呼ばれなくても Spring が起動時に実行する。削除すると、batch プロファイルで app.batch.job を誤指定・未指定にした場合、@ConditionalOnProperty によりジョブ Bean が作られず、何も実行されないまま終了コード 0 で終わる。スケジューラからは正常終了に見え、バッチ未実行を検知できない。PR の「どこからも呼ばれていない」という前提が誤り。",
+   "line": 1,
+   "evidence": "削除クラスは ApplicationRunner と ExitCodeGenerator を実装し @Component/@Profile(\"batch\") 付き。Javadoc に「これが無いと、ジョブ ID の誤りや指定漏れでも何も実行せずに終了コード 0 で終わる」とある。テストのコメントにも「ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない」とある。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "削除クラスは @Component @Profile(\"batch\") 付きで ApplicationRunner と ExitCodeGenerator を実装しています。コードから直接呼ばれていなくても Spring が起動時に実行し、終了コードにも反映します。Javadoc とテストのコメントにも、これが無いとジョブ ID の誤りや指定漏れで終了コード 0 になると書かれているため、「未使用」という PR の前提は誤りで、異常終了を検知できなくなります。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "「未使用」ではなく Spring が自動検出する ApplicationRunner/ExitCodeGenerator を削除しており、ジョブ ID 誤りが終了コード 0 で終わる BatchJobGuard は @Component + @Profile(\"batch\") で、コードから直接呼ばれなくても Spring が起動時に実行する。削除すると、batch プロファイルで app.batch.job を誤指定・未指定にした場合、@ConditionalOnProperty によりジョブ Bean が作られず、何も実行されないまま終了コード 0 で終わる。スケジューラからは正常終了に見え、バッチ未実行を検知できない。PR の「どこからも呼ばれていない」という前提が誤り。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java",
+   "title": "ジョブ ID 不正時に異常終了することを保証するテストがなくなる",
+   "detail": "ガードを残すか代替手段（BatchJob 側での検証、SpringApplication.exit を使う起動クラスなど）に移す場合でも、誤ったジョブ ID・空・null のときに BatchJob.ERROR で終了する、というテストが消える。回帰を検知できなくなる。",
+   "line": 1,
+   "evidence": "削除されたテスト errorWhenJobIdIsWrongOrMissing が JOB9999・空文字・null の 3 ケースで ERROR を検証していた。差分内に代わりのテストはない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "差分の中に代わりのテストはなく、JOB9999・空文字・null の 3 ケースで ERROR になることの検証が消えます。ただし s1 に対応してクラスを残せばテストも一緒に残るため、s1 から派生する指摘です。",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java:1",
+   "message": "ジョブ ID 不正時に異常終了することを保証するテストがなくなる ガードを残すか代替手段（BatchJob 側での検証、SpringApplication.exit を使う起動クラスなど）に移す場合でも、誤ったジョブ ID・空・null のときに BatchJob.ERROR で終了する、というテストが消える。回帰を検知できなくなる。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "MessageIds.BATCH_UNKNOWN_JOB や代替の異常終了処理は別の場所にあるか",
+   "detail": "意図的な削除であれば、ジョブ ID 不正時の異常終了を別の仕組みが担保しているかを確認したい。差分からは確認できない（推測）。また、削除後に MessageIds.BATCH_UNKNOWN_JOB が未使用の定数として残らないかも確認したい。",
+   "line": 1,
+   "evidence": "削除クラスだけが MessageIds.BATCH_UNKNOWN_JOB を参照していた。他の参照は差分に現れていないため不明。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "uncertain",
+   "verdict_note": "MessageIds.BATCH_UNKNOWN_JOB が他から参照されているか、ほかに異常終了を担保する仕組みがあるかは、差分に無いファイルの中身次第なので、ここでは判断できません。",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "MessageIds.BATCH_UNKNOWN_JOB や代替の異常終了処理は別の場所にあるか 意図的な削除であれば、ジョブ ID 不正時の異常終了を別の仕組みが担保しているかを確認したい。差分からは確認できない（推測）。また、削除後に MessageIds.BATCH_UNKNOWN_JOB が未使用の定数として残らないかも確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P05",
+ "config": "auto",
+ "run": 3
+}

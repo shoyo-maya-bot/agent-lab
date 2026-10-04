@@ -1,0 +1,73 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3594,
+   "output_tokens": 822,
+   "cost_usd": 0.0112,
+   "seconds": 8.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0112,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消えた",
+   "detail": "取込中に例外が起きて異常終了（終了コード 8）になったとき、ログに MessageIds.BATCH_FAILED が出なくなる。運用側がこの ID でログ監視・アラート・検索をしている場合、最も重要な異常終了が検知されなくなる。同じクラス内の他のログ（IMPORT_STARTED / IMPORT_FINISHED / BATCH_INVALID_ARGS / IMPORT_LINE_SKIPPED）はすべて ID 付きなので、この 1 行だけ形式が揃わなくなる。PR の説明は「読みやすくした」だけで、ID を外す意図は書かれていない。",
+   "line": 62,
+   "evidence": "差分で `log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e)` が `log.error(\"JOB0001 異常終了\", e)` に変わっている。ファイル内の他の log 呼び出しは先頭に `{}` と MessageIds の定数を付けている。なお MessageIds の import は他の箇所で使われているため残るが、BATCH_FAILED はこのクラスから参照されなくなる。監視設定の有無は差分から見えないため、影響範囲は推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消えた 取込中に例外が起きて異常終了（終了コード 8）になったとき、ログに MessageIds.BATCH_FAILED が出なくなる。運用側がこの ID でログ監視・アラート・検索をしている場合、最も重要な異常終了が検知されなくなる。同じクラス内の他のログ（IMPORT_STARTED / IMPORT_FINISHED / BATCH_INVALID_ARGS / IMPORT_LINE_SKIPPED）はすべて ID 付きなので、この 1 行だけ形式が揃わなくなる。PR の説明は「読みやすくした」だけで、ID を外す意図は書かれていない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "BATCH_FAILED を外したのは意図的か",
+   "detail": "BATCH_FAILED を外した理由が不明。意図的（例: ID 体系の見直し、別の場所でログ出力している）なら、他のジョブや監視設定との整合も含めて PR 説明に書いてほしい。意図的でなければ、ID を戻したうえで読みやすさの改善（文言や例外の出し方）を行うのがよい。",
+   "line": 62,
+   "evidence": "PR 説明は「異常終了のログを読みやすくしました」のみ。BATCH_FAILED を使う他のジョブや監視設定は、このメッセージの範囲では確認できない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "BATCH_FAILED を外したのは意図的か BATCH_FAILED を外した理由が不明。意図的（例: ID 体系の見直し、別の場所でログ出力している）なら、他のジョブや監視設定との整合も含めて PR 説明に書いてほしい。意図的でなければ、ID を戻したうえで読みやすさの改善（文言や例外の出し方）を行うのがよい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "auto",
+ "run": 3
+}

@@ -1,0 +1,52 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4254,
+   "output_tokens": 1105,
+   "cost_usd": 0.0147,
+   "seconds": 11.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0147,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "product_code の上限側の境界（21 文字）が拒否側で確かめられていない",
+   "detail": "今回 product_code の 20 文字ちょうどは受理側でテストされるようになった。一方、拒否側は 22 文字（P-01234567890123456789）しかない。実装の上限判定が `> 21` に壊れても、20 文字の受理テストと 22 文字の拒否テストはどちらも通り、product_code の境界の食い違いに気づけない。order_no は tooLongCodeSkipsOnlyThatLine で 21 文字を確かめているため、両者で拒否側の境界の確かめ方がそろっていない。PR の目的は「境界値を order_no と product_code の両方で見る」ことなので、拒否側も 21 文字にそろえると目的に合う。",
+   "line": 83,
+   "evidence": "parseRejects の最後のケースは `P-01234567890123456789`（22 文字）で、メッセージも「22 文字」。product_code が 21 文字のケースは差分にも全文にも無い。order_no の 21 文字は tooLongCodeSkipsOnlyThatLine にある。なお、実装本体（OrderImportService.parse）は差分に含まれないため、判定が `> 20` になっているかどうかは推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:83",
+   "message": "product_code の上限側の境界（21 文字）が拒否側で確かめられていない 今回 product_code の 20 文字ちょうどは受理側でテストされるようになった。一方、拒否側は 22 文字（P-01234567890123456789）しかない。実装の上限判定が `> 21` に壊れても、20 文字の受理テストと 22 文字の拒否テストはどちらも通り、product_code の境界の食い違いに気づけない。order_no は tooLongCodeSkipsOnlyThatLine で 21 文字を確かめているため、両者で拒否側の境界の確かめ方がそろっていない。PR の目的は「境界値を order_no と product_code の両方で見る」ことなので、拒否側も 21 文字にそろえると目的に合う。"
+  }
+ ],
+ "rejected": [],
+ "case": "D03",
+ "config": "standard",
+ "run": 3
+}

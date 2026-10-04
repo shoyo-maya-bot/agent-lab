@@ -1,0 +1,88 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3588,
+   "output_tokens": 1984,
+   "cost_usd": 0.0426,
+   "seconds": 19.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0426,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、ログ監視で検知できなくなる",
+   "detail": "S3 の読込失敗、DB 障害、サービスの実行時例外などでジョブが異常終了したときを考える。この変更後、ERROR ログは「JOB0001 異常終了」とスタックトレースだけになり、`MessageIds.BATCH_FAILED` が出力されない。ログ監視や通知の設定がメッセージ ID をキーにしている場合（推測）、異常終了のアラートが鳴らなくなる。終了コード 8 は維持されるため、ジョブスケジューラ側では検知できる。ただし、ログを見て障害を一次切り分けする運用は崩れる。",
+   "line": 62,
+   "evidence": "変更前は `log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e)`、変更後は `log.error(\"JOB0001 異常終了\", e)` である。同じクラスの他のログ（BATCH_INVALID_ARGS、IMPORT_STARTED、IMPORT_LINE_SKIPPED、IMPORT_FINISHED）は、すべて先頭にメッセージ ID を付けている。メッセージ ID が無いのはこの行だけで、出力形式の一貫性が崩れている。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、ログ監視で検知できなくなる S3 の読込失敗、DB 障害、サービスの実行時例外などでジョブが異常終了したときを考える。この変更後、ERROR ログは「JOB0001 異常終了」とスタックトレースだけになり、`MessageIds.BATCH_FAILED` が出力されない。ログ監視や通知の設定がメッセージ ID をキーにしている場合（推測）、異常終了のアラートが鳴らなくなる。終了コード 8 は維持されるため、ジョブスケジューラ側では検知できる。ただし、ログを見て障害を一次切り分けする運用は崩れる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログの形式（メッセージ ID を含むこと）を守るテストが無い",
+   "detail": "今回のように、メッセージ ID の削除がレビューでしか検出できない状態になっている。fetcher または service が例外を投げたときに、(1) 終了コードが 8 になること、(2) ERROR ログに BATCH_FAILED が含まれること、を確認するテスト（例: OutputCaptureExtension を使う）があれば回帰を防げる。",
+   "line": 62,
+   "evidence": "差分にテストの追加・変更は含まれていない。既存テストの有無と内容は、このメッセージからは確認できない（推測）。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログの形式（メッセージ ID を含むこと）を守るテストが無い 今回のように、メッセージ ID の削除がレビューでしか検出できない状態になっている。fetcher または service が例外を投げたときに、(1) 終了コードが 8 になること、(2) ERROR ログに BATCH_FAILED が含まれること、を確認するテスト（例: OutputCaptureExtension を使う）があれば回帰を防げる。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "BATCH_FAILED を外したのは意図どおりか",
+   "detail": "PR の説明は「異常終了のログを読みやすくしました」だけで、メッセージ ID を外す理由が書かれていない。ログ上で ID が二重に出ていた、ID 体系を変える、といった事情があるなら、その内容と監視設定の追随状況を教えてほしい。単に読みやすさのためであれば、ID を残すべきと考える。また、他にも BATCH_FAILED を使っているジョブがあれば、この変更で JOB0001 だけ形式が揃わなくなる（推測）。",
+   "line": 62,
+   "evidence": "差分はこの 1 行の変更だけで、MessageIds や監視設定の変更は含まれていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "BATCH_FAILED を外したのは意図どおりか PR の説明は「異常終了のログを読みやすくしました」だけで、メッセージ ID を外す理由が書かれていない。ログ上で ID が二重に出ていた、ID 体系を変える、といった事情があるなら、その内容と監視設定の追随状況を教えてほしい。単に読みやすさのためであれば、ID を残すべきと考える。また、他にも BATCH_FAILED を使っているジョブがあれば、この変更で JOB0001 だけ形式が揃わなくなる（推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "deep",
+ "run": 3
+}

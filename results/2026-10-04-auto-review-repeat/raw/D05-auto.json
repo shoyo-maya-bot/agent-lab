@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 4,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: トランザクション境界の変更"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2976,
+   "output_tokens": 986,
+   "cost_usd": 0.0122,
+   "seconds": 10.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0122,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly トランザクションを外したことによる影響の確認が不足している（現状の単一 SELECT では実害は小さい）",
+   "detail": "get() は現状 mapper.findById を 1 回呼ぶだけなので、トランザクションが無くても結果は変わらない。ただし @Transactional(readOnly = true) を外すと、(1) 将来 get() に 2 本目のクエリ（例: 会員に紐づく明細の取得）が足された時に、読み取り間の一貫性が保証されなくなる、(2) readOnly による Hibernate の flush 抑止や、ルーティングデータソース・リードレプリカ振り分けのヒントが効かなくなる、といった影響がある。リードレプリカへの振り分けなどを readOnly で行っている場合、照会がプライマリに向く可能性がある（推測: 設定ファイルは差分に含まれていない）。",
+   "line": 21,
+   "evidence": "差分は get() から @Transactional(readOnly = true) を削除するのみ。register() は @Transactional を残しており、クラス内で方針が分かれる。DataSource 設定・レプリカ構成は差分に無く確認できない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly トランザクションを外したことによる影響の確認が不足している（現状の単一 SELECT では実害は小さい） get() は現状 mapper.findById を 1 回呼ぶだけなので、トランザクションが無くても結果は変わらない。ただし @Transactional(readOnly = true) を外すと、(1) 将来 get() に 2 本目のクエリ（例: 会員に紐づく明細の取得）が足された時に、読み取り間の一貫性が保証されなくなる、(2) readOnly による Hibernate の flush 抑止や、ルーティングデータソース・リードレプリカ振り分けのヒントが効かなくなる、といった影響がある。リードレプリカへの振り分けなどを readOnly で行っている場合、照会がプライマリに向く可能性がある（推測: 設定ファイルは差分に含まれていない）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly に依存した設定（レプリカ振り分け・接続プール・AOP）が無いか確認したい",
+   "detail": "このプロジェクトで readOnly を見て DataSource を切り替える仕組み（AbstractRoutingDataSource など）や、トランザクション境界を前提にした処理（OSIV 無効化、MyBatis のセッション管理）が無いかを確認したい。無ければこの変更は動作上は安全。",
+   "line": 21,
+   "evidence": "差分に設定ファイルが含まれておらず、推測の域を出ない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly に依存した設定（レプリカ振り分け・接続プール・AOP）が無いか確認したい このプロジェクトで readOnly を見て DataSource を切り替える仕組み（AbstractRoutingDataSource など）や、トランザクション境界を前提にした処理（OSIV 無効化、MyBatis のセッション管理）が無いかを確認したい。無ければこの変更は動作上は安全。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "PR 説明の根拠が「SELECT 1 本」だけで、削除の利点が示されていない",
+   "detail": "readOnly トランザクションは SELECT 1 本でもコネクション取得・ヒント付与の点で意味を持つことがある。削除によるメリット（性能計測など）が示されておらず、リスクとの釣り合いが判断しづらい。レビュー観点としては、削除を維持するなら「将来クエリを増やす場合は付け直す」旨のコメントか、チーム方針の明記があるとよい。",
+   "line": 21,
+   "evidence": "PR 説明は「SELECT 1 本なので不要と判断」とだけ記載。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "PR 説明の根拠が「SELECT 1 本」だけで、削除の利点が示されていない readOnly トランザクションは SELECT 1 本でもコネクション取得・ヒント付与の点で意味を持つことがある。削除によるメリット（性能計測など）が示されておらず、リスクとの釣り合いが判断しづらい。レビュー観点としては、削除を維持するなら「将来クエリを増やす場合は付け直す」旨のコメントか、チーム方針の明記があるとよい。"
+  }
+ ],
+ "rejected": [],
+ "case": "D05",
+ "config": "auto",
+ "run": 1
+}

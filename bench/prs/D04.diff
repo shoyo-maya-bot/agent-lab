@@ -1,0 +1,13 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberController.java b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+index 4e3202a..d598da0 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberController.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+@@ -29,7 +29,7 @@ public class MemberController {
+             @NotBlank @Size(max = 50) String name, @NotBlank @Email @Size(max = 254) String email) {}
+ 
+     @GetMapping("/{id}")
+-    public Member get(@PathVariable("id") long id) {
++    public Member get(@PathVariable long id) {
+         return service.get(id);
+     }
+ 

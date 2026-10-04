@@ -1,0 +1,104 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5338,
+   "output_tokens": 1071,
+   "cost_usd": 0.0153,
+   "seconds": 11.5,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 6136,
+   "output_tokens": 527,
+   "cost_usd": 0.058,
+   "seconds": 8.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0733,
+ "notes": [
+  "standard の MUST 2 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 2,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "ID を long のまま渡すと 1,234 のように桁区切りが入り、エラーメッセージが壊れる",
+   "detail": "ID が 1000 以上の会員を GET すると、404 の message が「会員が見つかりません（会員ID: 1,234）。」になる。元のコードは MessageFormat の数値整形を避けるため意図的に String.valueOf していた。引数が Object でも、MessageFormat は Long を数値として整形するため、「Object だから変換不要」という PR の前提は成り立たない。ロケールによっては区切り文字も変わる。ID は識別子なので、利用者・ログ・問い合わせ対応で誤読や不一致を招く。",
+   "line": 23,
+   "evidence": "削除された行のコメント「数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる」。削除されたテスト notFoundMessageHasNoThousandsSeparator が /members/1234 で期待していたのは「会員ID: 1234」。メッセージは StaticMessageSource（MessageFormat 系）で「{0}」に埋め込まれている。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "Spring の StaticMessageSource は引数があると MessageFormat で整形します。MessageFormat は {0} に Number が渡ると NumberFormat.getInstance(locale) で整形するため、Long の 1234 は ja ロケールで「1,234」になります。PR の「Object なので変換不要」という前提は誤りで、削除されたコメントが警告していた不具合が再発します。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "ID を long のまま渡すと 1,234 のように桁区切りが入り、エラーメッセージが壊れる ID が 1000 以上の会員を GET すると、404 の message が「会員が見つかりません（会員ID: 1,234）。」になる。元のコードは MessageFormat の数値整形を避けるため意図的に String.valueOf していた。引数が Object でも、MessageFormat は Long を数値として整形するため、「Object だから変換不要」という PR の前提は成り立たない。ロケールによっては区切り文字も変わる。ID は識別子なので、利用者・ログ・問い合わせ対応で誤読や不一致を招く。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "回帰防止テストを削除しており、上記の不具合を検知できなくなる",
+   "detail": "桁区切りの不具合を守っていた唯一のテストが消えた。残っている notFoundReturns404WithMessageId は ID=42 を使っており、3 桁以下では桁区切りが出ないため、変更後も通ってしまう。実装の変更とテストの削除が同時に行われ、不具合がそのままマージされる状態になっている。",
+   "line": 73,
+   "evidence": "差分で notFoundMessageHasNoThousandsSeparator（/api/v1/members/1234）が削除されている。変更後の全文に残る NotFound テストは /api/v1/members/42 のみ。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "4 桁以上の ID で桁区切りを検証していた唯一のテストが、実装の変更と同時に削除されています。残っている 42 のテストは変更後も通るため、s1 の不具合を検知できません。",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:73",
+   "message": "回帰防止テストを削除しており、上記の不具合を検知できなくなる 桁区切りの不具合を守っていた唯一のテストが消えた。残っている notFoundReturns404WithMessageId は ID=42 を使っており、3 桁以下では桁区切りが出ないため、変更後も通ってしまう。実装の変更とテストの削除が同時に行われ、不具合がそのままマージされる状態になっている。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "String.valueOf を戻し、理由コメントも残す（または NotFoundException 側で吸収する）",
+   "detail": "修正案は2つ。(1) 元の String.valueOf(id) に戻し、コメントも復活させる。(2) 呼び出し側の注意に頼らないため、NotFoundException や ApiExceptionHandler で Number 型の引数を String に変換してからメッセージ整形する。(2) なら他の呼び出し箇所でも同じ事故を防げる。どちらの場合も 1000 以上の ID を使うテストを復活させる。",
+   "line": 23,
+   "evidence": "コメントが削除されたため、変換が必要な理由がコード上から読み取れなくなった。NotFoundException と ApiExceptionHandler の実装は差分に含まれておらず、整形の方法は推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "String.valueOf を戻し、理由コメントも残す（または NotFoundException 側で吸収する） 修正案は2つ。(1) 元の String.valueOf(id) に戻し、コメントも復活させる。(2) 呼び出し側の注意に頼らないため、NotFoundException や ApiExceptionHandler で Number 型の引数を String に変換してからメッセージ整形する。(2) なら他の呼び出し箇所でも同じ事故を防げる。どちらの場合も 1000 以上の ID を使うテストを復活させる。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "auto",
+ "run": 1
+}

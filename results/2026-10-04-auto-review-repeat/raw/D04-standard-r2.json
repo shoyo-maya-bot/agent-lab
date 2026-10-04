@@ -1,0 +1,68 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2926,
+   "output_tokens": 643,
+   "cost_usd": 0.0087,
+   "seconds": 7.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0087,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "-parameters 前提の設定がこの差分から確認できない",
+   "detail": "PR 説明では build.gradle で -parameters を付けているとあるが、build.gradle は差分にも添付ファイルにも含まれておらず、確認できない。-parameters が実際には有効でない場合（例: 設定が test/他モジュールのみ、IDE や別ビルドツールでの実行、将来の設定変更）、GET /api/v1/members/{id} は実行時に IllegalArgumentException（名前を解決できない）となり 500 になる。Spring Boot の Gradle プラグインを使っていれば -parameters は自動で付くが、使っていない場合は明示設定が必要。コンパイル時には検出されず、実行時に初めて失敗する。",
+   "line": 32,
+   "evidence": "変更は @PathVariable(\"id\") から @PathVariable への変更のみ。-parameters の設定は build.gradle にあると PR 説明が述べるだけで、差分内に根拠がない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "-parameters 前提の設定がこの差分から確認できない PR 説明では build.gradle で -parameters を付けているとあるが、build.gradle は差分にも添付ファイルにも含まれておらず、確認できない。-parameters が実際には有効でない場合（例: 設定が test/他モジュールのみ、IDE や別ビルドツールでの実行、将来の設定変更）、GET /api/v1/members/{id} は実行時に IllegalArgumentException（名前を解決できない）となり 500 になる。Spring Boot の Gradle プラグインを使っていれば -parameters は自動で付くが、使っていない場合は明示設定が必要。コンパイル時には検出されず、実行時に初めて失敗する。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "GET /{id} のエンドポイントを実際に叩くテストで確認したい",
+   "detail": "名前解決の成否は実行時にしか分からないため、MockMvc 等で GET /api/v1/members/1 が 200 を返すテストがあれば -parameters の設定漏れを CI で検出できる。差分にテストの追加・変更は無く、既存テストの有無は見えない（推測）。",
+   "line": 32,
+   "evidence": "差分はコントローラ 1 行のみで、テストファイルの変更は含まれていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "GET /{id} のエンドポイントを実際に叩くテストで確認したい 名前解決の成否は実行時にしか分からないため、MockMvc 等で GET /api/v1/members/1 が 200 を返すテストがあれば -parameters の設定漏れを CI で検出できる。差分にテストの追加・変更は無く、既存テストの有無は見えない（推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "D04",
+ "config": "standard",
+ "run": 2
+}

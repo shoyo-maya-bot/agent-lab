@@ -1,0 +1,138 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5952,
+   "output_tokens": 2137,
+   "cost_usd": 0.0482,
+   "seconds": 22.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0482,
+ "notes": [],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない会員が1行でもあると取込全体が取り消される",
+   "detail": "CSV に存在しない member_id の行が1行でもあると、insertIfAbsent で外部キー違反の例外（DataIntegrityViolationException 等）が出ます。この例外はループの外へ投げられ、@Transactional の importLines 全体がロールバックされます。その結果、正しい行も含めて1件も登録されません。以前は該当行だけを errors に残して続行していたので、挙動が後退しています。PR 説明の「外部キーで守られている」は、不正なデータが入らないことまでしか保証しません。行を飛ばして続行する点は守られなくなります。",
+   "line": 52,
+   "evidence": "importLines には @Transactional が付いており、insertIfAbsent の呼び出しを try で囲んでいない。クラスの Javadoc には「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる。DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため」とあり、今回削除した存在確認がこの方針を実装していた。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "存在しない会員が1行でもあると取込全体が取り消される CSV に存在しない member_id の行が1行でもあると、insertIfAbsent で外部キー違反の例外（DataIntegrityViolationException 等）が出ます。この例外はループの外へ投げられ、@Transactional の importLines 全体がロールバックされます。その結果、正しい行も含めて1件も登録されません。以前は該当行だけを errors に残して続行していたので、挙動が後退しています。PR 説明の「外部キーで守られている」は、不正なデータが入らないことまでしか保証しません。行を飛ばして続行する点は守られなくなります。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "仕様を守るテストを削除し、後退が検出されなくなっている",
+   "detail": "unknownMemberSkipsOnlyThatLine は「存在しない会員の行だけを飛ばす」という仕様を確かめるテストでした。これを直さずに削除したため、上の全件ロールバックをテストで検出できません。FakeOrderMapper はおそらく外部キーを再現していないので（推測）、単体テストは通ってしまいます。実 DB での結合テストも差分にはありません。",
+   "line": 51,
+   "evidence": "差分で unknownMemberSkipsOnlyThatLine が丸ごと削除され、代わりのテストは追加されていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:51",
+   "message": "仕様を守るテストを削除し、後退が検出されなくなっている unknownMemberSkipsOnlyThatLine は「存在しない会員の行だけを飛ばす」という仕様を確かめるテストでした。これを直さずに削除したため、上の全件ロールバックをテストで検出できません。FakeOrderMapper はおそらく外部キーを再現していないので（推測）、単体テストは通ってしまいます。実 DB での結合テストも差分にはありません。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化は存在確認を消さずに一括取得で行うべき",
+   "detail": "元の実装でも memberCache により、SELECT の回数は会員の種類数までに抑えられていました。それでも遅いなら、確認を消すのではなく次のような方法を取るべきです。(1) ファイル中の member_id をまとめて集め、IN 句または一時テーブルで存在する ID を一度に取得してから行ごとに判定する。(2) INSERT ... SELECT ... WHERE EXISTS(members) で、存在しない会員の行を 0 件として返し、重複と区別して扱う。こうすれば、行を飛ばして続行する方針を保ったまま往復回数を減らせます。",
+   "line": 39,
+   "evidence": "削除されたコード: memberCache.computeIfAbsent(order.memberId(), mapper::memberExists)。削除されたテストの assertion にも「同じ会員は 1 回だけ確かめる」（memberLookups == 2）とある。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:39",
+   "message": "高速化は存在確認を消さずに一括取得で行うべき 元の実装でも memberCache により、SELECT の回数は会員の種類数までに抑えられていました。それでも遅いなら、確認を消すのではなく次のような方法を取るべきです。(1) ファイル中の member_id をまとめて集め、IN 句または一時テーブルで存在する ID を一度に取得してから行ごとに判定する。(2) INSERT ... SELECT ... WHERE EXISTS(members) で、存在しない会員の行を 0 件として返し、重複と区別して扱う。こうすれば、行を飛ばして続行する方針を保ったまま往復回数を減らせます。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc と実装が食い違っている",
+   "detail": "Javadoc には「存在しない会員の行は飛ばして続行」「外部キーに当たる誤りは登録の前にここで確かめる」と書かれたままです。実装はもうそうなっていないため、運用者や後任が挙動を誤解します。",
+   "line": 11,
+   "evidence": "クラスの Javadoc の 2 段落目と 3 段落目が変更されていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:11",
+   "message": "Javadoc と実装が食い違っている Javadoc には「存在しない会員の行は飛ばして続行」「外部キーに当たる誤りは登録の前にここで確かめる」と書かれたままです。実装はもうそうなっていないため、運用者や後任が挙動を誤解します。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "外部キー違反のときのジョブの終了コードと再実行の手順",
+   "detail": "このまま進める場合の確認です。例外が JOB0001 の呼び出し側でどう扱われるかが見えません（推測）。異常終了の終了コードになるか、ログにどの行・どの member_id が原因か残るかを確認させてください。現状ではエラーメッセージに行番号が含まれないため、ファイルのどこを直せばよいか分からず、再実行の手順が難しくなります。",
+   "line": 52,
+   "evidence": "外部キー違反の例外は捕まえられず、errors（行番号付き）にも記録されない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "外部キー違反のときのジョブの終了コードと再実行の手順 このまま進める場合の確認です。例外が JOB0001 の呼び出し側でどう扱われるかが見えません（推測）。異常終了の終了コードになるか、ログにどの行・どの member_id が原因か残るかを確認させてください。現状ではエラーメッセージに行番号が含まれないため、ファイルのどこを直せばよいか分からず、再実行の手順が難しくなります。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "memberExists とテスト用のカウンタが使われずに残る（推測）",
+   "detail": "このサービスから mapper.memberExists が呼ばれなくなりました。OrderMapper、XML、FakeOrderMapper.memberLookups が残っていれば、使われないコードになります。",
+   "line": 52,
+   "evidence": "差分で memberExists の唯一の呼び出しが削除された。OrderMapper と FakeOrderMapper の中身は差分に含まれていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "memberExists とテスト用のカウンタが使われずに残る（推測） このサービスから mapper.memberExists が呼ばれなくなりました。OrderMapper、XML、FakeOrderMapper.memberLookups が残っていれば、使われないコードになります。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "deep",
+ "run": 2
+}

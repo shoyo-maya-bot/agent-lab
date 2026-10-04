@@ -1,0 +1,151 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4650,
+   "output_tokens": 1644,
+   "cost_usd": 0.0205,
+   "seconds": 15.8,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5072,
+   "output_tokens": 1951,
+   "cost_usd": 0.0772,
+   "seconds": 21.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0977,
+ "notes": [
+  "standard の MUST 1 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 2,
+  "uncertain": 1,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "DuplicateKeyException を email 以外の制約違反でも「メール重複」にしてしまう",
+   "detail": "DuplicateKeyException は主キー等、他の一意制約違反でも発生する。事前チェック廃止により、このキャッチが唯一の判定になり、email 以外の制約違反（例: ID 採番の衝突、将来追加される別の一意キー）でも「メールは使用済み」の 409 を返し、原因を誤認させる。例外は握りつぶされ、原因がログにも残らない。",
+   "line": 33,
+   "evidence": "catch (DuplicateKeyException e) { throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized); } で制約名の判別も cause の保持もしていない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:33",
+   "message": "DuplicateKeyException を email 以外の制約違反でも「メール重複」にしてしまう DuplicateKeyException は主キー等、他の一意制約違反でも発生する。事前チェック廃止により、このキャッチが唯一の判定になり、email 以外の制約違反（例: ID 採番の衝突、将来追加される別の一意キー）でも「メールは使用済み」の 409 を返し、原因を誤認させる。例外は握りつぶされ、原因がログにも残らない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "テストの説明コメントが変更後の挙動と合っていない・テストが重複している",
+   "detail": "register_concurrentDuplicateBecomesBusinessError のコメントは「事前の確認をすり抜けた」前提だが、事前確認はもう存在しない。さらに InMemoryMapper が insert で DuplicateKeyException を投げるようになったため、register_rejectsDuplicateEmailIgnoringCase と実質同じ経路を検証しており、並行ケース専用のテストの意味が薄れた。",
+   "line": 72,
+   "evidence": "コメント「事前の確認をすり抜けた（同時に登録された）ケース」と、InMemoryMapper.insert に追加された existsByEmail 判定。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:72",
+   "message": "テストの説明コメントが変更後の挙動と合っていない・テストが重複している register_concurrentDuplicateBecomesBusinessError のコメントは「事前の確認をすり抜けた」前提だが、事前確認はもう存在しない。さらに InMemoryMapper が insert で DuplicateKeyException を投げるようになったため、register_rejectsDuplicateEmailIgnoringCase と実質同じ経路を検証しており、並行ケース専用のテストの意味が薄れた。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "本番の一意制約が大文字小文字・正規化後の値で効く保証がテストされていない／DB 側制約の存在が差分から確認できない",
+   "detail": "重複判定を DB 一意制約だけに一本化したが、member.email に UNIQUE 制約（または一意インデックス）が実在するか、差分内では確認できない（推測）。制約が無い環境では重複登録が素通りして 201 で成功し、データが壊れる。テストは InMemoryMapper が擬似的に DuplicateKeyException を投げるだけで、実 DB の制約・マイグレーションを検証していない。",
+   "line": 34,
+   "evidence": "MemberService.register から existsByEmail を削除。テストは InMemoryMapper.insert 内で自前に DuplicateKeyException を投げる実装。スキーマ/マイグレーションは差分に含まれない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "uncertain",
+   "verdict_note": "変更前のコードにも「最終的な判定は DB の一意制約に任せる」というコメントと DuplicateKeyException の catch があり、テストも \"member_email_key\" を想定しているため、制約は以前から前提だったと考えられる。ただしスキーマは差分に含まれず実在を確認できないので、人がマイグレーションを確かめる必要がある（正規化はアプリ側で小文字化してから INSERT するので、制約は通常の UNIQUE で足りる）。MUST は過大。",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:34",
+   "message": "本番の一意制約が大文字小文字・正規化後の値で効く保証がテストされていない／DB 側制約の存在が差分から確認できない 重複判定を DB 一意制約だけに一本化したが、member.email に UNIQUE 制約（または一意インデックス）が実在するか、差分内では確認できない（推測）。制約が無い環境では重複登録が素通りして 201 で成功し、データが壊れる。テストは InMemoryMapper が擬似的に DuplicateKeyException を投げるだけで、実 DB の制約・マイグレーションを検証していない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "BusinessException に原因例外を渡していない",
+   "detail": "元の DuplicateKeyException が失われるため、制約名や SQL エラーが運用時に追えない。上記の誤分類の調査も困難になる。",
+   "line": 34,
+   "evidence": "new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized) に e を渡していない（BusinessException が cause を受け取るコンストラクタを持つかは差分から不明）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "BusinessException に原因例外を渡していない 元の DuplicateKeyException が失われるため、制約名や SQL エラーが運用時に追えない。上記の誤分類の調査も困難になる。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "PostgreSQL 等でトランザクション内の一意制約違反後の挙動は問題ないか",
+   "detail": "@Transactional 内で insert が失敗すると、PostgreSQL ではトランザクションが abort 状態になる。ここでは BusinessException（RuntimeException）を投げてロールバックされるため通常は問題ないが、BusinessException が rollback 対象か（noRollbackFor 設定等）を確認したい。DB 製品も差分からは不明。",
+   "line": 30,
+   "evidence": "@Transactional メソッド内で DuplicateKeyException を catch して別例外を投げている。BusinessException の継承元は差分に無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:30",
+   "message": "PostgreSQL 等でトランザクション内の一意制約違反後の挙動は問題ないか @Transactional 内で insert が失敗すると、PostgreSQL ではトランザクションが abort 状態になる。ここでは BusinessException（RuntimeException）を投げてロールバックされるため通常は問題ないが、BusinessException が rollback 対象か（noRollbackFor 設定等）を確認したい。DB 製品も差分からは不明。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "完全修飾名で例外を指定している",
+   "detail": "同ファイルで既に DuplicateKeyException を import しているのに、追加行では org.springframework.dao.DuplicateKeyException と完全修飾で書いている。",
+   "line": 35,
+   "evidence": "import org.springframework.dao.DuplicateKeyException; が既にある。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:35",
+   "message": "完全修飾名で例外を指定している 同ファイルで既に DuplicateKeyException を import しているのに、追加行では org.springframework.dao.DuplicateKeyException と完全修飾で書いている。"
+  }
+ ],
+ "rejected": [],
+ "case": "D01",
+ "config": "auto",
+ "run": 1
+}

@@ -1,0 +1,136 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4650,
+   "output_tokens": 1906,
+   "cost_usd": 0.0381,
+   "seconds": 18.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0381,
+ "notes": [],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "@Transactional 内の insert で DuplicateKeyException を捕捉しても、PostgreSQL ではトランザクションが失敗状態になる可能性がある",
+   "detail": "DB が PostgreSQL の場合（制約名 member_email_key からの推測）、一意制約違反の後は同一トランザクション内の以降の SQL が失敗する。現状 catch 後は BusinessException を投げるだけなのでロールバックされ、直ちに問題にはならない。ただし、将来 catch 後に処理を足すと壊れる。また BusinessException が rollbackFor の対象外（チェック例外の場合）だと、中途半端にコミットを試みて 'current transaction is aborted' 等になりうる。BusinessException が RuntimeException か確認が必要。",
+   "line": 33,
+   "evidence": "register は @Transactional で、try/catch の中で mapper.insert を呼び BusinessException に変換している。BusinessException の定義は差分に含まれず不明（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:33",
+   "message": "@Transactional 内の insert で DuplicateKeyException を捕捉しても、PostgreSQL ではトランザクションが失敗状態になる可能性がある DB が PostgreSQL の場合（制約名 member_email_key からの推測）、一意制約違反の後は同一トランザクション内の以降の SQL が失敗する。現状 catch 後は BusinessException を投げるだけなのでロールバックされ、直ちに問題にはならない。ただし、将来 catch 後に処理を足すと壊れる。また BusinessException が rollbackFor の対象外（チェック例外の場合）だと、中途半端にコミットを試みて 'current transaction is aborted' 等になりうる。BusinessException が RuntimeException か確認が必要。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "実際の DB 一意制約・MyBatis の例外変換を検証するテストが無く、本変更の前提が未検証",
+   "detail": "本 PR は重複判定を DB の一意制約のみに依存させるが、テストはインメモリ Mapper が手で投げた DuplicateKeyException を前提にしている。実際のスキーマに email の UNIQUE 制約（小文字正規化後の値に対するもの）が存在すること、MyBatis-Spring の例外変換により DuplicateKeyException が出ること（SqlSessionTemplate / PersistenceExceptionTranslator が有効か）は検証されない。制約が無い、または例外が変換されない（MyBatisSystemException 等になる）と、重複登録が成功するか 500 になる。事前チェックを外したことで防御が一段減っているため影響が大きい。",
+   "line": 34,
+   "evidence": "テストの InMemoryMapper.insert が existsByEmail を呼んで DuplicateKeyException を自前で投げている。マイグレーション/スキーマや統合テストは差分に無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:34",
+   "message": "実際の DB 一意制約・MyBatis の例外変換を検証するテストが無く、本変更の前提が未検証 本 PR は重複判定を DB の一意制約のみに依存させるが、テストはインメモリ Mapper が手で投げた DuplicateKeyException を前提にしている。実際のスキーマに email の UNIQUE 制約（小文字正規化後の値に対するもの）が存在すること、MyBatis-Spring の例外変換により DuplicateKeyException が出ること（SqlSessionTemplate / PersistenceExceptionTranslator が有効か）は検証されない。制約が無い、または例外が変換されない（MyBatisSystemException 等になる）と、重複登録が成功するか 500 になる。事前チェックを外したことで防御が一段減っているため影響が大きい。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "テスト用 Mapper が本番の一意制約を再実装しており、テストが実装の挙動を保証しない",
+   "detail": "register_rejectsDuplicateEmailIgnoringCase は、サービスが正規化(lowercase)して insert することと、フェイクが小文字で比較することの組合せで通るだけ。DB の制約が大文字小文字を区別する場合や、正規化前の値が保存される場合の挙動は検証されない。Testcontainers 等で実 DB を使った @MybatisTest / 統合テストを 1 本追加するのが望ましい。",
+   "line": 34,
+   "evidence": "フェイクの insert 内で existsByEmail → DuplicateKeyException。実 DB を使うテストは無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:34",
+   "message": "テスト用 Mapper が本番の一意制約を再実装しており、テストが実装の挙動を保証しない register_rejectsDuplicateEmailIgnoringCase は、サービスが正規化(lowercase)して insert することと、フェイクが小文字で比較することの組合せで通るだけ。DB の制約が大文字小文字を区別する場合や、正規化前の値が保存される場合の挙動は検証されない。Testcontainers 等で実 DB を使った @MybatisTest / 統合テストを 1 本追加するのが望ましい。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "テストのコメントが現状と食い違っている",
+   "detail": "register_concurrentDuplicateBecomesBusinessError のコメントは「事前の確認をすり抜けた」としているが、事前確認は削除された。さらに本テストは上の register_rejectsDuplicateEmailIgnoringCase と実質同じ経路（DuplicateKeyException → BusinessException）を検証しており、重複している。",
+   "line": 78,
+   "evidence": "コメント『事前の確認をすり抜けた（同時に登録された）ケース』と、MemberService から existsByEmail が除去されていること。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:78",
+   "message": "テストのコメントが現状と食い違っている register_concurrentDuplicateBecomesBusinessError のコメントは「事前の確認をすり抜けた」としているが、事前確認は削除された。さらに本テストは上の register_rejectsDuplicateEmailIgnoringCase と実質同じ経路（DuplicateKeyException → BusinessException）を検証しており、重複している。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "PR の動機（SELECT 1 回の削減）に対する妥当性の確認",
+   "detail": "削除前のコメントは『よくある重複を早く返すため』としていた。重複登録は通常のユーザー操作であり、一意制約違反では例外生成・トランザクションのロールバック・DB ログ（PostgreSQL の ERROR ログ）が発生する。重複が多いケースでは SELECT 1 回より高コストになる場合がある。また、シーケンス/IDENTITY 列を使っている場合、失敗した insert で採番が消費され欠番が増える。この点は許容してよいか確認したい。",
+   "line": 31,
+   "evidence": "事前チェックの削除とコメント変更。採番方式は差分に無いため推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:31",
+   "message": "PR の動機（SELECT 1 回の削減）に対する妥当性の確認 削除前のコメントは『よくある重複を早く返すため』としていた。重複登録は通常のユーザー操作であり、一意制約違反では例外生成・トランザクションのロールバック・DB ログ（PostgreSQL の ERROR ログ）が発生する。重複が多いケースでは SELECT 1 回より高コストになる場合がある。また、シーケンス/IDENTITY 列を使っている場合、失敗した insert で採番が消費され欠番が増える。この点は許容してよいか確認したい。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberMapper.java",
+   "title": "existsByEmail が未使用になる可能性（推測）",
+   "detail": "サービスから呼び出しが無くなったため、Mapper とその XML の existsByEmail は本番コードで未使用になる。テストのフェイクでは使われている。残すか削除するか意図を確認したい。",
+   "line": 1,
+   "evidence": "MemberService の diff で唯一の呼び出しが削除された。MemberMapper 本体は差分に無いため推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberMapper.java:1",
+   "message": "existsByEmail が未使用になる可能性（推測） サービスから呼び出しが無くなったため、Mapper とその XML の existsByEmail は本番コードで未使用になる。テストのフェイクでは使われている。残すか削除するか意図を確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "D01",
+ "config": "standard",
+ "run": 1
+}

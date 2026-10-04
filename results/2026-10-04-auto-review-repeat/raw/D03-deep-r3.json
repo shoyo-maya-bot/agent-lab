@@ -1,0 +1,68 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4248,
+   "output_tokens": 1192,
+   "cost_usd": 0.0276,
+   "seconds": 14.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0276,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "値の一致を確かめなくなり、検証が弱くなった",
+   "detail": "変更前は `orderNo()` が入力と完全に一致することを確かめていました。変更後は長さしか見ていません。このため、parse が値を書き換えても長さが変わらなければテストが通ります。たとえば大文字小文字の変換や、別の列の値を同じ長さで返す実装でも通ってしまいます。境界の受け入れテストなら、入力の文字列をそのまま返すことまで確かめるべきです。",
+   "line": 97,
+   "evidence": "削除された `assertThat(...orderNo()).isEqualTo(twenty)` が、`assertThat(o.orderNo()).hasSize(orderNoLength)` と `assertThat(o.productCode()).hasSize(productLength)` に置き換わっています。期待値の文字列（\"B\".repeat(n) / \"P\".repeat(n)）を変数に入れて `isEqualTo` で比べれば、元の強さを保てます。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:97",
+   "message": "値の一致を確かめなくなり、検証が弱くなった 変更前は `orderNo()` が入力と完全に一致することを確かめていました。変更後は長さしか見ていません。このため、parse が値を書き換えても長さが変わらなければテストが通ります。たとえば大文字小文字の変換や、別の列の値を同じ長さで返す実装でも通ってしまいます。境界の受け入れテストなら、入力の文字列をそのまま返すことまで確かめるべきです。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "product_code の 21 文字（上限 +1）の拒否テストがない",
+   "detail": "受け入れ側は order_no と product_code の両方で 20 文字を見るようになりました。一方、拒否側の境界は対称になっていません。order_no は 21 文字で拒否されることを確かめていますが、product_code は 22 文字でしか確かめていません。たとえば判定が `> 21` に誤っていても、product_code については検出できません。",
+   "line": 88,
+   "evidence": "parseRejects のケースは `P-01234567890123456789`（22 文字）だけです。21 文字を確かめているのは tooLongCodeSkipsOnlyThatLine の order_no（`\"A\".repeat(21)`）だけです。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:88",
+   "message": "product_code の 21 文字（上限 +1）の拒否テストがない 受け入れ側は order_no と product_code の両方で 20 文字を見るようになりました。一方、拒否側の境界は対称になっていません。order_no は 21 文字で拒否されることを確かめていますが、product_code は 22 文字でしか確かめていません。たとえば判定が `> 21` に誤っていても、product_code については検出できません。"
+  }
+ ],
+ "rejected": [],
+ "case": "D03",
+ "config": "deep",
+ "run": 3
+}

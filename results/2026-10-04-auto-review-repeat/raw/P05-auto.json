@@ -1,0 +1,119 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）",
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: 終了コード",
+   "+3 sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java: テストの削除"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3699,
+   "output_tokens": 1046,
+   "cost_usd": 0.0135,
+   "seconds": 12.2,
+   "estimated": false
+  },
+  {
+   "step": "deep",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4784,
+   "output_tokens": 1008,
+   "cost_usd": 0.0558,
+   "seconds": 11.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0693,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 2,
+  "uncertain": 1,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "「どこからも呼ばれていない」は誤り。ジョブ ID 不正時の異常終了が失われる",
+   "detail": "BatchJobGuard は @Component @Profile(\"batch\") の ApplicationRunner / ExitCodeGenerator で、Spring が自動で実行する。コードから直接呼ばれないのは当然で、未使用ではない。削除すると、batch プロファイルで app.batch.job を誤った値にした場合や未指定にした場合に、ジョブの Bean が作られず何も実行されないまま終了コード 0 で終わる。スケジューラからは正常終了に見え、バッチが動いていないことに気付けない。",
+   "line": 1,
+   "evidence": "クラスの Javadoc に「これが無いと、ジョブ ID の誤りや指定漏れでも何も実行せずに終了コード 0 で終わり」とある。テストのコメントには「ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない」とある。getExitCode() が BatchJob.ERROR を返す役割を持つのはこのクラスだけに見える（他の ExitCodeGenerator の有無は差分からは不明で推測）。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "@Component @Profile(\"batch\") の ApplicationRunner / ExitCodeGenerator なので、Spring が自動で登録し実行する。直接の呼び出し元が無いのは当然で、Javadoc とテストのコメントが示すとおり、削除するとジョブ ID の誤りや指定漏れでも終了コード 0 で終わる退行になる。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "「どこからも呼ばれていない」は誤り。ジョブ ID 不正時の異常終了が失われる BatchJobGuard は @Component @Profile(\"batch\") の ApplicationRunner / ExitCodeGenerator で、Spring が自動で実行する。コードから直接呼ばれないのは当然で、未使用ではない。削除すると、batch プロファイルで app.batch.job を誤った値にした場合や未指定にした場合に、ジョブの Bean が作られず何も実行されないまま終了コード 0 で終わる。スケジューラからは正常終了に見え、バッチが動いていないことに気付けない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java",
+   "title": "ジョブ ID 不正時の異常終了を確認するテストも一緒に無くなる",
+   "detail": "このテストは JOB9999・空文字・null のときに終了コードが ERROR になることを確認していた。削除すると、同じ振る舞いを別の場所に移さない限り、今後の変更で誤ったジョブ ID が正常終了扱いになっても気付けない。クラスを残す場合はテストも残す。クラスを意図して廃止する場合は、代替の検知と、それを確認するテストを同じ PR に含める。",
+   "line": 21,
+   "evidence": "errorWhenJobIdIsWrongOrMissing が isEqualTo(BatchJob.ERROR) を検証しており、差分にはこれに代わるテストの追加が無い。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "errorWhenJobIdIsWrongOrMissing は JOB9999・空文字・null で ERROR になることを検証する唯一のテストに見える。差分には代わりのテストが無く、この振る舞いの回帰検知も失われる。",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java:21",
+   "message": "ジョブ ID 不正時の異常終了を確認するテストも一緒に無くなる このテストは JOB9999・空文字・null のときに終了コードが ERROR になることを確認していた。削除すると、同じ振る舞いを別の場所に移さない限り、今後の変更で誤ったジョブ ID が正常終了扱いになっても気付けない。クラスを残す場合はテストも残す。クラスを意図して廃止する場合は、代替の検知と、それを確認するテストを同じ PR に含める。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "同等のチェックが別の場所に移っていないか",
+   "detail": "意図して廃止するなら、ジョブ ID 不正時に非 0 で終了させる仕組みが別にあるかを確認したい。別の実装があるなら PR 説明に書いてほしい。無いなら、今回の削除は仕様の退行になる。",
+   "line": 1,
+   "evidence": "差分には代替実装が含まれない。MessageIds.BATCH_UNKNOWN_JOB が他で使われているかは差分からは分からない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "uncertain",
+   "verdict_note": "代わりのチェックが別の場所（ジョブ ID を検証する別の Runner やスケジューラ側のラッパーなど）にあるかは、差分からは判断できないため人の確認が必要。",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "同等のチェックが別の場所に移っていないか 意図して廃止するなら、ジョブ ID 不正時に非 0 で終了させる仕組みが別にあるかを確認したい。別の実装があるなら PR 説明に書いてほしい。無いなら、今回の削除は仕様の退行になる。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "MessageIds.BATCH_UNKNOWN_JOB が未使用の定数として残る可能性",
+   "detail": "削除したクラスは MessageIds.BATCH_UNKNOWN_JOB を参照していた。ほかに参照箇所が無ければ、メッセージ ID の定義と、運用側の監視ルール（このメッセージ ID でアラートを出す設定など）が実体の無いまま残る。削除を進めるなら、これらも合わせて整理するか、廃止を明記する必要がある（他の参照有無や監視設定の存在は推測）。",
+   "line": 44,
+   "evidence": "log.error(\"{} ジョブ ID が不正です app.batch.job={}\", MessageIds.BATCH_UNKNOWN_JOB, ...)",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "d1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:44",
+   "message": "MessageIds.BATCH_UNKNOWN_JOB が未使用の定数として残る可能性 削除したクラスは MessageIds.BATCH_UNKNOWN_JOB を参照していた。ほかに参照箇所が無ければ、メッセージ ID の定義と、運用側の監視ルール（このメッセージ ID でアラートを出す設定など）が実体の無いまま残る。削除を進めるなら、これらも合わせて整理するか、廃止を明記する必要がある（他の参照有無や監視設定の存在は推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P05",
+ "config": "auto",
+ "run": 1
+}

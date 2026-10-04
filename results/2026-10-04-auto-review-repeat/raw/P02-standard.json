@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5958,
+   "output_tokens": 1468,
+   "cost_usd": 0.0427,
+   "seconds": 15.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0427,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない member_id の 1 行でファイル全体の取込が失敗・ロールバックする",
+   "detail": "CSV に存在しない member_id の行が 1 行でもあると、insertIfAbsent が外部キー違反の例外を投げる。importLines は @Transactional で、例外はこの行で捕捉されていないため、トランザクション全体がロールバックされ、それまでに取り込んだ行もすべて取り消される。ジョブは異常終了し、行番号付きのエラー報告も残らない。従来は「該当行だけ飛ばして続行し、行番号と理由を結果に残す」仕様だったが、それが失われる。PostgreSQL の場合、例外後は同一トランザクションが aborted 状態になるため、仮に例外を捕捉しても後続の SQL は実行できない（推測：DB 種別は差分から確認できない）。",
+   "line": 51,
+   "evidence": "メソッド冒頭のクラス Javadoc に「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため、登録の前にここで確かめる」とある。差分は存在確認（memberExists）の分岐を削除しただけで、DataIntegrityViolationException 等の捕捉は追加されていない。PR 説明の「外部キーで守られている」は、データ整合性は守るが、行単位でスキップする挙動は守らない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "存在しない member_id の 1 行でファイル全体の取込が失敗・ロールバックする CSV に存在しない member_id の行が 1 行でもあると、insertIfAbsent が外部キー違反の例外を投げる。importLines は @Transactional で、例外はこの行で捕捉されていないため、トランザクション全体がロールバックされ、それまでに取り込んだ行もすべて取り消される。ジョブは異常終了し、行番号付きのエラー報告も残らない。従来は「該当行だけ飛ばして続行し、行番号と理由を結果に残す」仕様だったが、それが失われる。PostgreSQL の場合、例外後は同一トランザクションが aborted 状態になるため、仮に例外を捕捉しても後続の SQL は実行できない（推測：DB 種別は差分から確認できない）。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "存在しない会員の行を扱うテストが削除され、仕様変更が検証されない",
+   "detail": "unknownMemberSkipsOnlyThatLine が削除されたため、存在しない会員の行をどう扱うかを検証するテストが無くなった。上記の全件ロールバックの退行もテストで検知できない。なお FakeOrderMapper は外部キー違反を再現しないため、単体テストでは本番の挙動を確認できない（推測：Fake の中身は差分に含まれない）。",
+   "line": 51,
+   "evidence": "差分でテストメソッド unknownMemberSkipsOnlyThatLine が丸ごと削除されている。変更後の全文のテストにも member の存在に関する検証が残っていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:51",
+   "message": "存在しない会員の行を扱うテストが削除され、仕様変更が検証されない unknownMemberSkipsOnlyThatLine が削除されたため、存在しない会員の行をどう扱うかを検証するテストが無くなった。上記の全件ロールバックの退行もテストで検知できない。なお FakeOrderMapper は外部キー違反を再現しないため、単体テストでは本番の挙動を確認できない（推測：Fake の中身は差分に含まれない）。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "クラス Javadoc が実装と食い違っている",
+   "detail": "Javadoc は「存在しない会員の行は飛ばして続行し」「外部キーに当たる誤りは登録の前にここで確かめる」と説明しているが、その処理は削除された。後から読む人が、現在も保護されていると誤解する。",
+   "line": 12,
+   "evidence": "Javadoc の「形式エラーの行・存在しない会員の行は飛ばして続行し」と「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」が差分で更新されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:12",
+   "message": "クラス Javadoc が実装と食い違っている Javadoc は「存在しない会員の行は飛ばして続行し」「外部キーに当たる誤りは登録の前にここで確かめる」と説明しているが、その処理は削除された。後から読む人が、現在も保護されていると誤解する。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化の効果の測定と、別の方法の検討",
+   "detail": "元の実装は会員ごとに 1 回だけ SELECT する（キャッシュ付き）ため、SELECT の回数は行数ではなく会員数に比例していた。ボトルネックが本当にここか、確認済みか。速度が必要なら、存在確認を残したまま、会員 ID をまとめて 1 回の IN クエリで取得する、または INSERT ... SELECT で会員の存在を条件に含めて 0 件挿入なら会員なしとして扱う、といった方法で行単位のスキップを維持できる。ただし後者は重複との区別が必要になる。",
+   "line": 51,
+   "evidence": "削除された memberCache による computeIfAbsent(order.memberId(), mapper::memberExists) と、削除されたテストの「同じ会員は 1 回だけ確かめる」の検証。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "高速化の効果の測定と、別の方法の検討 元の実装は会員ごとに 1 回だけ SELECT する（キャッシュ付き）ため、SELECT の回数は行数ではなく会員数に比例していた。ボトルネックが本当にここか、確認済みか。速度が必要なら、存在確認を残したまま、会員 ID をまとめて 1 回の IN クエリで取得する、または INSERT ... SELECT で会員の存在を条件に含めて 0 件挿入なら会員なしとして扱う、といった方法で行単位のスキップを維持できる。ただし後者は重複との区別が必要になる。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "standard",
+ "run": 1
+}

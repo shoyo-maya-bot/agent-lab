@@ -18,7 +18,7 @@ class Finding:
     line: int | None = None
     evidence: str = ""
     models: list[str] = field(default_factory=list)  # 指摘した・認めたモデル
-    status: str = "unverified"  # unverified / confirmed / rejected
+    status: str = "unverified"  # unverified（検証なし）/ confirmed / uncertain（検証したが決められない）/ rejected
     verdict_note: str = ""
     id: str = ""
 
@@ -127,6 +127,9 @@ def apply_verdicts(findings: list[Finding], verdicts: dict[str, dict], model: st
                 f.severity = _norm_sev(v["severity"])
         elif kind.startswith("reject"):
             f.status = "rejected"
+        else:
+            # uncertain など: 検証役が決められなかった. 人が確かめる印を付け、あとの合流で「一致」に上げない
+            f.status = "uncertain"
 
 
 def merge(base: list[Finding], extra: list[Finding]) -> list[Finding]:
@@ -138,15 +141,16 @@ def merge(base: list[Finding], extra: list[Finding]) -> list[Finding]:
             for m in e.models:
                 if m not in same.models:
                     same.models.append(m)
+            # 検証の判定（認める・決められない・却下）が付いたものは、合流で上書きしない
             if same.status == "unverified":
                 same.status = "confirmed"
-            if SEVERITY_ORDER[e.severity] < SEVERITY_ORDER[same.severity]:
-                same.severity = e.severity
+                if SEVERITY_ORDER[e.severity] < SEVERITY_ORDER[same.severity]:
+                    same.severity = e.severity
         else:
             out.append(e)
     return out
 
 
 def ordered(findings: list[Finding]) -> list[Finding]:
-    status_order = {"confirmed": 0, "unverified": 1, "rejected": 2}
+    status_order = {"confirmed": 0, "uncertain": 1, "unverified": 2, "rejected": 3}
     return sorted(findings, key=lambda f: (status_order[f.status], SEVERITY_ORDER[f.severity], -len(f.models)))

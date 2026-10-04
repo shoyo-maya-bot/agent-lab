@@ -1,0 +1,72 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 1,
+  "reasons": [
+   "+1 sample-app/build.gradle: 依存・ビルド"
+  ],
+  "risky_files": [
+   "sample-app/build.gradle"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3266,
+   "output_tokens": 963,
+   "cost_usd": 0.0219,
+   "seconds": 11.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0219,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/build.gradle",
+   "title": "-DbaseUrl がテスト JVM に届かず、指定した接続先ではなく既定の接続先に対してテストが走る",
+   "detail": "`./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<dev-host>` のように実行すると、baseUrl は Gradle の JVM にしか設定されない。テストを動かすフォーク先の JVM には渡らない。その結果、Karate 側の karate-config.js などで読む baseUrl は未設定になる。既定値（おそらく localhost）か env ごとの値にフォールバックして、意図しない接続先にテストが走る。この場合テストは失敗しないこともあり、dev を検証したつもりで実際はローカル（または別環境）を叩いていた、という事故になる。既定値が無い場合は、接続エラーで全件失敗する（karate-config.js が見えないため推測）。",
+   "line": 55,
+   "evidence": "削除されたコメントに「Gradle に渡した -DbaseUrl は、そのままではテストの JVM に届かないので明示的に渡す」とある。Gradle の Test タスクはテストを別 JVM で動かし、Gradle 本体のシステムプロパティを自動では引き継がない。変更後も karate.env だけは `systemProperty 'karate.env', System.getProperty(...)` で明示的に渡しており、baseUrl だけ同じ扱いが消えている。ファイル上部のコメント（`接続先を変えるとき: ./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<your-dev-host>`）は残っており、手順として案内された使い方が動かなくなる。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/build.gradle:55",
+   "message": "-DbaseUrl がテスト JVM に届かず、指定した接続先ではなく既定の接続先に対してテストが走る `./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<dev-host>` のように実行すると、baseUrl は Gradle の JVM にしか設定されない。テストを動かすフォーク先の JVM には渡らない。その結果、Karate 側の karate-config.js などで読む baseUrl は未設定になる。既定値（おそらく localhost）か env ごとの値にフォールバックして、意図しない接続先にテストが走る。この場合テストは失敗しないこともあり、dev を検証したつもりで実際はローカル（または別環境）を叩いていた、という事故になる。既定値が無い場合は、接続エラーで全件失敗する（karate-config.js が見えないため推測）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/build.gradle",
+   "title": "「不要そう」と判断した根拠の確認",
+   "detail": "PR 説明は「不要そうな記述を削った」だけで、削っても baseUrl の上書きが効くことを確かめたかどうかが書かれていない。CI やデプロイ後の検証ジョブで -DbaseUrl を渡している箇所があれば、そこも黙って既定の接続先を叩くようになる（CI 設定は差分に無いため推測）。確認していないなら削除を取り消すことを提案する。baseUrl を別の方法（環境変数・karate-config.js の env 別定義など）に移す意図なら、その変更と、48 行目付近の使い方コメントの更新を同じ PR に入れてほしい。",
+   "line": 55,
+   "evidence": "PR 説明の「karateTest タスクの不要そうな記述を削りました」。削除された行には、必要な理由を説明するコメントが付いていた。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/build.gradle:55",
+   "message": "「不要そう」と判断した根拠の確認 PR 説明は「不要そうな記述を削った」だけで、削っても baseUrl の上書きが効くことを確かめたかどうかが書かれていない。CI やデプロイ後の検証ジョブで -DbaseUrl を渡している箇所があれば、そこも黙って既定の接続先を叩くようになる（CI 設定は差分に無いため推測）。確認していないなら削除を取り消すことを提案する。baseUrl を別の方法（環境変数・karate-config.js の env 別定義など）に移す意図なら、その変更と、48 行目付近の使い方コメントの更新を同じ PR に入れてほしい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P04",
+ "config": "deep",
+ "run": 3
+}

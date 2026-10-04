@@ -1,0 +1,52 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 2920,
+   "output_tokens": 764,
+   "cost_usd": 0.0349,
+   "seconds": 10.0,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0349,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "名前省略は -parameters 付きコンパイルが前提。build.gradle 以外のビルド経路でも有効か確認したい",
+   "detail": "Spring 6.1 以降は、パラメータ名を `-parameters` で付けたメタデータからしか取得しません（LocalVariableTableParameterNameDiscoverer が削除されたため）。`-parameters` なしでコンパイルされたクラスでは、GET /api/v1/members/{id} の呼び出しのたびに引数名を解決できず IllegalArgumentException になり、500 が返ります（推測）。PR 説明では build.gradle で付けているとありますが、build.gradle は差分にもファイルにも含まれず確認できません。また、IDE（Eclipse/IntelliJ のビルダー）でコンパイルした場合や、将来 javac 設定が変わった場合にもこの前提が保たれるのかを確認させてください。GET /{id} を MockMvc などで実際に呼び、200 が返ることを確かめるテストがあれば、この回帰を検出できます。",
+   "line": 32,
+   "evidence": "変更点は `@PathVariable(\"id\") long id` から `@PathVariable long id` への置き換えだけです。名前の解決はコンパイラオプションに頼ることになりますが、そのオプションの設定は差分から見えません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "名前省略は -parameters 付きコンパイルが前提。build.gradle 以外のビルド経路でも有効か確認したい Spring 6.1 以降は、パラメータ名を `-parameters` で付けたメタデータからしか取得しません（LocalVariableTableParameterNameDiscoverer が削除されたため）。`-parameters` なしでコンパイルされたクラスでは、GET /api/v1/members/{id} の呼び出しのたびに引数名を解決できず IllegalArgumentException になり、500 が返ります（推測）。PR 説明では build.gradle で付けているとありますが、build.gradle は差分にもファイルにも含まれず確認できません。また、IDE（Eclipse/IntelliJ のビルダー）でコンパイルした場合や、将来 javac 設定が変わった場合にもこの前提が保たれるのかを確認させてください。GET /{id} を MockMvc などで実際に呼び、200 が返ることを確かめるテストがあれば、この回帰を検出できます。"
+  }
+ ],
+ "rejected": [],
+ "case": "D04",
+ "config": "deep",
+ "run": 1
+}

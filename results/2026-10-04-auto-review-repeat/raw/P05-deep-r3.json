@@ -1,0 +1,91 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）",
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: 終了コード",
+   "+3 sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java: テストの削除"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3693,
+   "output_tokens": 1168,
+   "cost_usd": 0.0264,
+   "seconds": 13.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0264,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "未使用ではなく Spring が呼ぶクラスなので、消すとジョブ ID の誤りや指定漏れが終了コード 0 になる",
+   "detail": "batch プロファイルで起動し、app.batch.job に存在しない ID（例: JOB9999）を指定した場合や、指定し忘れた場合が対象。ジョブの Bean が作られないため何も実行されない。この PR の後は誰も異常を検知せず、終了コード 0 で終わる。スケジューラからは正常終了に見えるため、夜間バッチが実行されていないことに気付けない運用事故になる。",
+   "line": 23,
+   "evidence": "クラスは @Component @Profile(\"batch\") で、ApplicationRunner と ExitCodeGenerator を実装している。run() と getExitCode() は Spring Boot が起動時と SpringApplication.exit 時に呼ぶので、アプリのコードから参照が無いのは正常な状態。Javadoc にも「これが無いと…終了コード 0 で終わり、スケジューラからは正常終了に見えてしまう」と書かれている。テストのコメントにも「ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない」とあり、他に検知する仕組みが無いことがうかがえる（ジョブ側の実装は差分外のため推測）。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:23",
+   "message": "未使用ではなく Spring が呼ぶクラスなので、消すとジョブ ID の誤りや指定漏れが終了コード 0 になる batch プロファイルで起動し、app.batch.job に存在しない ID（例: JOB9999）を指定した場合や、指定し忘れた場合が対象。ジョブの Bean が作られないため何も実行されない。この PR の後は誰も異常を検知せず、終了コード 0 で終わる。スケジューラからは正常終了に見えるため、夜間バッチが実行されていないことに気付けない運用事故になる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java",
+   "title": "異常終了を保証するテストも一緒に消えている",
+   "detail": "errorWhenJobIdIsWrongOrMissing は、JOB9999・空文字・null のどれでも ERROR になることを確認していた。このテストも削除されるので、同じ退行を CI で検知できなくなる。この PR を取り下げない場合も、代わりの仕組みとテストが必要。",
+   "line": 21,
+   "evidence": "BatchJobGuardTest が丸ごと削除されている。他に同じ観点のテストがあるかは差分からは見えない（推測）。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java:21",
+   "message": "異常終了を保証するテストも一緒に消えている errorWhenJobIdIsWrongOrMissing は、JOB9999・空文字・null のどれでも ERROR になることを確認していた。このテストも削除されるので、同じ退行を CI で検知できなくなる。この PR を取り下げない場合も、代わりの仕組みとテストが必要。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "MessageIds.BATCH_UNKNOWN_JOB と関連ドキュメントの扱い",
+   "detail": "削除を進めるなら、このメッセージ ID が他で使われていないかを確認してほしい。運用手順書や監視ルールでこの ID を検知している場合は、そのログも二度と出なくなる。監視側でも気付けなくなる点を確認したい。",
+   "line": 3,
+   "evidence": "log.error で MessageIds.BATCH_UNKNOWN_JOB を出力していた。他の参照箇所は差分外のため不明（推測）。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:3",
+   "message": "MessageIds.BATCH_UNKNOWN_JOB と関連ドキュメントの扱い 削除を進めるなら、このメッセージ ID が他で使われていないかを確認してほしい。運用手順書や監視ルールでこの ID を検知している場合は、そのログも二度と出なくなる。監視側でも気付けなくなる点を確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P05",
+ "config": "deep",
+ "run": 3
+}

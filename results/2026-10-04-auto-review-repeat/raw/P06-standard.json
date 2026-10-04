@@ -1,0 +1,123 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: エラー応答",
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: 例外の扱いの変更",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 4 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6511,
+   "output_tokens": 1835,
+   "cost_usd": 0.046,
+   "seconds": 16.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.046,
+ "notes": [],
+ "summary": {
+  "findings": 5,
+  "shown": 5,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "想定外の例外が Spring 既定の応答になり、エラー形式 ErrorResponse と APPE9999 が失われる",
+   "detail": "DB 障害や NPE などが起きると、これまで {messageId: APPE9999, message, details: []} の 500 を返していたが、この PR 後は Exception ハンドラが無いので例外が DispatcherServlet の外へ伝わる。Spring Boot の /error への転送で別形式の JSON（timestamp/status/error/path。設定次第で message や trace も含む）になるか、環境によってはHTML になる。クライアントが ErrorResponse 1 形式だけを前提にしている場合に解析できなくなる。また、これまで log.error で例外をスタックトレース付きで記録していたが、そのログ出力（APPE9999 付き）が無くなり、運用での検知・監視が弱くなる。server.error.include-message / include-stacktrace 等の設定次第では、接続先ホスト名などの内部情報が応答に出る恐れもある（設定は差分に無いので推測）。",
+   "line": 54,
+   "evidence": "差分で @ExceptionHandler(Exception.class) の unexpected() が削除された。クラス Javadoc には「想定外のエラーは 500 と APPE9999 だけを返し、例外の中身はログにだけ出す」「どの失敗でも ErrorResponse の形で返す」と残っており、実装と食い違う。削除されたテスト unexpectedErrorReturns500WithoutDetails は secret-host の情報が応答に出ないことを検証していた。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:54",
+   "message": "想定外の例外が Spring 既定の応答になり、エラー形式 ErrorResponse と APPE9999 が失われる DB 障害や NPE などが起きると、これまで {messageId: APPE9999, message, details: []} の 500 を返していたが、この PR 後は Exception ハンドラが無いので例外が DispatcherServlet の外へ伝わる。Spring Boot の /error への転送で別形式の JSON（timestamp/status/error/path。設定次第で message や trace も含む）になるか、環境によってはHTML になる。クライアントが ErrorResponse 1 形式だけを前提にしている場合に解析できなくなる。また、これまで log.error で例外をスタックトレース付きで記録していたが、そのログ出力（APPE9999 付き）が無くなり、運用での検知・監視が弱くなる。server.error.include-message / include-stacktrace 等の設定次第では、接続先ホスト名などの内部情報が応答に出る恐れもある（設定は差分に無いので推測）。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "不正な入力（型違い・壊れた JSON）の 400 が別形式になる",
+   "detail": "GET /members/abc や壊れた JSON の POST は、これまで APPE0001 の ErrorResponse（400）だったが、ハンドラ削除後は Spring 既定の応答（ProblemDetail もしくは /error 形式）になる。同じ「入力不正」でも、@Valid 違反は ErrorResponse、型違い・JSON 不正は別形式という不整合が生じ、クライアントは 2 形式を扱う必要がある。405 や 404 などの標準例外も同様に APPE0004 等の形式でなくなる。",
+   "line": 54,
+   "evidence": "typeMismatch / unreadable ハンドラと framework の ErrorResponse を処理していた分岐が削除された。残るのは NotFoundException・BusinessException・MethodArgumentNotValidException のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:54",
+   "message": "不正な入力（型違い・壊れた JSON）の 400 が別形式になる GET /members/abc や壊れた JSON の POST は、これまで APPE0001 の ErrorResponse（400）だったが、ハンドラ削除後は Spring 既定の応答（ProblemDetail もしくは /error 形式）になる。同じ「入力不正」でも、@Valid 違反は ErrorResponse、型違い・JSON 不正は別形式という不整合が生じ、クライアントは 2 形式を扱う必要がある。405 や 404 などの標準例外も同様に APPE0004 等の形式でなくなる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "異常系のテストを削除しており、振る舞いの変化が検証されない",
+   "detail": "型違い、壊れた JSON、405、500 のテストを 4 件削除しており、方針を変えた後の期待（既定の形式・ステータス）を確認するテストが無い。standaloneSetup では Boot の /error 転送が動かないため、実環境で実際にどうなるかを確かめる統合テスト（@SpringBootTest + MockMvc / TestRestTemplate）も無い。末尾に空行が 2 つ残っている点も整理したい。",
+   "line": 80,
+   "evidence": "差分でテスト 4 件が削除され、残りは正常系・404・400（Bean Validation）・ID 表示のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:80",
+   "message": "異常系のテストを削除しており、振る舞いの変化が検証されない 型違い、壊れた JSON、405、500 のテストを 4 件削除しており、方針を変えた後の期待（既定の形式・ステータス）を確認するテストが無い。standaloneSetup では Boot の /error 転送が動かないため、実環境で実際にどうなるかを確かめる統合テスト（@SpringBootTest + MockMvc / TestRestTemplate）も無い。末尾に空行が 2 つ残っている点も整理したい。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "未使用の import が残りコンパイル警告・静的解析の違反になる",
+   "detail": "HttpMessageNotReadableException と MethodArgumentTypeMismatchException の import が使われなくなった。checkstyle / -Werror などを有効にしていると、ビルドが失敗することがある（設定は差分に無いので推測）。log も 5xx 側で使われなくなったが、business() で使っているので問題は無い。",
+   "line": 3,
+   "evidence": "変更後の全文で、これら 2 つのクラスを参照するコードが無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:3",
+   "message": "未使用の import が残りコンパイル警告・静的解析の違反になる HttpMessageNotReadableException と MethodArgumentTypeMismatchException の import が使われなくなった。checkstyle / -Werror などを有効にしていると、ビルドが失敗することがある（設定は差分に無いので推測）。log も 5xx 側で使われなくなったが、business() で使っているので問題は無い。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "「Spring の既定に任せる」意図は、エラー形式の統一をやめるという合意か",
+   "detail": "既存クラスの設計意図は「どの失敗でも ErrorResponse 1 形式」だった。これを変えるなら、API 利用者（クライアントや API 仕様書）への周知と、既定の形式（spring.mvc.problemdetails.enabled など）の設定が必要になる。簡素化したいだけであれば、Exception 用の 500 ハンドラと、ResponseEntityExceptionHandler の継承による標準例外の一括処理は残すほうが安全。",
+   "line": 54,
+   "evidence": "PR の説明は「業務で使う例外だけ残し、それ以外は Spring の既定に任せる」とだけある。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:54",
+   "message": "「Spring の既定に任せる」意図は、エラー形式の統一をやめるという合意か 既存クラスの設計意図は「どの失敗でも ErrorResponse 1 形式」だった。これを変えるなら、API 利用者（クライアントや API 仕様書）への周知と、既定の形式（spring.mvc.problemdetails.enabled など）の設定が必要になる。簡素化したいだけであれば、Exception 用の 500 ハンドラと、ResponseEntityExceptionHandler の継承による標準例外の一括処理は残すほうが安全。"
+  }
+ ],
+ "rejected": [],
+ "case": "P06",
+ "config": "standard",
+ "run": 1
+}

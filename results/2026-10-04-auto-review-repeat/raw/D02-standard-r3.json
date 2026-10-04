@@ -1,0 +1,39 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3507,
+   "output_tokens": 378,
+   "cost_usd": 0.0066,
+   "seconds": 6.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0066,
+ "notes": [],
+ "summary": {
+  "findings": 0,
+  "shown": 0,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [],
+ "rejected": [],
+ "case": "D02",
+ "config": "standard",
+ "run": 3
+}

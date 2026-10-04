@@ -1,0 +1,12 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberService.java b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+index 2912e45..73b8871 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberService.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+@@ -18,7 +18,6 @@ public class MemberService {
+         this.mapper = mapper;
+     }
+ 
+-    @Transactional(readOnly = true)
+     public Member get(long id) {
+         // ID は文字列で渡す。数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる
+         return mapper.findById(id)

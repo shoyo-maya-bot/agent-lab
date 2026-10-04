@@ -1,0 +1,52 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4254,
+   "output_tokens": 1106,
+   "cost_usd": 0.0282,
+   "seconds": 11.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0282,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "product_code の上限の直上 (21 文字) がテストされていない",
+   "detail": "このPRは「20 文字ちょうど」の境界を order_no と product_code の両方で見るのが狙い。しかし product_code の拒否側は 22 文字のケースしかない。上限が誤って 21 になる（`> 21` や `<= 21`）と、20 文字の受理テストも 22 文字の拒否テストも通ってしまい、21 文字の入力が通る不具合を検出できない。order_no は tooLongCodeSkipsOnlyThatLine で 21 文字を確認しているので、product_code だけ境界の片側が抜けている。",
+   "line": 84,
+   "evidence": "parseRejects の product_code の行は \"A001,1,P-01234567890123456789,1 | product_code は 20 文字以内です（22 文字）\" だけ。受理側の parseAcceptsCodesUpToTwentyChars は 20 文字までで、21 文字の product_code を使うテストは差分にもファイル全文にも見当たらない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:84",
+   "message": "product_code の上限の直上 (21 文字) がテストされていない このPRは「20 文字ちょうど」の境界を order_no と product_code の両方で見るのが狙い。しかし product_code の拒否側は 22 文字のケースしかない。上限が誤って 21 になる（`> 21` や `<= 21`）と、20 文字の受理テストも 22 文字の拒否テストも通ってしまい、21 文字の入力が通る不具合を検出できない。order_no は tooLongCodeSkipsOnlyThatLine で 21 文字を確認しているので、product_code だけ境界の片側が抜けている。"
+  }
+ ],
+ "rejected": [],
+ "case": "D03",
+ "config": "standard",
+ "run": 1
+}

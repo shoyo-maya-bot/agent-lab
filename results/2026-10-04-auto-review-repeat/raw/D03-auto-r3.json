@@ -1,0 +1,53 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4254,
+   "output_tokens": 1017,
+   "cost_usd": 0.0139,
+   "seconds": 11.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0139,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "product_code の上限は「20 は通る」しか確かめておらず、21 文字の拒否が無い",
+   "detail": "product_code の上限判定が 20 ではなく 21 文字までになっている実装ミス（`<= 21` など）があっても、このテストは通る。20 文字の受理テスト（今回のパラメータ化）と、22 文字の拒否テスト（parseRejects）の間に 21 文字のケースが無いため。order_no 側は tooLongCodeSkipsOnlyThatLine が 21 文字で拒否を確かめている。product_code 側だけ境界の「すぐ外側」が抜けていて、PR の目的である「境界値を両方の項目で見る」が半分しか満たされない。",
+   "line": 96,
+   "evidence": "parseAcceptsCodesUpToTwentyChars は {20,1},{1,20},{20,20} の受理のみ。parseRejects の product_code のケースは 'P-01234567890123456789'（22 文字）で、21 文字のケースは無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:96",
+   "message": "product_code の上限は「20 は通る」しか確かめておらず、21 文字の拒否が無い product_code の上限判定が 20 ではなく 21 文字までになっている実装ミス（`<= 21` など）があっても、このテストは通る。20 文字の受理テスト（今回のパラメータ化）と、22 文字の拒否テスト（parseRejects）の間に 21 文字のケースが無いため。order_no 側は tooLongCodeSkipsOnlyThatLine が 21 文字で拒否を確かめている。product_code 側だけ境界の「すぐ外側」が抜けていて、PR の目的である「境界値を両方の項目で見る」が半分しか満たされない。"
+  }
+ ],
+ "rejected": [],
+ "case": "D03",
+ "config": "auto",
+ "run": 3
+}

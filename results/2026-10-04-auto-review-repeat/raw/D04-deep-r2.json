@@ -1,0 +1,68 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 2920,
+   "output_tokens": 910,
+   "cost_usd": 0.0205,
+   "seconds": 11.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0205,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "照会 API の結合テストで退行を検知できるか",
+   "detail": "将来ビルド設定から -parameters が外れると、照会 API（API0001）が全件 500 になります。この退行は起動時やコンパイル時には見つかりません。MockMvc などで GET /api/v1/members/{id} を実際に呼ぶテストがあれば CI で検知できます。テストが既にあるかは差分からは確認できません（推測）。",
+   "line": 32,
+   "evidence": "差分に含まれるのは Controller の変更だけで、テストの追加・確認はありません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "照会 API の結合テストで退行を検知できるか 将来ビルド設定から -parameters が外れると、照会 API（API0001）が全件 500 になります。この退行は起動時やコンパイル時には見つかりません。MockMvc などで GET /api/v1/members/{id} を実際に呼ぶテストがあれば CI で検知できます。テストが既にあるかは差分からは確認できません（推測）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "-parameters が全てのビルド・実行経路で有効か確認したい",
+   "detail": "Spring 6.1 以降は、クラスファイルのデバッグ情報から引数名を推定する仕組みが廃止されています。そのため -parameters を付けずにコンパイルしたクラスでは、GET /api/v1/members/{id} の呼び出し時に引数名が解決できず IllegalArgumentException になり、500 を返します。この失敗は起動時には出ず、リクエストを受けて初めて発生します。build.gradle 経由のビルドなら PR の説明どおり問題ないと思われます。一方、IDE の独自ビルド（Gradle に委譲しない設定）や、他のツールでコンパイルする経路では -parameters が付かない可能性があります（推測）。",
+   "line": 32,
+   "evidence": "名前指定のない `@PathVariable long id` に変えたことで、引数名の解決がコンパイラオプションに依存するようになりました。PR の説明は build.gradle に -parameters を付けているとしていますが、build.gradle そのものは差分に含まれていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "-parameters が全てのビルド・実行経路で有効か確認したい Spring 6.1 以降は、クラスファイルのデバッグ情報から引数名を推定する仕組みが廃止されています。そのため -parameters を付けずにコンパイルしたクラスでは、GET /api/v1/members/{id} の呼び出し時に引数名が解決できず IllegalArgumentException になり、500 を返します。この失敗は起動時には出ず、リクエストを受けて初めて発生します。build.gradle 経由のビルドなら PR の説明どおり問題ないと思われます。一方、IDE の独自ビルド（Gradle に委譲しない設定）や、他のツールでコンパイルする経路では -parameters が付かない可能性があります（推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "D04",
+ "config": "deep",
+ "run": 2
+}

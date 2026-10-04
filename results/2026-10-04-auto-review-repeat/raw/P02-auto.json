@@ -1,0 +1,137 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5958,
+   "output_tokens": 1400,
+   "cost_usd": 0.0194,
+   "seconds": 15.9,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 6815,
+   "output_tokens": 1469,
+   "cost_usd": 0.083,
+   "seconds": 16.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.1024,
+ "notes": [
+  "standard の MUST 2 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 5,
+  "shown": 5,
+  "confirmed": 3,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない member_id の 1 行で取込全体がロールバックされる",
+   "detail": "CSV に会員テーブルに存在しない member_id の行が 1 行でもあると、insertIfAbsent が外部キー違反の例外（DataIntegrityViolationException 等）を投げる。importLines は例外を捕捉せず @Transactional のため、それまでに登録した行もすべて取り消され、ジョブは異常終了する。従来は該当行だけをエラーとして記録して続行できていたが、その挙動が失われる。会員が退会・未登録のデータが混ざるのは通常あり得るため、再実行しても同じ行で毎回失敗し、取込が一切進まなくなる。",
+   "line": 51,
+   "evidence": "memberExists チェックの削除により、insertIfAbsent の前に会員確認がない。クラスの Javadoc に「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため、登録の前にここで確かめる」とあり、元の確認がこの目的で入っていたことが分かる。ループ内に try/catch は parse の IllegalArgumentException のみ。PR 説明の「外部キーで守られている」は不整合は防ぐが、エラー行をスキップする挙動は守らない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "ループ内で捕捉するのは parse の IllegalArgumentException だけです。そのため、insertIfAbsent の外部キー違反例外は @Transactional の importLines の外へ伝わり、取込全体がロールバックされます。これはクラス Javadoc が避けると明記している事態そのものです。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "存在しない member_id の 1 行で取込全体がロールバックされる CSV に会員テーブルに存在しない member_id の行が 1 行でもあると、insertIfAbsent が外部キー違反の例外（DataIntegrityViolationException 等）を投げる。importLines は例外を捕捉せず @Transactional のため、それまでに登録した行もすべて取り消され、ジョブは異常終了する。従来は該当行だけをエラーとして記録して続行できていたが、その挙動が失われる。会員が退会・未登録のデータが混ざるのは通常あり得るため、再実行しても同じ行で毎回失敗し、取込が一切進まなくなる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "存在しない会員の行をスキップする仕様のテストが削除され、仕様変更が無自覚になっている",
+   "detail": "unknownMemberSkipsOnlyThatLine の削除で、未登録会員の行がある場合の挙動（その行だけエラーにして他は取り込む）を保証するテストがなくなった。上記のロールバックの退行をテストでも検出できない。また FakeOrderMapper には外部キー違反を再現する仕組みがなく、テストは実 DB の挙動を見ていない。",
+   "line": 52,
+   "evidence": "差分でテスト全体が削除されている。変更後のテストファイルに未登録会員を扱うケースがない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "仕様（未登録会員の行だけを飛ばして続行する）を保証していたテストが、代わりのテストなしに削除されています。ただし根本原因は s1 の挙動の退行なので、重要度は WANT が妥当です。FakeOrderMapper が外部キー違反を再現できない点は、ファイルが見えないため推測です。",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:52",
+   "message": "存在しない会員の行をスキップする仕様のテストが削除され、仕様変更が無自覚になっている unknownMemberSkipsOnlyThatLine の削除で、未登録会員の行がある場合の挙動（その行だけエラーにして他は取り込む）を保証するテストがなくなった。上記のロールバックの退行をテストでも検出できない。また FakeOrderMapper には外部キー違反を再現する仕組みがなく、テストは実 DB の挙動を見ていない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc がコードの挙動と食い違っている",
+   "detail": "「存在しない会員の行は飛ばして続行」「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」と書かれているが、外部キーの事前確認はなくなった。後から読む人が誤解し、会員欠落が部分取込で済むと思い込む。",
+   "line": 12,
+   "evidence": "クラス Javadoc の記述と、importLines に会員確認がない現状。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:12",
+   "message": "Javadoc がコードの挙動と食い違っている 「存在しない会員の行は飛ばして続行」「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」と書かれているが、外部キーの事前確認はなくなった。後から読む人が誤解し、会員欠落が部分取込で済むと思い込む。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化の方針の確認（存在確認を残したまま遅さを解消できないか）",
+   "detail": "遅さの原因は行ごとの SELECT だった。元のコードは会員 ID ごとにキャッシュしていたため、会員数が多い入力では SELECT が多くなる。ファイル中の member_id を集めて IN 句で一括確認する、または会員 ID 一覧を一度に取得する方法なら、スキップ仕様を保ったまま往復回数を減らせる。それとも「未登録会員は取込全体の失敗でよい」と仕様を変えるのか、その意図を確認したい。変更するなら Javadoc（存在しない会員の行は飛ばす）と運用手順の更新も必要。",
+   "line": 51,
+   "evidence": "削除前は memberCache による 1 会員 1 回の確認。クラス Javadoc に「存在しない会員の行は飛ばして続行」と残っており、コードと不一致になっている。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "高速化の方針の確認（存在確認を残したまま遅さを解消できないか） 遅さの原因は行ごとの SELECT だった。元のコードは会員 ID ごとにキャッシュしていたため、会員数が多い入力では SELECT が多くなる。ファイル中の member_id を集めて IN 句で一括確認する、または会員 ID 一覧を一度に取得する方法なら、スキップ仕様を保ったまま往復回数を減らせる。それとも「未登録会員は取込全体の失敗でよい」と仕様を変えるのか、その意図を確認したい。変更するなら Javadoc（存在しない会員の行は飛ばす）と運用手順の更新も必要。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化の根拠：会員確認はすでに会員単位でキャッシュされていた",
+   "detail": "削除前のコードは memberCache（HashMap）と computeIfAbsent を使い、同じ member_id への SELECT を 1 回に抑えていました。PR 説明にある「行ごとの SELECT が遅い」は、実際には「会員の種類数ぶんの SELECT」です。期待どおりの改善が出るのか、計測結果を示してもらえますか。改善が必要な場合は、存在確認をやめるのではなく、IN 句で会員をまとめて取得する方法でも同じ目的を達成できます。後者は推奨案です。",
+   "line": 39,
+   "evidence": "削除された行：`Map<Long, Boolean> memberCache = new HashMap<>();` と `memberCache.computeIfAbsent(order.memberId(), mapper::memberExists)`。削除されたテストにも「同じ会員は 1 回だけ確かめる」（memberLookups == 2）という記述があります。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "d2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:39",
+   "message": "高速化の根拠：会員確認はすでに会員単位でキャッシュされていた 削除前のコードは memberCache（HashMap）と computeIfAbsent を使い、同じ member_id への SELECT を 1 回に抑えていました。PR 説明にある「行ごとの SELECT が遅い」は、実際には「会員の種類数ぶんの SELECT」です。期待どおりの改善が出るのか、計測結果を示してもらえますか。改善が必要な場合は、存在確認をやめるのではなく、IN 句で会員をまとめて取得する方法でも同じ目的を達成できます。後者は推奨案です。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "auto",
+ "run": 1
+}

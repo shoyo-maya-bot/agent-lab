@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6072,
+   "output_tokens": 1327,
+   "cost_usd": 0.0188,
+   "seconds": 13.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0188,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁数超過の行で DB 例外となり、取込全体がロールバックされる",
+   "detail": "order_no または product_code が 21 文字以上の行が 1 行でも含まれると、insertIfAbsent が VARCHAR(20) 超過で DataIntegrityViolationException（PostgreSQL なら value too long、MySQL strict なら Data too long）を投げる。この例外は parse の IllegalArgumentException ではなく、行単位の catch にもかからない。importLines は @Transactional なので、それまでに登録した行も含めて全件が取り消され、ジョブも異常終了する。従来は 1 行だけ errors に載せてスキップできていた。なお PostgreSQL の例外後はトランザクションが abort 状態になるため、仮に catch しても続行できない。",
+   "line": 85,
+   "evidence": "削除前のコードは長さを parse 内で検証し、行単位でスキップしていた。変更後の code() は空チェックのみ。クラスの Javadoc に「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため、登録の前にここで確かめる」とあり、この PR はその設計と矛盾する。importLines は @Transactional で、例外を捕捉するのは parse 部分の IllegalArgumentException だけ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:85",
+   "message": "桁数超過の行で DB 例外となり、取込全体がロールバックされる order_no または product_code が 21 文字以上の行が 1 行でも含まれると、insertIfAbsent が VARCHAR(20) 超過で DataIntegrityViolationException（PostgreSQL なら value too long、MySQL strict なら Data too long）を投げる。この例外は parse の IllegalArgumentException ではなく、行単位の catch にもかからない。importLines は @Transactional なので、それまでに登録した行も含めて全件が取り消され、ジョブも異常終了する。従来は 1 行だけ errors に載せてスキップできていた。なお PostgreSQL の例外後はトランザクションが abort 状態になるため、仮に catch しても続行できない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "クラス Javadoc が実装と食い違う",
+   "detail": "Javadoc は「桁数は登録の前にここで確かめる」と書いているが、桁数チェックは消えた。保守者が桁数検証済みと誤解する。チェックを戻すか、Javadoc を直す必要がある。",
+   "line": 18,
+   "evidence": "Javadoc の「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」と、変更後の code() に長さ検証がないこと。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:18",
+   "message": "クラス Javadoc が実装と食い違う Javadoc は「桁数は登録の前にここで確かめる」と書いているが、桁数チェックは消えた。保守者が桁数検証済みと誤解する。チェックを戻すか、Javadoc を直す必要がある。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "桁数超過・境界値（20 文字）のテストを削除しており、回帰を検知できない",
+   "detail": "tooLongCodeSkipsOnlyThatLine、parseAcceptsExactlyTwentyChars、parseRejects の 21 文字超ケースがすべて消え、桁数まわりの挙動が未検証になった。FakeOrderMapper は桁数制約を持たないため、この種の不具合は単体テストでは出ない。",
+   "line": 60,
+   "evidence": "差分で該当テスト 3 件が削除され、追加されたテストはない。変更後の全文にも桁数に関するケースがない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:60",
+   "message": "桁数超過・境界値（20 文字）のテストを削除しており、回帰を検知できない tooLongCodeSkipsOnlyThatLine、parseAcceptsExactlyTwentyChars、parseRejects の 21 文字超ケースがすべて消え、桁数まわりの挙動が未検証になった。FakeOrderMapper は桁数制約を持たないため、この種の不具合は単体テストでは出ない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "上限の二重管理の解消方法は他にないか",
+   "detail": "目的（Java と DDL の食い違い防止）は妥当だが、検証をなくすと行単位のスキップができなくなる。DB の例外を行ごとに捕捉する場合は、REQUIRES_NEW や SAVEPOINT など行単位のトランザクション設計が必要になる。それとも、上限を設定値や定数として 1 か所にまとめ、DDL との一致を統合テストで確認する方針ではだめか。意図を確認したい（推測: 統合テストは見えていない）。",
+   "line": 85,
+   "evidence": "PR 説明は「Java 側のチェックを外した」とのみ記載し、DB 例外時の扱いに言及がない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:85",
+   "message": "上限の二重管理の解消方法は他にないか 目的（Java と DDL の食い違い防止）は妥当だが、検証をなくすと行単位のスキップができなくなる。DB の例外を行ごとに捕捉する場合は、REQUIRES_NEW や SAVEPOINT など行単位のトランザクション設計が必要になる。それとも、上限を設定値や定数として 1 か所にまとめ、DDL との一致を統合テストで確認する方針ではだめか。意図を確認したい（推測: 統合テストは見えていない）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "standard",
+ "run": 3
+}

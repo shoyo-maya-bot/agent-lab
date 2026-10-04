@@ -1,0 +1,88 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3588,
+   "output_tokens": 1416,
+   "cost_usd": 0.0313,
+   "seconds": 16.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0313,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、監視で検知できなくなるおそれ",
+   "detail": "S3 の読み込みに失敗したときや DB エラーなどで importLines が例外を投げると、終了コードは 8（ERROR）になります。ところが、この差分で出力されるログは「JOB0001 異常終了」だけになり、先頭のメッセージ ID が付きません。ログ監視やアラートがメッセージ ID をキーにしている場合、最も重要な異常終了だけが検知から漏れます（監視設定はこのメッセージに含まれていないため、推測です）。運用手順書やメッセージ一覧との対応も取れなくなります。",
+   "line": 62,
+   "evidence": "差分で `log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e)` が `log.error(\"JOB0001 異常終了\", e)` に変わっています。同じクラスの他のログ（BATCH_INVALID_ARGS / IMPORT_STARTED / IMPORT_LINE_SKIPPED / IMPORT_FINISHED）は、すべて `\"{} ...\"` の形式でメッセージ ID を先頭に付けています。ID を付けるのが前提の設計で、異常終了だけがその規約から外れます。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、監視で検知できなくなるおそれ S3 の読み込みに失敗したときや DB エラーなどで importLines が例外を投げると、終了コードは 8（ERROR）になります。ところが、この差分で出力されるログは「JOB0001 異常終了」だけになり、先頭のメッセージ ID が付きません。ログ監視やアラートがメッセージ ID をキーにしている場合、最も重要な異常終了だけが検知から漏れます（監視設定はこのメッセージに含まれていないため、推測です）。運用手順書やメッセージ一覧との対応も取れなくなります。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "PR の目的（読みやすさ）に対して、変更が情報を減らす方向になっている",
+   "detail": "元のコードでもプレースホルダは 1 つで、引数は MessageIds.BATCH_FAILED と e でした。SLF4J は最後の Throwable をスタックトレースとして扱うため、元のログも正しく出力されていたはずです。読みやすさが目的なら、ID は残したまま、文言の追加や原因メッセージ（e.getMessage()）の併記といった方法をとるべきです。「ID の重複が見づらい」などの理由がある場合は、ID を外す方向ではなく、ログのパターン設定で対処するのが妥当です。",
+   "line": 62,
+   "evidence": "変更前の `log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e)` は、SLF4J の仕様どおりに出力される形です。この差分は、出力から ID を取り除く以外の効果がありません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "PR の目的（読みやすさ）に対して、変更が情報を減らす方向になっている 元のコードでもプレースホルダは 1 つで、引数は MessageIds.BATCH_FAILED と e でした。SLF4J は最後の Throwable をスタックトレースとして扱うため、元のログも正しく出力されていたはずです。読みやすさが目的なら、ID は残したまま、文言の追加や原因メッセージ（e.getMessage()）の併記といった方法をとるべきです。「ID の重複が見づらい」などの理由がある場合は、ID を外す方向ではなく、ログのパターン設定で対処するのが妥当です。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "MessageIds.BATCH_FAILED は他でも使われていますか／ID 削除の合意はありますか",
+   "detail": "このクラスで使わなくなったことで、BATCH_FAILED 定数やメッセージ定義が未使用になったり、他のジョブとログ形式が食い違ったりする可能性があります（推測です）。ログ形式やメッセージ ID の変更について運用チームと合意しているか、ログ出力を検証するテストを更新する必要がないかを確認させてください。",
+   "line": 62,
+   "evidence": "差分は 1 行だけで、MessageIds、テスト、監視設定のいずれにも変更がありません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "MessageIds.BATCH_FAILED は他でも使われていますか／ID 削除の合意はありますか このクラスで使わなくなったことで、BATCH_FAILED 定数やメッセージ定義が未使用になったり、他のジョブとログ形式が食い違ったりする可能性があります（推測です）。ログ形式やメッセージ ID の変更について運用チームと合意しているか、ログ出力を検証するテストを更新する必要がないかを確認させてください。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "deep",
+ "run": 2
+}

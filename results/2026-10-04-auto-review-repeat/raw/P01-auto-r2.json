@@ -1,0 +1,105 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4704,
+   "output_tokens": 1025,
+   "cost_usd": 0.0143,
+   "seconds": 9.9,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5597,
+   "output_tokens": 921,
+   "cost_usd": 0.0612,
+   "seconds": 11.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0755,
+ "notes": [
+  "standard の MUST 2 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 3,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同時登録で一意制約違反が 409 ではなく 500 になる",
+   "detail": "同じメールアドレスで 2 つのリクエストがほぼ同時に来ると、両方が existsByEmail で false を得て insert に進む。後から insert した方は DB の一意制約違反で DuplicateKeyException（DataIntegrityViolationException 系）が発生する。この例外は BusinessException に変換されず、汎用の例外ハンドラ経由で 500 になる（ハンドラの実装は差分外のため推測）。利用者には「メールは使用済み」という業務エラーではなく内部エラーが返り、エラー応答の一貫性が崩れる。PR 説明の「existsByEmail で確認済みなので不要」は、確認と insert が原子的でないため成り立たない。",
+   "line": 34,
+   "evidence": "変更前は try { mapper.insert(rec); } catch (DuplicateKeyException e) { throw new BusinessException(EMAIL_ALREADY_USED, ...) } で変換していたが、差分でそれが削除された。削除された元コメントにも「同時に登録されたときの最終的な判定は DB の一意制約に任せる」とあり、事前チェックは早期応答のためだけだった。変更後の register は existsByEmail → insert を @Transactional だけで囲んでおり、通常の分離レベル（READ COMMITTED 等）では競合を防げない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "existsByEmail と insert は原子的ではなく、@Transactional だけでは READ COMMITTED などで同時登録を防げない。削除された catch がなくなると、DuplicateKeyException が BusinessException に変換されないまま外に伝わる。500 になるかどうかは例外ハンドラが差分外のため推測だが、409 の業務エラーにならない点はコードから確実に言える。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "同時登録で一意制約違反が 409 ではなく 500 になる 同じメールアドレスで 2 つのリクエストがほぼ同時に来ると、両方が existsByEmail で false を得て insert に進む。後から insert した方は DB の一意制約違反で DuplicateKeyException（DataIntegrityViolationException 系）が発生する。この例外は BusinessException に変換されず、汎用の例外ハンドラ経由で 500 になる（ハンドラの実装は差分外のため推測）。利用者には「メールは使用済み」という業務エラーではなく内部エラーが返り、エラー応答の一貫性が崩れる。PR 説明の「existsByEmail で確認済みなので不要」は、確認と insert が原子的でないため成り立たない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "同時重複登録のリグレッションテストが削除されている",
+   "detail": "register_concurrentDuplicateBecomesBusinessError は、事前チェックをすり抜けて DB 制約で失敗した場合も 409 の業務エラーになることを保証する唯一のテストだった。これを消すことで、上記の不具合を検知する手段がなくなる。コード側を元に戻す場合はテストも戻す必要がある。",
+   "line": 59,
+   "evidence": "差分でテストメソッド全体が削除されている。変更後のテストは、事前チェックで検出される重複（register_rejectsDuplicateEmailIgnoringCase）しか扱っていない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "競合ケースを確かめる唯一のテストが消え、退行を検知できなくなるのは事実。ただし根本の問題は s1 で、s1 を直す（catch を戻す）ときにこのテストも戻せば解決するため、独立した MUST ではなく WANT とした。",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:59",
+   "message": "同時重複登録のリグレッションテストが削除されている register_concurrentDuplicateBecomesBusinessError は、事前チェックをすり抜けて DB 制約で失敗した場合も 409 の業務エラーになることを保証する唯一のテストだった。これを消すことで、上記の不具合を検知する手段がなくなる。コード側を元に戻す場合はテストも戻す必要がある。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "未使用 import が残っている",
+   "detail": "テスト削除により DuplicateKeyException が使われなくなったが import が残っている。ビルドの警告や checkstyle の設定によっては失敗する可能性がある（設定は差分外のため推測）。上記テストを復活させるなら解消される。",
+   "line": 12,
+   "evidence": "import org.springframework.dao.DuplicateKeyException; が残っており、ファイル内に使用箇所がない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:12",
+   "message": "未使用 import が残っている テスト削除により DuplicateKeyException が使われなくなったが import が残っている。ビルドの警告や checkstyle の設定によっては失敗する可能性がある（設定は差分外のため推測）。上記テストを復活させるなら解消される。"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "auto",
+ "run": 2
+}

@@ -1,0 +1,69 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4129,
+   "output_tokens": 595,
+   "cost_usd": 0.0095,
+   "seconds": 7.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0095,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "uncertain": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "下限・上限の外側（0 と 1000）との対の確認が分散している",
+   "detail": "追加テストは 1 と 999 が受理されることだけを確認する。範囲外の 0 は badLinesAreReportedWithLineNumbersAndOthersContinue（importLines 経由）、1000 は parseRejects にある。そのため境界の 4 点は揃っており、実害はない。ただし 0 は parse 単体のテストではなく、境界の確認が 2 つのテストに分かれている。parse の判定が `<= 0` から `< 0` に変わった場合は importLines 側のテストが検知するので、検知漏れにはならない。",
+   "line": 92,
+   "evidence": "parseRejects の CsvSource に 1000 はあるが 0 は無い。0 は badLinesAreReportedWithLineNumbersAndOthersContinue の 'A002,1,P-02,0' で確認している。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "下限・上限の外側（0 と 1000）との対の確認が分散している 追加テストは 1 と 999 が受理されることだけを確認する。範囲外の 0 は badLinesAreReportedWithLineNumbersAndOthersContinue（importLines 経由）、1000 は parseRejects にある。そのため境界の 4 点は揃っており、実害はない。ただし 0 は parse 単体のテストではなく、境界の確認が 2 つのテストに分かれている。parse の判定が `<= 0` から `< 0` に変わった場合は importLines 側のテストが検知するので、検知漏れにはならない。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "@CsvSource に単一列の値を渡している",
+   "detail": "@CsvSource({\"1\", \"999\"}) は動作するが、値が 1 列だけなので @ValueSource(ints = {1, 999}) の方が意図に合う。動作上の問題は無い。",
+   "line": 93,
+   "evidence": "parseAcceptsQuantityBoundaries は引数が int quantity の 1 つだけで、複数列の CSV として使っていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:93",
+   "message": "@CsvSource に単一列の値を渡している @CsvSource({\"1\", \"999\"}) は動作するが、値が 1 列だけなので @ValueSource(ints = {1, 999}) の方が意図に合う。動作上の問題は無い。"
+  }
+ ],
+ "rejected": [],
+ "case": "N01",
+ "config": "auto",
+ "run": 2
+}

@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 6066,
+   "output_tokens": 2626,
+   "cost_usd": 0.0999,
+   "seconds": 27.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0999,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁数超過の 1 行で取込全体が取り消される",
+   "detail": "order_no か product_code が 21 文字以上の行が 1 行でもあると、その行が検証を通って insertIfAbsent に渡ります。DB の VARCHAR(20) 制約で例外（DataIntegrityViolationException など）が出て、@Transactional の importLines から外へ抜けます。その結果、同じファイルの正しい行も含めてすべてロールバックされ、ジョブ全体が失敗します。errors に行番号付きで残す仕組みも通らないため、運用者はどの行が原因かを DB の例外メッセージから探すことになります。変更前は該当行だけを飛ばして続行していました（削除されたテスト tooLongCodeSkipsOnlyThatLine が保証していた挙動）。食い違いの心配には、Java 側のチェックを残したうえで、01_schema.sql の定義と CODE_MAX_LENGTH が一致することを確かめるテストを足す方法で対応するのが妥当です。",
+   "line": 56,
+   "evidence": "importLines は @Transactional で、mapper.insertIfAbsent(order) の周りに try/catch がありません。code() から長さチェックが削除されています。クラスの Javadoc にも「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため」と、ここで確かめる理由が明記されています。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:56",
+   "message": "桁数超過の 1 行で取込全体が取り消される order_no か product_code が 21 文字以上の行が 1 行でもあると、その行が検証を通って insertIfAbsent に渡ります。DB の VARCHAR(20) 制約で例外（DataIntegrityViolationException など）が出て、@Transactional の importLines から外へ抜けます。その結果、同じファイルの正しい行も含めてすべてロールバックされ、ジョブ全体が失敗します。errors に行番号付きで残す仕組みも通らないため、運用者はどの行が原因かを DB の例外メッセージから探すことになります。変更前は該当行だけを飛ばして続行していました（削除されたテスト tooLongCodeSkipsOnlyThatLine が保証していた挙動）。食い違いの心配には、Java 側のチェックを残したうえで、01_schema.sql の定義と CODE_MAX_LENGTH が一致することを確かめるテストを足す方法で対応するのが妥当です。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "クラスの Javadoc と実装が食い違っている",
+   "detail": "Javadoc には「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」とあります。しかし桁数はもう確かめていません。読み手は桁数超過の行もスキップされると誤解し、運用手順や障害時の判断を誤るおそれがあります。",
+   "line": 16,
+   "evidence": "16〜17 行目の Javadoc は残っていますが、code() は空チェックだけになっています。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:16",
+   "message": "クラスの Javadoc と実装が食い違っている Javadoc には「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」とあります。しかし桁数はもう確かめていません。読み手は桁数超過の行もスキップされると誤解し、運用手順や障害時の判断を誤るおそれがあります。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "桁数超過の入力に対する挙動がテストされていない",
+   "detail": "長さに関するテストが 3 件まとめて削除されました（超過行のスキップ、parse での拒否、ちょうど 20 文字の受け入れ）。超過時に何が起きるか（行エラーになるのか、全体が失敗するのか）を確かめるテストがありません。DB に任せる方針を取るにしても、実 DB を使う結合テストで超過時の挙動を固定しておくべきです。また parseAcceptsExactlyTwentyChars は変更後も成立するテストなので、消す理由がありません。",
+   "line": 72,
+   "evidence": "削除されたテスト: tooLongCodeSkipsOnlyThatLine、parseRejects の 22 文字のケース、parseAcceptsExactlyTwentyChars。代わりのテストは追加されていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:72",
+   "message": "桁数超過の入力に対する挙動がテストされていない 長さに関するテストが 3 件まとめて削除されました（超過行のスキップ、parse での拒否、ちょうど 20 文字の受け入れ）。超過時に何が起きるか（行エラーになるのか、全体が失敗するのか）を確かめるテストがありません。DB に任せる方針を取るにしても、実 DB を使う結合テストで超過時の挙動を固定しておくべきです。また parseAcceptsExactlyTwentyChars は変更後も成立するテストなので、消す理由がありません。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "DB が超過値を切り詰める設定ではないか（推測）",
+   "detail": "DB が例外を出さずに値を切り詰める設定（例: MySQL の非 strict モード）の場合、先頭 20 文字が同じで異なる order_no が同じ値として登録されます。その結果、2 件目以降がエラーにならず duplicated として数えられ、注文が黙って欠落するおそれがあります。対象 DB と sql_mode などの設定を確認させてください。",
+   "line": 81,
+   "evidence": "差分からは DB 製品と設定が分かりません。insertIfAbsent は戻り値が 1 以外のとき duplicated++ にしています（56〜60 行目）。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:81",
+   "message": "DB が超過値を切り詰める設定ではないか（推測） DB が例外を出さずに値を切り詰める設定（例: MySQL の非 strict モード）の場合、先頭 20 文字が同じで異なる order_no が同じ値として登録されます。その結果、2 件目以降がエラーにならず duplicated として数えられ、注文が黙って欠落するおそれがあります。対象 DB と sql_mode などの設定を確認させてください。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "deep",
+ "run": 1
+}

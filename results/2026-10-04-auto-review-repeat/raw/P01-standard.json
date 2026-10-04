@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4704,
+   "output_tokens": 870,
+   "cost_usd": 0.0306,
+   "seconds": 10.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0306,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同時登録で DuplicateKeyException が素通りし 500 になる",
+   "detail": "同じメールアドレスで 2 リクエストがほぼ同時に来ると、両方が existsByEmail で false を得て insert に進む。DB の一意制約により後着の insert が DuplicateKeyException で失敗する。この変更後はその例外が BusinessException に変換されず、409 の業務エラー（EMAIL_ALREADY_USED）ではなく 500 になる。ユーザーには「登録済み」と伝わらず、エラーログも汚れる。",
+   "line": 34,
+   "evidence": "register は existsByEmail → insert の check-then-act で、@Transactional のデフォルト分離レベル（通常 READ COMMITTED）では未コミットの他トランザクションの行は見えず、存在確認は競合を防げない。削除された catch (DuplicateKeyException) が唯一の救済経路だった。一意制約が DB にあること自体は、削除前コメントの「DB の一意制約に任せる」から読み取れる（スキーマは差分に無いため推測を含む）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "同時登録で DuplicateKeyException が素通りし 500 になる 同じメールアドレスで 2 リクエストがほぼ同時に来ると、両方が existsByEmail で false を得て insert に進む。DB の一意制約により後着の insert が DuplicateKeyException で失敗する。この変更後はその例外が BusinessException に変換されず、409 の業務エラー（EMAIL_ALREADY_USED）ではなく 500 になる。ユーザーには「登録済み」と伝わらず、エラーログも汚れる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "競合ケースの回帰テストを削除している",
+   "detail": "register_concurrentDuplicateBecomesBusinessError は、事前確認をすり抜けた重複が業務エラーになることを保証する唯一のテストだった。これを消したため、上記の不具合が今後も検知されない。本来はテストを消すのではなく、挙動を維持するテストを残すべき。",
+   "line": 59,
+   "evidence": "差分で当該テストが丸ごと削除されている。変更後の全文に競合系のテストが無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:59",
+   "message": "競合ケースの回帰テストを削除している register_concurrentDuplicateBecomesBusinessError は、事前確認をすり抜けた重複が業務エラーになることを保証する唯一のテストだった。これを消したため、上記の不具合が今後も検知されない。本来はテストを消すのではなく、挙動を維持するテストを残すべき。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "未使用 import が残る",
+   "detail": "テスト削除により DuplicateKeyException の import が未使用になる。Checkstyle などで未使用 import を検査している場合はビルドが失敗する。競合テストを復活させれば解消する。",
+   "line": 13,
+   "evidence": "import org.springframework.dao.DuplicateKeyException; が残っているが、変更後のファイル内で使用箇所が無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:13",
+   "message": "未使用 import が残る テスト削除により DuplicateKeyException の import が未使用になる。Checkstyle などで未使用 import を検査している場合はビルドが失敗する。競合テストを復活させれば解消する。"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "standard",
+ "run": 1
+}

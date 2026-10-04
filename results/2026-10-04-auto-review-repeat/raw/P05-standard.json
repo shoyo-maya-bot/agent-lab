@@ -1,0 +1,91 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）",
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: 終了コード",
+   "+3 sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java: テストの削除"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3699,
+   "output_tokens": 1182,
+   "cost_usd": 0.0262,
+   "seconds": 11.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0262,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "「どこからも呼ばれていない」は誤り。Spring が自動で実行する安全装置を削除している",
+   "detail": "BatchJobGuard は @Component + @Profile(\"batch\") の ApplicationRunner / ExitCodeGenerator で、コードから明示的に呼ばれなくても batch プロファイル起動時に Spring が実行する。削除すると、app.batch.job が誤り・未指定のときに終了コード 1 (BatchJob.ERROR) で落とす処理が無くなる。結果、ジョブ ID の打ち間違いや指定漏れでも何も実行されないまま終了コード 0 で終わり、スケジューラからは正常終了に見える。ジョブが実行されなかったことに気づけず、後続処理や業務データの未処理につながる。",
+   "line": 1,
+   "evidence": "クラスの Javadoc に「これが無いと、ジョブ ID の誤りや指定漏れでも何も実行せずに終了コード 0 で終わり」とある。テストのコメントにも「ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない」とあり、ジョブ Bean 側には不正 ID を検知する仕組みが無いことが読み取れる（差分外のため推測を含む）。PR 説明は参照が無いことだけを根拠にしており、DI による暗黙の実行を考慮していない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "「どこからも呼ばれていない」は誤り。Spring が自動で実行する安全装置を削除している BatchJobGuard は @Component + @Profile(\"batch\") の ApplicationRunner / ExitCodeGenerator で、コードから明示的に呼ばれなくても batch プロファイル起動時に Spring が実行する。削除すると、app.batch.job が誤り・未指定のときに終了コード 1 (BatchJob.ERROR) で落とす処理が無くなる。結果、ジョブ ID の打ち間違いや指定漏れでも何も実行されないまま終了コード 0 で終わり、スケジューラからは正常終了に見える。ジョブが実行されなかったことに気づけず、後続処理や業務データの未処理につながる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java",
+   "title": "ジョブ ID 誤り時に異常終了することを確認するテストが無くなる",
+   "detail": "ガードを削除すると、不正・未指定のジョブ ID で終了コードが非 0 になるという仕様を検証するテストも消える。意図的な仕様変更だとしても、代替の検知手段（別クラスや起動時チェック）とそのテストが無い。将来 batch 起動の回帰があっても CI で検出できない。",
+   "line": 18,
+   "evidence": "削除された errorWhenJobIdIsWrongOrMissing が \"JOB9999\"・空文字・null のすべてで BatchJob.ERROR を検証していた。差分内に代替テストの追加は無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java:18",
+   "message": "ジョブ ID 誤り時に異常終了することを確認するテストが無くなる ガードを削除すると、不正・未指定のジョブ ID で終了コードが非 0 になるという仕様を検証するテストも消える。意図的な仕様変更だとしても、代替の検知手段（別クラスや起動時チェック）とそのテストが無い。将来 batch 起動の回帰があっても CI で検出できない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "MessageIds.BATCH_UNKNOWN_JOB など関連資産の扱いと、削除の意図の確認",
+   "detail": "他所で同等のジョブ ID 検証が行われるようになったため削除したのか、単に参照が無いと判断したのか確認したい。前者なら、その検証の場所を PR 説明に書いてほしい。後者なら本 PR は取り下げるべき。あわせて、MessageIds.BATCH_UNKNOWN_JOB が他で使われなくなり未使用になる可能性がある（推測。MessageIds の中身は差分に無い）。",
+   "line": 1,
+   "evidence": "PR 説明は「どこからも呼ばれていない」とだけ記載。差分には、他の検証処理の追加や MessageIds の変更が含まれていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "MessageIds.BATCH_UNKNOWN_JOB など関連資産の扱いと、削除の意図の確認 他所で同等のジョブ ID 検証が行われるようになったため削除したのか、単に参照が無いと判断したのか確認したい。前者なら、その検証の場所を PR 説明に書いてほしい。後者なら本 PR は取り下げるべき。あわせて、MessageIds.BATCH_UNKNOWN_JOB が他で使われなくなり未使用になる可能性がある（推測。MessageIds の中身は差分に無い）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P05",
+ "config": "standard",
+ "run": 1
+}

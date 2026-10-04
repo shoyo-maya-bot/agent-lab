@@ -1,0 +1,104 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4650,
+   "output_tokens": 1280,
+   "cost_usd": 0.0168,
+   "seconds": 12.6,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0168,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "@Transactional 内で DuplicateKeyException を catch しているが、実 DB では例外が変換されない/トランザクション状態に注意が必要",
+   "detail": "PostgreSQL では一意制約違反が起きるとそのトランザクションは aborted 状態になる。現状は catch 後すぐに BusinessException を投げるだけなので実害は小さいが、BusinessException が RuntimeException の場合はロールバックされる点を確認すべき。BusinessException が checked、または rollbackFor 設定で除外されている場合、aborted なトランザクションのコミットを試みて 409 でなく 500 になる。また MyBatis-Spring で DuplicateKeyException に変換されるのは SqlSessionTemplate 経由（Mapper 経由）の場合のみで、素の SqlSession を使う構成だと PersistenceException のまま素通りして 500 になる。",
+   "line": 33,
+   "evidence": "register() は @Transactional で try/catch (DuplicateKeyException)。BusinessException の定義はこのPRに含まれず不明（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:33",
+   "message": "@Transactional 内で DuplicateKeyException を catch しているが、実 DB では例外が変換されない/トランザクション状態に注意が必要 PostgreSQL では一意制約違反が起きるとそのトランザクションは aborted 状態になる。現状は catch 後すぐに BusinessException を投げるだけなので実害は小さいが、BusinessException が RuntimeException の場合はロールバックされる点を確認すべき。BusinessException が checked、または rollbackFor 設定で除外されている場合、aborted なトランザクションのコミットを試みて 409 でなく 500 になる。また MyBatis-Spring で DuplicateKeyException に変換されるのは SqlSessionTemplate 経由（Mapper 経由）の場合のみで、素の SqlSession を使う構成だと PersistenceException のまま素通りして 500 になる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "テストの Mapper が DB の一意制約を再現しており、実際の制約・例外変換は検証されていない",
+   "detail": "このPRは重複判定を DB の一意制約に完全依存させるが、テストはインメモリの擬似実装が DuplicateKeyException を投げるだけ。実 DB のユニーク制約が email 小文字で存在するか、マイグレーションに制約があるか、MyBatis 経由で DuplicateKeyException に変換されるかは検証されない。制約が無い/名前が違う環境では重複登録が通ってしまう（正規化は Java 側でのみ行っている）。",
+   "line": 34,
+   "evidence": "InMemoryMapper.insert が existsByEmail を使って DuplicateKeyException を自前で投げている。DB スキーマ・統合テストは差分に無い（推測：制約の存在は未確認）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:34",
+   "message": "テストの Mapper が DB の一意制約を再現しており、実際の制約・例外変換は検証されていない このPRは重複判定を DB の一意制約に完全依存させるが、テストはインメモリの擬似実装が DuplicateKeyException を投げるだけ。実 DB のユニーク制約が email 小文字で存在するか、マイグレーションに制約があるか、MyBatis 経由で DuplicateKeyException に変換されるかは検証されない。制約が無い/名前が違う環境では重複登録が通ってしまう（正規化は Java 側でのみ行っている）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "email カラムの一意制約の存在と大文字小文字の扱いの確認",
+   "detail": "事前チェックを削除したため、一意制約が唯一の防御になる。DDL/マイグレーションで member.email に UNIQUE があり、アプリ側で小文字化した値が保存される前提（過去データに大文字混在がないか）を確認したい。既存データに大文字のメールがあると、従来の existsByEmail（同じく正規化値との比較）と挙動は同じだが、制約は大文字違いを重複と見なさない。",
+   "line": 31,
+   "evidence": "差分に DDL が含まれない。正規化は Locale.ROOT での toLowerCase のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:31",
+   "message": "email カラムの一意制約の存在と大文字小文字の扱いの確認 事前チェックを削除したため、一意制約が唯一の防御になる。DDL/マイグレーションで member.email に UNIQUE があり、アプリ側で小文字化した値が保存される前提（過去データに大文字混在がないか）を確認したい。既存データに大文字のメールがあると、従来の existsByEmail（同じく正規化値との比較）と挙動は同じだが、制約は大文字違いを重複と見なさない。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "古くなったテストコメントと重複テスト",
+   "detail": "register_concurrentDuplicateBecomesBusinessError のコメント「事前の確認をすり抜けた」は事前確認が無くなったため不正確。また register_rejectsDuplicateEmailIgnoringCase と実質同じ経路を検証しており、区別が薄い。",
+   "line": 66,
+   "evidence": "事前チェック削除後、どちらのテストも insert の DuplicateKeyException → BusinessException のみを通る。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:66",
+   "message": "古くなったテストコメントと重複テスト register_concurrentDuplicateBecomesBusinessError のコメント「事前の確認をすり抜けた」は事前確認が無くなったため不正確。また register_rejectsDuplicateEmailIgnoringCase と実質同じ経路を検証しており、区別が薄い。"
+  }
+ ],
+ "rejected": [],
+ "case": "D01",
+ "config": "standard",
+ "run": 3
+}

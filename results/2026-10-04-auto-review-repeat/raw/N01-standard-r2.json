@@ -1,0 +1,84 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 4129,
+   "output_tokens": 924,
+   "cost_usd": 0.0128,
+   "seconds": 10.0,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0128,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "下限側の境界（0）と上限側の境界（1000）のテストが非対称で、下限の拒否は別テストにしか無い",
+   "detail": "このPRは「1 と 999 を受け付ける」ことだけを足している。拒否側は parseRejects に 1000 があり、0 は badLinesAreReportedWithLineNumbersAndOthersContinue に間接的にあるだけ。parse 単体で 0 を拒否するケースが無いため、将来 `quantity < 1` が `quantity < 0` に壊れても、境界テストの追加で守ったつもりになりやすい。また負数（-1）や数値でない quantity（'x'、空）の parse 単体テストも無い。",
+   "line": 92,
+   "evidence": "parseRejects の CsvSource は 1000 のみ。0 は importLines 経由の1ケースだけ。追加された parseAcceptsQuantityBoundaries は受け入れ側（1, 999）のみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "下限側の境界（0）と上限側の境界（1000）のテストが非対称で、下限の拒否は別テストにしか無い このPRは「1 と 999 を受け付ける」ことだけを足している。拒否側は parseRejects に 1000 があり、0 は badLinesAreReportedWithLineNumbersAndOthersContinue に間接的にあるだけ。parse 単体で 0 を拒否するケースが無いため、将来 `quantity < 1` が `quantity < 0` に壊れても、境界テストの追加で守ったつもりになりやすい。また負数（-1）や数値でない quantity（'x'、空）の parse 単体テストも無い。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "@CsvSource の値が int に変換される前提の確認",
+   "detail": "`@CsvSource({\"1\", \"999\"})` は各行を1引数として int に暗黙変換する。動作はするが、@ValueSource(ints = {1, 999}) の方が意図に合う。parse の戻り値 quantity() の型が int 以外（例: Integer/long/BigDecimal）の場合、isEqualTo(quantity) の比較が型の違いで失敗する可能性があるが、quantity() の型は差分から見えない（推測）。",
+   "line": 92,
+   "evidence": "OrderImportService / 戻り値の型の定義が差分に含まれていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:92",
+   "message": "@CsvSource の値が int に変換される前提の確認 `@CsvSource({\"1\", \"999\"})` は各行を1引数として int に暗黙変換する。動作はするが、@ValueSource(ints = {1, 999}) の方が意図に合う。parse の戻り値 quantity() の型が int 以外（例: Integer/long/BigDecimal）の場合、isEqualTo(quantity) の比較が型の違いで失敗する可能性があるが、quantity() の型は差分から見えない（推測）。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "境界テストの検証が quantity() のみで、他の項目が壊れても検知できない",
+   "detail": "parse の戻り値のうち quantity しか見ていない。order_no / memberId / productCode が quantity の値に影響されて崩れるようなリグレッションは検出できない。ただし目的は境界値の受け入れなので、影響は小さい。",
+   "line": 93,
+   "evidence": "`assertThat(OrderImportService.parse(\"A001,1,P-01,\" + quantity).quantity()).isEqualTo(quantity)`",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:93",
+   "message": "境界テストの検証が quantity() のみで、他の項目が壊れても検知できない parse の戻り値のうち quantity しか見ていない。order_no / memberId / productCode が quantity の値に影響されて崩れるようなリグレッションは検出できない。ただし目的は境界値の受け入れなので、影響は小さい。"
+  }
+ ],
+ "rejected": [],
+ "case": "N01",
+ "config": "standard",
+ "run": 2
+}

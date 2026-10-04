@@ -1,0 +1,91 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: バッチ（終了コード・再実行）",
+   "+2 sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java: 終了コード",
+   "+3 sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java: テストの削除"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3699,
+   "output_tokens": 1058,
+   "cost_usd": 0.0136,
+   "seconds": 10.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0136,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "「どこからも呼ばれていない」は誤り。@Component の ApplicationRunner として batch プロファイルで自動実行されている",
+   "detail": "BatchJobGuard は @Component + @Profile(\"batch\") の ApplicationRunner / ExitCodeGenerator で、Spring が起動時に自動で実行する。コードから明示的に呼ばれないのは当然で、参照が無いことは未使用の根拠にならない。削除すると、batch プロファイルで app.batch.job を誤指定・未指定にしたとき、ジョブの Bean が作られず何も実行されないまま終了コード 0 で終わる。スケジューラからは正常終了に見え、バッチが動いていないことに気づけない。",
+   "line": 1,
+   "evidence": "クラスの Javadoc に「これが無いと、ジョブ ID の誤りや指定漏れでも何も実行せずに終了コード 0 で終わり…」とある。テストのコメントにも「ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない」とある。つまり他に異常終了させる仕組みがあることは差分から確認できない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "「どこからも呼ばれていない」は誤り。@Component の ApplicationRunner として batch プロファイルで自動実行されている BatchJobGuard は @Component + @Profile(\"batch\") の ApplicationRunner / ExitCodeGenerator で、Spring が起動時に自動で実行する。コードから明示的に呼ばれないのは当然で、参照が無いことは未使用の根拠にならない。削除すると、batch プロファイルで app.batch.job を誤指定・未指定にしたとき、ジョブの Bean が作られず何も実行されないまま終了コード 0 で終わる。スケジューラからは正常終了に見え、バッチが動いていないことに気づけない。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java",
+   "title": "ジョブ ID 不正時に終了コードがエラーになることを確認するテストが無くなる",
+   "detail": "削除により、ジョブ ID が誤り・空・null のとき BatchJob.ERROR を返す動作を守るテストが無くなる。代わりのテストが他にあるかは差分からは分からない。ガードを残す場合は、このテストも残す必要がある。",
+   "line": 1,
+   "evidence": "errorWhenJobIdIsWrongOrMissing が \"JOB9999\"、\"\"、null の 3 ケースで ERROR を検証している。差分に代替テストの追加は無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java:1",
+   "message": "ジョブ ID 不正時に終了コードがエラーになることを確認するテストが無くなる 削除により、ジョブ ID が誤り・空・null のとき BatchJob.ERROR を返す動作を守るテストが無くなる。代わりのテストが他にあるかは差分からは分からない。ガードを残す場合は、このテストも残す必要がある。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java",
+   "title": "削除の意図の確認：ジョブ ID 不正時の異常終了を別の仕組みに移したのか",
+   "detail": "意図的に削除するなら、不正なジョブ ID で非 0 終了にする処理が別に存在するか確認したい。無いのであれば、この PR は運用上の安全装置を外すことになる。あわせて MessageIds.BATCH_UNKNOWN_JOB が他で使われていない場合は、削除後に未使用になる。",
+   "line": 1,
+   "evidence": "PR 説明は「どこからも呼ばれていない」としか書かれておらず、代替の仕組みへの言及が無い。BATCH_UNKNOWN_JOB の他の参照は差分に含まれないため見えない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java:1",
+   "message": "削除の意図の確認：ジョブ ID 不正時の異常終了を別の仕組みに移したのか 意図的に削除するなら、不正なジョブ ID で非 0 終了にする処理が別に存在するか確認したい。無いのであれば、この PR は運用上の安全装置を外すことになる。あわせて MessageIds.BATCH_UNKNOWN_JOB が他で使われていない場合は、削除後に未使用になる。"
+  }
+ ],
+ "rejected": [],
+ "case": "P05",
+ "config": "standard",
+ "run": 2
+}

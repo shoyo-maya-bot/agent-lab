@@ -1,0 +1,35 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3019,
+   "output_tokens": 86,
+   "cost_usd": 0.0041,
+   "seconds": 3.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0041,
+ "notes": [],
+ "summary": {
+  "findings": 0,
+  "shown": 0,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [],
+ "rejected": [],
+ "case": "N03",
+ "config": "deep",
+ "run": 3
+}

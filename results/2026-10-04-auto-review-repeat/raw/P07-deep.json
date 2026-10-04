@@ -1,0 +1,90 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5332,
+   "output_tokens": 1210,
+   "cost_usd": 0.0649,
+   "seconds": 14.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0649,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "4桁以上の会員IDで、エラーメッセージのIDに桁区切りが入る",
+   "detail": "会員IDが 1000 以上で会員が見つからないとき（例: GET /api/v1/members/1234）、メッセージが「会員が見つかりません（会員ID: 1,234）。」になる。利用者や問い合わせ対応で ID を照合・コピーすると実際の ID と一致しない。ログや監視で ID を検索するときも引っかからない（推測。ハンドラがログにも message を出している場合）。ロケールによっては区切り文字が「.」や空白になる。",
+   "line": 23,
+   "evidence": "削除されたコメント「数値のまま渡すと MessageFormat が『1,234』と桁区切りを入れる」がこの問題そのものを説明している。String.valueOf(id) をやめて long の id（Long にオートボクシングされる）をそのまま渡している。MessageFormat は {0} に Number を受け取ると NumberFormat で整形する（Spring の MessageSource も同じ）。引数の型が Object であることは、変換が不要である理由にならない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "4桁以上の会員IDで、エラーメッセージのIDに桁区切りが入る 会員IDが 1000 以上で会員が見つからないとき（例: GET /api/v1/members/1234）、メッセージが「会員が見つかりません（会員ID: 1,234）。」になる。利用者や問い合わせ対応で ID を照合・コピーすると実際の ID と一致しない。ログや監視で ID を検索するときも引っかからない（推測。ハンドラがログにも message を出している場合）。ロケールによっては区切り文字が「.」や空白になる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "回帰を検知するテストを削除している",
+   "detail": "notFoundMessageHasNoThousandsSeparator は、上の不具合を防ぐためのテストだった。このテストが落ちたのでテストごと消したと考えられる。残っている notFoundReturns404WithMessageId は ID が 42 で、桁区切りが入らない値のため、この不具合を検知できない。テストを戻し、MemberService の String.valueOf(id) も元に戻すべき。",
+   "line": 74,
+   "evidence": "差分で、/api/v1/members/1234 に対して「会員ID: 1234」を期待するテストが削除されている。変更後の全文で NotFound を確かめているのは get(\"/api/v1/members/42\") だけ。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:74",
+   "message": "回帰を検知するテストを削除している notFoundMessageHasNoThousandsSeparator は、上の不具合を防ぐためのテストだった。このテストが落ちたのでテストごと消したと考えられる。残っている notFoundReturns404WithMessageId は ID が 42 で、桁区切りが入らない値のため、この不具合を検知できない。テストを戻し、MemberService の String.valueOf(id) も元に戻すべき。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "数値引数を文字列にする処理が呼び出し側に任されている",
+   "detail": "ほかの箇所で NotFoundException や BusinessException に数値をそのまま渡すと、同じ桁区切りの不具合が起きる。この PR のように、意図が伝わらないまま変換が消されることもある。例外の生成時か ApiExceptionHandler で引数を String に変換しておくか、メッセージ定義を {0,number,#} にすると、再発を防げる（ほかの呼び出し箇所があるかは推測）。",
+   "line": 23,
+   "evidence": "例外の引数が Object なので、型でこの誤りを防げない（PR の説明より）。変換の必要性は、削除されたコメント 1 行でしか伝わっていなかった。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "数値引数を文字列にする処理が呼び出し側に任されている ほかの箇所で NotFoundException や BusinessException に数値をそのまま渡すと、同じ桁区切りの不具合が起きる。この PR のように、意図が伝わらないまま変換が消されることもある。例外の生成時か ApiExceptionHandler で引数を String に変換しておくか、メッセージ定義を {0,number,#} にすると、再発を防げる（ほかの呼び出し箇所があるかは推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "deep",
+ "run": 1
+}

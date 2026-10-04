@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 4698,
+   "output_tokens": 1813,
+   "cost_usd": 0.0769,
+   "seconds": 21.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0769,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "同じメールアドレスを同時に登録すると 409 ではなく 500 になる",
+   "detail": "2 つのリクエストが同じメールアドレスでほぼ同時に register を呼ぶと、両方の existsByEmail が false を返します。片方の insert は DB の一意制約で DuplicateKeyException になります。以前はこれを BusinessException(EMAIL_ALREADY_USED) に変換していましたが、変換が無くなったため例外がそのまま上に伝わります。その結果、クライアントには 409 の業務エラーではなく 500（システムエラー）が返り、エラーログとアラートも出ます。PR 説明の「existsByEmail で確認済みなので不要」は、確認から insert までの間に別トランザクションが割り込める（チェックと実行の間の競合）ため成り立ちません。@Transactional を付けても、通常の分離レベル（READ COMMITTED 等）ではこの割り込みを防げません。",
+   "line": 34,
+   "evidence": "削除された行は `try { mapper.insert(rec); } catch (DuplicateKeyException e) { throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized); }` と、コメント「同時に登録されたときの最終的な判定は DB の一意制約に任せる」です。削除されたテスト register_concurrentDuplicateBecomesBusinessError の `throw new DuplicateKeyException(\"member_email_key\")` から、DB に一意制約があり、この経路が実際に想定されていたと読み取れます。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:34",
+   "message": "同じメールアドレスを同時に登録すると 409 ではなく 500 になる 2 つのリクエストが同じメールアドレスでほぼ同時に register を呼ぶと、両方の existsByEmail が false を返します。片方の insert は DB の一意制約で DuplicateKeyException になります。以前はこれを BusinessException(EMAIL_ALREADY_USED) に変換していましたが、変換が無くなったため例外がそのまま上に伝わります。その結果、クライアントには 409 の業務エラーではなく 500（システムエラー）が返り、エラーログとアラートも出ます。PR 説明の「existsByEmail で確認済みなので不要」は、確認から insert までの間に別トランザクションが割り込める（チェックと実行の間の競合）ため成り立ちません。@Transactional を付けても、通常の分離レベル（READ COMMITTED 等）ではこの割り込みを防げません。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "同時登録の回帰テストを削除したため、上の不具合を検知できない",
+   "detail": "register_concurrentDuplicateBecomesBusinessError は、事前確認をすり抜けて insert が一意制約違反になったとき 409 の業務エラーになることを保証していました。このテストを消したので、今回の差分が持ち込んだ挙動の後退がテストで検知されません。変換処理を戻し、このテストも元に戻すべきです。",
+   "line": 59,
+   "evidence": "差分 `@@ -59,22 +59,6 @@` でテストメソッドがまるごと削除されています。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:59",
+   "message": "同時登録の回帰テストを削除したため、上の不具合を検知できない register_concurrentDuplicateBecomesBusinessError は、事前確認をすり抜けて insert が一意制約違反になったとき 409 の業務エラーになることを保証していました。このテストを消したので、今回の差分が持ち込んだ挙動の後退がテストで検知されません。変換処理を戻し、このテストも元に戻すべきです。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "共通の例外ハンドラで DuplicateKeyException を 409 に変換していますか",
+   "detail": "差分には含まれていませんが、もし @ControllerAdvice などで DuplicateKeyException を EMAIL_ALREADY_USED の 409 に変換しているなら、今回の削除で応答は変わりません。ただしその場合でも、メッセージ引数（normalized）の扱いや、他の一意制約違反との区別ができるかを確認したいです。変換していないなら、1 件目の指摘のとおり 500 になります（ここは推測です）。",
+   "line": 30,
+   "evidence": "ファイルに含まれているのは MemberService と MemberServiceTest だけで、例外ハンドラのコードは見えていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:30",
+   "message": "共通の例外ハンドラで DuplicateKeyException を 409 に変換していますか 差分には含まれていませんが、もし @ControllerAdvice などで DuplicateKeyException を EMAIL_ALREADY_USED の 409 に変換しているなら、今回の削除で応答は変わりません。ただしその場合でも、メッセージ引数（normalized）の扱いや、他の一意制約違反との区別ができるかを確認したいです。変換していないなら、1 件目の指摘のとおり 500 になります（ここは推測です）。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java",
+   "title": "使われなくなった DuplicateKeyException の import が残っている",
+   "detail": "テストを削除した結果、この import はどこからも使われていません。コンパイルは通りますが、静的解析（未使用 import の検出）で警告になります。上の MUST に対応してテストを戻せば解消します。",
+   "line": 13,
+   "evidence": "`import org.springframework.dao.DuplicateKeyException;` が残っており、ファイル内の他の場所に参照がありません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberServiceTest.java:13",
+   "message": "使われなくなった DuplicateKeyException の import が残っている テストを削除した結果、この import はどこからも使われていません。コンパイルは通りますが、静的解析（未使用 import の検出）で警告になります。上の MUST に対応してテストを戻せば解消します。"
+  }
+ ],
+ "rejected": [],
+ "case": "P01",
+ "config": "deep",
+ "run": 1
+}

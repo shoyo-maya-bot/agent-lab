@@ -184,3 +184,19 @@ def test_cli_plan_and_dry_run(tmp_path: Path, capsys):
 
 def test_cli_bad_input_returns_2(tmp_path: Path):
     assert cli.main(["plan", str(tmp_path / "missing.diff")]) == 2
+
+
+def test_uncertain_verdict_is_not_upgraded_by_merge():
+    """検証役が「決められない」とした指摘は、同じ問題を新しい指摘として出しても「検証済み」にしない."""
+    std = _std([{"severity": "MUST", "file": "MemberService.java", "line": 33, "title": "一意制約が無いと重複登録が通る"}])
+    deep = json.dumps(
+        {
+            "verdicts": [{"id": "s1", "verdict": "uncertain", "reason": "DDL が見えないので決められない"}],
+            "findings": [{"severity": "MUST", "file": "MemberService.java", "line": 34, "title": "一意制約が無いと重複登録"}],
+        }
+    )
+    fb = FakeBackend([std, deep])
+    changes = parse_diff(JAVA_SERVICE)
+    r = Reviewer(CFG, fb).auto(JAVA_SERVICE, changes, plan(changes, CFG))
+    assert [f.status for f in r.findings] == ["uncertain"]
+    assert "要確認" in to_markdown(r)

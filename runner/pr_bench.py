@@ -52,7 +52,7 @@ def head_tree(repo: Path, base: str, diff: str, dest: Path) -> None:
         git(dest, "apply", "--index", "-", stdin=diff)
 
 
-def run_one(repo: Path, base: str, case: dict, config: str, cfg: dict, backend, dry: bool, out: Path) -> dict:
+def run_one(repo: Path, base: str, case: dict, config: str, cfg: dict, backend, dry: bool, out: Path, run: int = 1) -> dict:
     diff = (ROOT / "bench" / "prs" / f"{case['id']}.diff").read_text(encoding="utf-8")
     note = f"# PR: {case['title']}\n\n{case.get('description', '')}\n\n"
     with tempfile.TemporaryDirectory() as tmp:
@@ -68,10 +68,12 @@ def run_one(repo: Path, base: str, case: dict, config: str, cfg: dict, backend, 
             with _GIT_LOCK:
                 git(repo, "worktree", "remove", "--force", str(wt))
     report = to_report(result)
-    report["case"], report["config"] = case["id"], config
-    (out / "raw" / f"{case['id']}-{config}.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    report["case"], report["config"], report["run"] = case["id"], config, run
+    suffix = "" if run == 1 else f"-r{run}"
+    (out / "raw" / f"{case['id']}-{config}{suffix}.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(
-        f"{case['id']:>4} {config:<8} tier={p.tier:<8} findings={report['summary']['shown']:>2} cost=${report['cost_usd']:.3f}", flush=True
+        f"{case['id']:>4} {config:<8} r{run} tier={p.tier:<8} findings={report['summary']['shown']:>2} cost=${report['cost_usd']:.3f}",
+        flush=True,
     )
     return report
 
@@ -90,6 +92,8 @@ def summarize(out: Path) -> str:
             fs = [ScoreFinding(f["severity"], f["location"], f["message"]) for f in r["findings"]]
             shown += len(fs)
             deep_calls += sum(1 for c in r["calls"] if "opus" in c["model"])
+            if case.get("decoy"):
+                continue
             if case.get("expect"):
                 n_pos += 1
                 hit = [f for f in fs if matches(bugs[case["expect"]], f)]
@@ -106,10 +110,29 @@ def summarize(out: Path) -> str:
             f"| {conf} | {det} / {n_pos} | {shown / n:.1f} | {must_noise} | {false_alarm} | {deep_calls} "
             f"| ${cost:.2f} | ${cost / n:.3f} | {secs / n:.0f} 秒 |"
         )
+    decoy_rows = []
+    for conf in configs:
+        rs = [r for r in reports if r["config"] == conf and cases[r["case"]].get("decoy")]
+        if not rs:
+            continue
+        shown_must = [f for r in rs for f in r["findings"] if f["severity"] == "MUST"]
+        by = {k: sum(1 for f in shown_must if f.get("status") == k) for k in ("confirmed", "uncertain", "unverified")}
+        rejected = sum(1 for r in rs for f in r.get("rejected", []) if f["severity"] == "MUST")
+        pr_with_must = sum(1 for r in rs if any(f["severity"] == "MUST" for f in r["findings"]))
+        decoy_rows.append(
+            f"| {conf} | {len(rs)} | {pr_with_must} | {len(shown_must)} | {by['confirmed']} | {by['uncertain']} | {by['unverified']} "
+            f"| {rejected} | ${sum(r['cost_usd'] for r in rs) / len(rs):.3f} |"
+        )
     md = [
         "| 構成 | 検出（P01〜P08） | 1 PR あたりの指摘 | 正解以外の MUST（P） | 誤警報 MUST・WANT（N01〜N03） | Opus の呼び出し | 費用の合計 | 1 PR あたり | 1 PR あたりの時間 |",
         "|---|---|---|---|---|---|---|---|---|",
         *rows,
+        "",
+        "おとりの PR（D01〜。正しい変更なので MUST は誤り）:",
+        "",
+        "| 構成 | 実行数 | MUST を見せた PR | 見せた MUST | うち検証済み | うち要確認 | うち未検証 | 検証で却下した MUST | 1 PR あたり |",
+        "|---|---|---|---|---|---|---|---|---|",
+        *decoy_rows,
         "",
         "| PR | 構成 | 検出 | 重要度 | 指摘数 |",
         "|---|---|---|---|---|",
@@ -129,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--backend", default="claude-cli", choices=["anthropic", "claude-cli"])
     ap.add_argument("--yes", action="store_true", help="実際にモデルを呼ぶ（付けなければ見積もりだけ）")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--repeat", type=int, default=1, help="同じ PR・構成を何回流すか（ばらつきを見る）")
     ap.add_argument("--summarize", type=Path, help="集計だけやり直す（結果のフォルダ）")
     args = ap.parse_args(argv)
     if args.summarize:
@@ -141,9 +165,13 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config()
     backend = get_backend(args.backend) if args.yes else None
     (args.out / "raw").mkdir(parents=True, exist_ok=True)
-    jobs = [(c, conf) for c in cases for conf in args.configs.split(",")]
+    jobs = [(c, conf, k) for k in range(1, args.repeat + 1) for c in cases for conf in args.configs.split(",")]
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
-        list(ex.map(lambda j: run_one(args.repo.resolve(), spec["base_commit"], j[0], j[1], cfg, backend, not args.yes, args.out), jobs))
+        list(
+            ex.map(
+                lambda j: run_one(args.repo.resolve(), spec["base_commit"], j[0], j[1], cfg, backend, not args.yes, args.out, j[2]), jobs
+            )
+        )
     print(summarize(args.out))
     return 0
 

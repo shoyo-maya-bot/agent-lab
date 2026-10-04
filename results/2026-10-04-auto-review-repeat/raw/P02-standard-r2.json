@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5958,
+   "output_tokens": 1318,
+   "cost_usd": 0.0186,
+   "seconds": 13.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0186,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない会員が 1 行あるだけで取込全体が失敗・ロールバックする",
+   "detail": "CSV に存在しない member_id の行が 1 行でも含まれると、insertIfAbsent が外部キー違反の例外（DataIntegrityViolationException 等）を投げる。importLines は @Transactional で、この例外は行単位では捕捉されないため、トランザクション全体がロールバックされ、それ以前に正常だった行も全て取り消される。従来は「その行だけ飛ばして続行し、行番号と理由を結果に残す」仕様だったが、これが失われる。ジョブは異常終了し、利用者にはどの行が原因か分かるエラーも返らない。PR 説明の「外部キーで守られている」は不整合を防ぐだけで、1 行の誤りで全体が落ちる問題は解消しない。",
+   "line": 51,
+   "evidence": "削除された memberExists チェックの代わりの捕捉処理が無い。クラスの Javadoc にも「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため、登録の前にここで確かめる」と書かれている。insertIfAbsent の呼び出しは try/catch の外にある。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "存在しない会員が 1 行あるだけで取込全体が失敗・ロールバックする CSV に存在しない member_id の行が 1 行でも含まれると、insertIfAbsent が外部キー違反の例外（DataIntegrityViolationException 等）を投げる。importLines は @Transactional で、この例外は行単位では捕捉されないため、トランザクション全体がロールバックされ、それ以前に正常だった行も全て取り消される。従来は「その行だけ飛ばして続行し、行番号と理由を結果に残す」仕様だったが、これが失われる。ジョブは異常終了し、利用者にはどの行が原因か分かるエラーも返らない。PR 説明の「外部キーで守られている」は不整合を防ぐだけで、1 行の誤りで全体が落ちる問題は解消しない。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "不明な会員の行を飛ばす仕様のテストが削除され、挙動の変化が検知されない",
+   "detail": "unknownMemberSkipsOnlyThatLine を削除したため、存在しない会員の行で何が起きるかを確かめるテストが無くなった。実際には例外で全体が落ちる挙動に変わっているのに、テストはそれを検出しない。仕様を変えるなら、新しい挙動（行エラーとして報告する、または全体失敗とする）を確かめるテストが必要。",
+   "line": 50,
+   "evidence": "差分でテストが丸ごと削除されており、変更後のテスト全文にも member に関するケースが無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:50",
+   "message": "不明な会員の行を飛ばす仕様のテストが削除され、挙動の変化が検知されない unknownMemberSkipsOnlyThatLine を削除したため、存在しない会員の行で何が起きるかを確かめるテストが無くなった。実際には例外で全体が落ちる挙動に変わっているのに、テストはそれを検出しない。仕様を変えるなら、新しい挙動（行エラーとして報告する、または全体失敗とする）を確かめるテストが必要。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc が実装と食い違っている",
+   "detail": "「存在しない会員の行は飛ばして続行し」「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」という説明が残っており、外部キーの事前確認をやめた現状と矛盾する。後から読む人が、会員チェックがあると誤解する。",
+   "line": 13,
+   "evidence": "クラスの Javadoc に外部キーの事前確認の記述が残っている一方、importLines には会員チェックが無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:13",
+   "message": "Javadoc が実装と食い違っている 「存在しない会員の行は飛ばして続行し」「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」という説明が残っており、外部キーの事前確認をやめた現状と矛盾する。後から読む人が、会員チェックがあると誤解する。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化の方法として、会員の一括確認を検討したか",
+   "detail": "遅さの原因は行ごとの SELECT だった。キャッシュ（従来は同一会員を 1 回だけ確認）を使っていたため、実際の遅さの原因が何か（会員の種類が多い、など）を確認したい。全 member_id をまとめて 1 回の SELECT（IN 句）で確認する、または既存会員を事前に読み込む方法なら、行単位の報告を保ったまま高速化できる。測定結果があれば教えてほしい。",
+   "line": 51,
+   "evidence": "削除されたコードは memberCache による同一会員のキャッシュ付きの確認だった。PR 説明には性能の測定値が無い。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "高速化の方法として、会員の一括確認を検討したか 遅さの原因は行ごとの SELECT だった。キャッシュ（従来は同一会員を 1 回だけ確認）を使っていたため、実際の遅さの原因が何か（会員の種類が多い、など）を確認したい。全 member_id をまとめて 1 回の SELECT（IN 句）で確認する、または既存会員を事前に読み込む方法なら、行単位の報告を保ったまま高速化できる。測定結果があれば教えてほしい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "standard",
+ "run": 2
+}

@@ -1,0 +1,138 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5952,
+   "output_tokens": 2288,
+   "cost_usd": 0.0976,
+   "seconds": 25.4,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0976,
+ "notes": [],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない会員が 1 行でもあると、取込全体がロールバックされる",
+   "detail": "例: 10 万行の CSV のうち 1 行だけ member_id=999（会員なし）がある場合を考える。その行の insertIfAbsent で外部キー違反の例外（Spring なら DataIntegrityViolationException の系統）が出る。importLines は @Transactional なので、それまでに登録した行もすべて取り消され、ジョブは異常終了する。これまでは「その行だけ errors に記録して続行」だったので、利用者から見える振る舞いが大きく変わる。PostgreSQL ではこの例外を catch しても、トランザクションが aborted 状態になり後続の SQL がすべて失敗する。行単位で続行するには、事前チェックを残すか、行ごとに SAVEPOINT を張る必要がある。",
+   "line": 52,
+   "evidence": "PR 説明に「member_id は DB の外部キーで守られています」とある。クラス Javadoc には「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる。DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため」とある。importLines の catch は parse の IllegalArgumentException だけで、insertIfAbsent の例外は捕まえていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "存在しない会員が 1 行でもあると、取込全体がロールバックされる 例: 10 万行の CSV のうち 1 行だけ member_id=999（会員なし）がある場合を考える。その行の insertIfAbsent で外部キー違反の例外（Spring なら DataIntegrityViolationException の系統）が出る。importLines は @Transactional なので、それまでに登録した行もすべて取り消され、ジョブは異常終了する。これまでは「その行だけ errors に記録して続行」だったので、利用者から見える振る舞いが大きく変わる。PostgreSQL ではこの例外を catch しても、トランザクションが aborted 状態になり後続の SQL がすべて失敗する。行単位で続行するには、事前チェックを残すか、行ごとに SAVEPOINT を張る必要がある。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化の手段として過剰。会員確認はまとめて行えば速さと行単位スキップを両立できる",
+   "detail": "削除前のコードでも memberCache で会員ごとに 1 回しか SELECT していなかった（テストでも『同じ会員は 1 回だけ確かめる』と確認している）。遅かったのは会員の種類が多いケースだと推測する。チェックそのものを消すのではなく、次のどちらかで往復回数は大きく減らせる。(1) 先に全行を parse して distinct な member_id を集め、IN 句でまとめて存在確認する。(2) 一定件数ごとにまとめて確認する。こうすれば行単位でスキップする仕様も保てる。",
+   "line": 31,
+   "evidence": "削除された行: memberCache.computeIfAbsent(order.memberId(), mapper::memberExists)、および削除されたテストの assertThat(mapper.memberLookups).isEqualTo(2)",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:31",
+   "message": "高速化の手段として過剰。会員確認はまとめて行えば速さと行単位スキップを両立できる 削除前のコードでも memberCache で会員ごとに 1 回しか SELECT していなかった（テストでも『同じ会員は 1 回だけ確かめる』と確認している）。遅かったのは会員の種類が多いケースだと推測する。チェックそのものを消すのではなく、次のどちらかで往復回数は大きく減らせる。(1) 先に全行を parse して distinct な member_id を集め、IN 句でまとめて存在確認する。(2) 一定件数ごとにまとめて確認する。こうすれば行単位でスキップする仕様も保てる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "会員なしの行のテストを削除しただけで、新しい振る舞いのテストが無い",
+   "detail": "unknownMemberSkipsOnlyThatLine を削除したため、member_id が存在しない行の扱いがどのテストでも確認されなくなった。新しい振る舞い（全体ロールバックになるのか、別の扱いになるのか）を表すテストが無い。FakeOrderMapper は外部キーを再現しないと推測するので、実 DB を使うテスト（MyBatis + テスト用 DB）で確かめる必要がある。",
+   "line": 49,
+   "evidence": "差分で unknownMemberSkipsOnlyThatLine を丸ごと削除している。変更後のテストファイルに memberId が存在しないケースが無い。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:49",
+   "message": "会員なしの行のテストを削除しただけで、新しい振る舞いのテストが無い unknownMemberSkipsOnlyThatLine を削除したため、member_id が存在しない行の扱いがどのテストでも確認されなくなった。新しい振る舞い（全体ロールバックになるのか、別の扱いになるのか）を表すテストが無い。FakeOrderMapper は外部キーを再現しないと推測するので、実 DB を使うテスト（MyBatis + テスト用 DB）で確かめる必要がある。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc の仕様説明が実装と食い違っている",
+   "detail": "Javadoc には「存在しない会員の行は飛ばして続行し」「外部キーに当たる誤りは登録の前にここで確かめる」と書かれたままで、今回の変更後の実装と一致しない。運用担当がこの記述を信じると、ジョブが異常終了したときの原因の切り分けを誤る。",
+   "line": 11,
+   "evidence": "クラス Javadoc の 2 段落目・3 段落目",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:11",
+   "message": "Javadoc の仕様説明が実装と食い違っている Javadoc には「存在しない会員の行は飛ばして続行し」「外部キーに当たる誤りは登録の前にここで確かめる」と書かれたままで、今回の変更後の実装と一致しない。運用担当がこの記述を信じると、ジョブが異常終了したときの原因の切り分けを誤る。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "insertIfAbsent の SQL で外部キー違反がどう扱われるか確認させてください",
+   "detail": "OrderMapper の XML が見えないので推測です。MySQL の INSERT IGNORE で実装している場合、外部キー違反は警告に格下げされて戻り値 0 になります。その場合、会員なしの行がエラーにならず『duplicated（登録済み）』として数えられ、誤りが黙って消えます。PostgreSQL の ON CONFLICT DO NOTHING なら外部キー違反は例外になり、MUST の指摘のとおり全体ロールバックになります。どちらの DB・SQL でしょうか。",
+   "line": 52,
+   "evidence": "戻り値が 1 なら imported++、それ以外は duplicated++ という分岐で、0 になる理由を区別していない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "insertIfAbsent の SQL で外部キー違反がどう扱われるか確認させてください OrderMapper の XML が見えないので推測です。MySQL の INSERT IGNORE で実装している場合、外部キー違反は警告に格下げされて戻り値 0 になります。その場合、会員なしの行がエラーにならず『duplicated（登録済み）』として数えられ、誤りが黙って消えます。PostgreSQL の ON CONFLICT DO NOTHING なら外部キー違反は例外になり、MUST の指摘のとおり全体ロールバックになります。どちらの DB・SQL でしょうか。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "OrderMapper.memberExists が使われなくなる（推測）",
+   "detail": "今回の変更で、サービスから memberExists を呼ぶ箇所が無くなった。ほかで使っていなければ、Mapper の定義と SQL が死にコードとして残る。",
+   "line": 52,
+   "evidence": "mapper::memberExists の呼び出しを削除している。Mapper 本体は差分に含まれていない。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "OrderMapper.memberExists が使われなくなる（推測） 今回の変更で、サービスから memberExists を呼ぶ箇所が無くなった。ほかで使っていなければ、Mapper の定義と SQL が死にコードとして残る。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "deep",
+ "run": 1
+}

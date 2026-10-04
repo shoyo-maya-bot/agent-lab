@@ -1,0 +1,52 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 2926,
+   "output_tokens": 390,
+   "cost_usd": 0.0146,
+   "seconds": 5.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0146,
+ "notes": [],
+ "summary": {
+  "findings": 1,
+  "shown": 1,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberController.java",
+   "title": "-parameters 前提が差分から確認できない（ビルド設定依存）",
+   "detail": "名前省略は、コンパイル時に -parameters が有効な場合のみ動作する。PR 説明では build.gradle で付けているとあるが、その設定は差分・提示ファイルに含まれず確認できない（推測）。もし未設定、あるいは IDE や別ビルド（Maven、IDE の自動ビルド等）でコンパイルされると、実行時に IllegalArgumentException（Name for argument of type [long] not specified...）となり、GET /api/v1/members/{id} が常に 500 になる。Spring Boot の Gradle プラグインは通常 -parameters を自動で付けるため、設定が正しければ問題にならない。",
+   "line": 32,
+   "evidence": "変更は @PathVariable(\"id\") → @PathVariable のみ。build.gradle は差分に含まれず、PR 説明の記述だけが根拠。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberController.java:32",
+   "message": "-parameters 前提が差分から確認できない（ビルド設定依存） 名前省略は、コンパイル時に -parameters が有効な場合のみ動作する。PR 説明では build.gradle で付けているとあるが、その設定は差分・提示ファイルに含まれず確認できない（推測）。もし未設定、あるいは IDE や別ビルド（Maven、IDE の自動ビルド等）でコンパイルされると、実行時に IllegalArgumentException（Name for argument of type [long] not specified...）となり、GET /api/v1/members/{id} が常に 500 になる。Spring Boot の Gradle プラグインは通常 -parameters を自動で付けるため、設定が正しければ問題にならない。"
+  }
+ ],
+ "rejected": [],
+ "case": "D04",
+ "config": "standard",
+ "run": 1
+}

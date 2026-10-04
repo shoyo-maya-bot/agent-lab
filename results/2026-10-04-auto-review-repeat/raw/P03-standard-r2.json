@@ -1,0 +1,106 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6072,
+   "output_tokens": 1271,
+   "cost_usd": 0.0183,
+   "seconds": 12.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0183,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁数超過の行で取込全体がロールバックされる（行単位スキップが壊れる）",
+   "detail": "order_no または product_code が 21 文字以上の行が 1 行でも含まれると、mapper.insertIfAbsent が VARCHAR(20) 違反で DataIntegrityViolationException（実行時例外）を投げる。importLines は @Transactional で、この例外は catch されないため、それまでに登録した行も含めてトランザクション全体が取り消され、ジョブは異常終了する。従来は該当行だけがエラー行として報告され、他の行は取り込まれていた。DB 側で弾く方式に変えたことで、1 行の誤りが全件失敗になる。",
+   "line": 82,
+   "evidence": "クラスの Javadoc に「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる。DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまう」とある。削除した code() 内のチェック以外に桁数を検証する箇所はなく、insertIfAbsent の呼び出しも try/catch されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "桁数超過の行で取込全体がロールバックされる（行単位スキップが壊れる） order_no または product_code が 21 文字以上の行が 1 行でも含まれると、mapper.insertIfAbsent が VARCHAR(20) 違反で DataIntegrityViolationException（実行時例外）を投げる。importLines は @Transactional で、この例外は catch されないため、それまでに登録した行も含めてトランザクション全体が取り消され、ジョブは異常終了する。従来は該当行だけがエラー行として報告され、他の行は取り込まれていた。DB 側で弾く方式に変えたことで、1 行の誤りが全件失敗になる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁数チェック削除に伴うテスト削除で回帰を検知できなくなった",
+   "detail": "「長いコードの行だけ飛ばして続行する」「ちょうど 20 文字は受理される」という振る舞いのテストがすべて消えた。しかも FakeOrderMapper は DB の桁数制約を再現しないため、上記のロールバック問題は単体テストでは永久に検出できない。",
+   "line": 82,
+   "evidence": "tooLongCodeSkipsOnlyThatLine、parseAcceptsExactlyTwentyChars、parseRejects の 22 文字ケースが削除されている。残るテストに桁数超過を扱うものはない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "桁数チェック削除に伴うテスト削除で回帰を検知できなくなった 「長いコードの行だけ飛ばして続行する」「ちょうど 20 文字は受理される」という振る舞いのテストがすべて消えた。しかも FakeOrderMapper は DB の桁数制約を再現しないため、上記のロールバック問題は単体テストでは永久に検出できない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc が実装と食い違っている",
+   "detail": "クラスの Javadoc は「桁数は登録の前にここで確かめる」と説明しているが、今回の変更で桁数の確認はなくなった。後続の保守者が誤解する。",
+   "line": 18,
+   "evidence": "Javadoc に「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」とあるが、code() は空チェックのみ。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:18",
+   "message": "Javadoc が実装と食い違っている クラスの Javadoc は「桁数は登録の前にここで確かめる」と説明しているが、今回の変更で桁数の確認はなくなった。後続の保守者が誤解する。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "二重管理を避けたいなら、削除ではなく別の方法で一本化する",
+   "detail": "定義の食い違いが懸念なら、桁数を DB に任せるのではなく、(a) 例外を行単位で捕捉して errors に積む（ただし PostgreSQL ではエラー後にトランザクションが abort 状態になるため、行ごとにセーブポイントか別トランザクションが必要）、(b) スキーマと同期を取るテスト（information_schema などで CODE_MAX_LENGTH と照合）を用意する、といった方法がある。現状はどちらもなく、問題が実運用で初めて表面化する。DB 製品は推測。",
+   "line": 82,
+   "evidence": "PR 説明は「Java 側のチェックを外しました」のみで、代替のエラー処理や整合性テストは差分にない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "二重管理を避けたいなら、削除ではなく別の方法で一本化する 定義の食い違いが懸念なら、桁数を DB に任せるのではなく、(a) 例外を行単位で捕捉して errors に積む（ただし PostgreSQL ではエラー後にトランザクションが abort 状態になるため、行ごとにセーブポイントか別トランザクションが必要）、(b) スキーマと同期を取るテスト（information_schema などで CODE_MAX_LENGTH と照合）を用意する、といった方法がある。現状はどちらもなく、問題が実運用で初めて表面化する。DB 製品は推測。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "standard",
+ "run": 2
+}

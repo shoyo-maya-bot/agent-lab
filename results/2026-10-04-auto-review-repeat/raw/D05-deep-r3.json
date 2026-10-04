@@ -1,0 +1,89 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 4,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: トランザクション境界の変更"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 2970,
+   "output_tokens": 1606,
+   "cost_usd": 0.0345,
+   "seconds": 19.5,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0345,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "readOnly を見て参照系 DB へ振り分ける仕組みがあるなら、照会が更新系 DB に流れる",
+   "detail": "AbstractRoutingDataSource などで「readOnly トランザクションなら参照系（レプリカ）へ」と振り分けている場合、この変更で get の SELECT がすべて更新系 DB に流れます。その結果、更新系の負荷が増え、参照系に逃がしていた照会の分離もなくなります。逆に参照系を使っていて、それが登録直後の読み取り遅延の原因になっていたなら、振る舞いが変わります。振り分けの仕組みが無いかを確認してください。",
+   "line": 21,
+   "evidence": "差分は @Transactional(readOnly = true) の削除だけです。DataSource の構成は差分に含まれていないため、ここは推測です。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "readOnly を見て参照系 DB へ振り分ける仕組みがあるなら、照会が更新系 DB に流れる AbstractRoutingDataSource などで「readOnly トランザクションなら参照系（レプリカ）へ」と振り分けている場合、この変更で get の SELECT がすべて更新系 DB に流れます。その結果、更新系の負荷が増え、参照系に逃がしていた照会の分離もなくなります。逆に参照系を使っていて、それが登録直後の読み取り遅延の原因になっていたなら、振る舞いが変わります。振り分けの仕組みが無いかを確認してください。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "findById が本当に SELECT 1 本かの確認",
+   "detail": "Mapper XML で association や collection の nested select（N+1 形式）を使っている場合、トランザクションが無いと各 SELECT が別々の接続・別々のスナップショットで実行されます。並行して更新が走ると、親と子が食い違った Member を組み立てる可能性があります。「SELECT 1 本」という PR の前提が XML 上でも正しいかを確認してください。",
+   "line": 24,
+   "evidence": "mapper.findById(id) の SQL 定義（MemberMapper.xml など）は見えないため推測です。PR の説明は「SELECT 1 本」としています。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:24",
+   "message": "findById が本当に SELECT 1 本かの確認 Mapper XML で association や collection の nested select（N+1 形式）を使っている場合、トランザクションが無いと各 SELECT が別々の接続・別々のスナップショットで実行されます。並行して更新が走ると、親と子が食い違った Member を組み立てる可能性があります。「SELECT 1 本」という PR の前提が XML 上でも正しいかを確認してください。"
+  },
+  {
+   "severity": "NITS",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "読み取り専用であることの保証と意図の表明がなくなる",
+   "detail": "readOnly = true があると、ドライバや DB によっては Connection.setReadOnly / SET TRANSACTION READ ONLY が効き、誤って更新処理が追加されたときに検知できます。また、MySQL や PostgreSQL では読み取り専用トランザクションとして軽い扱いになります。外すことで得られる利点（トランザクション開始の小さなオーバーヘッドの削減）は小さいため、残しておく選択肢も検討してください。",
+   "line": 21,
+   "evidence": "削除された行は `@Transactional(readOnly = true)` です。同じクラスの register には @Transactional が残っており、クラス内でトランザクションの方針が揃わなくなります。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:21",
+   "message": "読み取り専用であることの保証と意図の表明がなくなる readOnly = true があると、ドライバや DB によっては Connection.setReadOnly / SET TRANSACTION READ ONLY が効き、誤って更新処理が追加されたときに検知できます。また、MySQL や PostgreSQL では読み取り専用トランザクションとして軽い扱いになります。外すことで得られる利点（トランザクション開始の小さなオーバーヘッドの削減）は小さいため、残しておく選択肢も検討してください。"
+  }
+ ],
+ "rejected": [],
+ "case": "D05",
+ "config": "deep",
+ "run": 3
+}
