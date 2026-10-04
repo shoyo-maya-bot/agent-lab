@@ -46,3 +46,7 @@ pip install -e ".[dev]" && pytest
 
 偽の CLI で引数と安全の決まりを確かめ、MCP クライアントから stdio で呼ぶテストもあります。
 隣に design-diff のリポジトリがあれば、本物のサンプルで差分を取るテストも走ります。
+
+## メモ
+
+MCP の Python SDK は 2.x で API が変わりました（`FastMCP` → `MCPServer` など）。今は 1.x に固定しています（`mcp>=1.10,<2`）。2.x への移行は別の作業として行います。
