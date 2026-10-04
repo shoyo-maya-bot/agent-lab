@@ -10,4 +10,14 @@ AI エージェントに **どこまで任せられるか** を実験するリ�
 
 課題には dev-environment の sample-app と架空の設計書だけを使い、実案件のデータは使いません。
 
-現在は設計の段階です。方針と実験計画は [docs/DESIGN.md](docs/DESIGN.md) を参照してください。
+方針と実験計画は [docs/DESIGN.md](docs/DESIGN.md) を参照してください。
+
+## 今あるもの
+
+| フォルダ | 中身 |
+|---|---|
+| [mcp-server/](mcp-server/) | 自作ツール（doc2md・design-diff・fieldcheck・spec-trace）の MCP サーバー（段階 1） |
+| [bench/bugs/](bench/bugs/) | sample-app の既知の弱いところ 8 件（レビューの正解） |
+| [runner/score.py](runner/score.py) | レビュー結果を正解と突き合わせ、検出率・ノイズ率を出す |
+| [reviewers/](reviewers/) | 実験で使うレビューのプロンプト |
+| [results/](results/) | 実験の結果。[2026-10-04 モデルの大きさによる違い](results/2026-10-04-model-compare/README.md) |
