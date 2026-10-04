@@ -1,0 +1,71 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 2,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java: バッチ（終了コード・再実行）"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3594,
+   "output_tokens": 866,
+   "cost_usd": 0.0116,
+   "seconds": 9.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0116,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、検知・監視に影響する可能性がある",
+   "detail": "変更前は異常終了時のログに MessageIds.BATCH_FAILED が付与されていた。変更後はこの ID が無くなり「JOB0001 異常終了」という固定文言だけになる。運用側がメッセージ ID（BATCH_FAILED）でのアラート・ログ検索・集計をしている場合、取込バッチが例外で落ちても通知されず、障害に気付けなくなる。同クラスの他のエラーログ（引数不正の BATCH_INVALID_ARGS、開始・終了・スキップの各 ID）は全て ID 付きで出しているため、異常終了だけ ID が無いのは一貫性も欠く。PR の説明は「読みやすくした」だけで、ID を外す意図は書かれていない。",
+   "line": 62,
+   "evidence": "差分: `log.error(\"{} JOB0001 異常終了\", MessageIds.BATCH_FAILED, e);` → `log.error(\"JOB0001 異常終了\", e);`。同ファイルの他の log.error / log.warn / log.info は全て MessageIds.* を先頭に付けている。監視設定が BATCH_FAILED を見ているかは差分からは分からない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "異常終了ログからメッセージ ID（BATCH_FAILED）が消え、検知・監視に影響する可能性がある 変更前は異常終了時のログに MessageIds.BATCH_FAILED が付与されていた。変更後はこの ID が無くなり「JOB0001 異常終了」という固定文言だけになる。運用側がメッセージ ID（BATCH_FAILED）でのアラート・ログ検索・集計をしている場合、取込バッチが例外で落ちても通知されず、障害に気付けなくなる。同クラスの他のエラーログ（引数不正の BATCH_INVALID_ARGS、開始・終了・スキップの各 ID）は全て ID 付きで出しているため、異常終了だけ ID が無いのは一貫性も欠く。PR の説明は「読みやすくした」だけで、ID を外す意図は書かれていない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java",
+   "title": "BATCH_FAILED の他の利用箇所は残っているか（未使用定数化していないか）",
+   "detail": "この行が MessageIds.BATCH_FAILED の唯一の利用箇所だった場合、定数が未使用になる。ID を意図して外したのか、誤って消したのかを確認したい。意図的なら、運用手順書・監視ルール側の更新も必要。他のジョブ（JOB0002 以降など）が BATCH_FAILED を出しているかも確認したい。",
+   "line": 62,
+   "evidence": "変更後のファイルでも `import com.example.sample.common.MessageIds;` は他のログで使われているため import は残るが、BATCH_FAILED の参照はこのファイルから消えている。他ファイルの利用状況は差分に含まれないため不明（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java:62",
+   "message": "BATCH_FAILED の他の利用箇所は残っているか（未使用定数化していないか） この行が MessageIds.BATCH_FAILED の唯一の利用箇所だった場合、定数が未使用になる。ID を意図して外したのか、誤って消したのかを確認したい。意図的なら、運用手順書・監視ルール側の更新も必要。他のジョブ（JOB0002 以降など）が BATCH_FAILED を出しているかも確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P08",
+ "config": "auto"
+}

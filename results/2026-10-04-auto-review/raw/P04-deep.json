@@ -1,0 +1,71 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 1,
+  "reasons": [
+   "+1 sample-app/build.gradle: 依存・ビルド"
+  ],
+  "risky_files": [
+   "sample-app/build.gradle"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3266,
+   "output_tokens": 834,
+   "cost_usd": 0.0394,
+   "seconds": 10.7,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0394,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/build.gradle",
+   "title": "-DbaseUrl がテストの JVM に届かなくなり、接続先を切り替えられない",
+   "detail": "`./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<dev-host>` と実行しても、Gradle の Test タスクはフォークした別の JVM でテストを動かします。そのため baseUrl はテスト側に渡りません。Karate 側（karate-config.js など。推測）が baseUrl を読んでいるなら、未設定のまま既定の接続先（local など）に向かいます。結果として dev を叩いているつもりでローカルを叩く、あるいは接続できずに全件失敗します。前者だとテストは通って見えるので、誤った検証結果に気付きにくいのが危険です。",
+   "line": 55,
+   "evidence": "削除された行のコメントに『Gradle に渡した -DbaseUrl は、そのままではテストの JVM に届かないので明示的に渡す』とあり、意図して置いた記述です。不要な記述ではありません。karate.env だけは `systemProperty 'karate.env', System.getProperty(...)` で残っており、同じ転送の仕組みで baseUrl だけが消えています。また、タスク直前の使い方コメント『接続先を変えるとき: ./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<your-dev-host>』は残ったままで、記述と実際の動作が食い違います。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/build.gradle:55",
+   "message": "-DbaseUrl がテストの JVM に届かなくなり、接続先を切り替えられない `./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<dev-host>` と実行しても、Gradle の Test タスクはフォークした別の JVM でテストを動かします。そのため baseUrl はテスト側に渡りません。Karate 側（karate-config.js など。推測）が baseUrl を読んでいるなら、未設定のまま既定の接続先（local など）に向かいます。結果として dev を叩いているつもりでローカルを叩く、あるいは接続できずに全件失敗します。前者だとテストは通って見えるので、誤った検証結果に気付きにくいのが危険です。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/build.gradle",
+   "title": "baseUrl を別の経路で渡す想定があるか",
+   "detail": "karate-config.js が baseUrl を環境変数（java.lang.System.getenv など）から読むように変わった、あるいは karate.env ごとに URL を固定する方針に変わったのであれば、この削除は意図どおりかもしれません。その場合は、使い方コメントの `-DbaseUrl=...` も合わせて直す必要があります。どちらでもないなら、削除は取り消してください。",
+   "line": 46,
+   "evidence": "差分には karate-config.js が含まれておらず、baseUrl の読み取り方は確認できません（推測）。PR の説明も『不要そうな記述を削りました』だけで、不要と判断した根拠が書かれていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/build.gradle:46",
+   "message": "baseUrl を別の経路で渡す想定があるか karate-config.js が baseUrl を環境変数（java.lang.System.getenv など）から読むように変わった、あるいは karate.env ごとに URL を固定する方針に変わったのであれば、この削除は意図どおりかもしれません。その場合は、使い方コメントの `-DbaseUrl=...` も合わせて直す必要があります。どちらでもないなら、削除は取り消してください。"
+  }
+ ],
+ "rejected": [],
+ "case": "P04",
+ "config": "deep"
+}

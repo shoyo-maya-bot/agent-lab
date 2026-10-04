@@ -4,7 +4,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 対象 | dev-environment の sample-app（ソース・テスト・設定・SQL・build.gradle） |
+| 対象 | dev-environment の sample-app（ソース・テスト・設定・SQL・build.gradle）。直す前のコミット `2aee458`（`exercise-base` ブランチ） |
 | 仕様 | ai-coding/samples/design-docs の設計書 2 本 |
 | プロンプト | [reviewers/code-review.prompt.md](../../reviewers/code-review.prompt.md)（3 モデルで同じ） |
 | モデル | Claude Haiku 4.5 / Sonnet / Opus（Claude Code のサブエージェントとして実行。答えのある資料は読まない指示） |

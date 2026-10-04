@@ -4,7 +4,13 @@
 # 一致の判定（runner/score.py）: 指摘の「箇所＋本文」に files のどれかが含まれ、かつ keywords のどれかが含まれる
 #   - files はファイル名。拡張子なしの名前（MemberService など）でも一致とする。大文字小文字は区別しない
 #   - keywords は言い換えに強いよう、日本語と英語を並べる
+#
+# 対象のコードは「直す前」に固定する. main では 8 件とも直してあるので、main をレビューさせても正解は出ない.
+#   git -C dev-environment switch exercise-base   （または git checkout <target_commit>）
 target: dev-environment/sample-app
+target_ref: exercise-base
+target_commit: 2aee458696da6bd7564b5166df9d75c2b8110e5a
+fixed_in: main   # 直し方の参考（git diff exercise-base main -- sample-app）
 version: 1
 bugs:
   - id: B01
@@ -38,7 +44,7 @@ bugs:
   - id: B05
     title: ジョブ ID の誤り・未指定でも終了コード 0
     severity: MUST
-    files: [OrderImportJob.java, SampleApplication.java]
+    files: [OrderImportJob.java, SampleApplication.java, BatchJobGuard.java]   # BatchJobGuard は修正後にできたクラス（PR の課題用）
     keywords: [ジョブ ID, app.batch.job, 終了コード 0, exit code 0, 何もしない, ConditionalOnProperty]
     why: 対象のジョブが無いと何も実行されず、スケジューラからは正常終了に見える
 

@@ -1,0 +1,15 @@
+diff --git a/sample-app/build.gradle b/sample-app/build.gradle
+index 103d4cd..ca1aab9 100644
+--- a/sample-app/build.gradle
++++ b/sample-app/build.gradle
+@@ -53,10 +53,6 @@ tasks.register('karateTest', Test) {
+         includeTags 'karate'
+     }
+     systemProperty 'karate.env', System.getProperty('karate.env', 'local')
+-    // Gradle に渡した -DbaseUrl は、そのままではテストの JVM に届かないので明示的に渡す
+-    if (System.getProperty('baseUrl')) {
+-        systemProperty 'baseUrl', System.getProperty('baseUrl')
+-    }
+     outputs.upToDateWhen { false }
+ }
+ 

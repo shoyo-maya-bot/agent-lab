@@ -1,0 +1,17 @@
+diff --git a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+index f400e9b..1c8577e 100644
+--- a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+@@ -89,6 +89,12 @@ class OrderImportServiceTest {
+         assertThatThrownBy(() -> OrderImportService.parse(line)).hasMessage(message);
+     }
+ 
++    @ParameterizedTest
++    @CsvSource({"1", "999"})
++    void parseAcceptsQuantityBoundaries(int quantity) {
++        assertThat(OrderImportService.parse("A001,1,P-01," + quantity).quantity()).isEqualTo(quantity);
++    }
++
+     @Test
+     void parseAcceptsExactlyTwentyChars() {
+         String twenty = "B".repeat(20);

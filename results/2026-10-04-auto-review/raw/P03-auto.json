@@ -1,0 +1,118 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "standard",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 6072,
+   "output_tokens": 1401,
+   "cost_usd": 0.0196,
+   "seconds": 13.9,
+   "estimated": false
+  },
+  {
+   "step": "verify",
+   "model": "claude-opus-5-5",
+   "input_tokens": 6911,
+   "output_tokens": 941,
+   "cost_usd": 0.0733,
+   "seconds": 12.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0929,
+ "notes": [
+  "standard の MUST 2 件を deep モデルで検証しました"
+ ],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 2,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "桁数チェック削除で、21文字以上の1行の誤りが取込全体のロールバックになる",
+   "detail": "order_no または product_code が 20 文字を超える行が 1 行でもあると、insertIfAbsent で DB が値の長さ超過の例外（PostgreSQL なら value too long、MySQL strict なら Data too long）を投げる。importLines は @Transactional で例外を捕捉していないため、例外が外へ伝播してトランザクション全体がロールバックされ、それまでの正常行も全て取り消される。従来は「その行だけエラーとして飛ばして続行」できていた。ファイル全体が失敗し、どの行が原因かも結果（errors）に残らない。",
+   "line": 82,
+   "evidence": "クラスの Javadoc に「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため、登録の前にここで確かめる」とある。この Javadoc は変更後も残っており、PR の変更と矛盾している。code() には空チェックしか残っておらず、insertIfAbsent の呼び出しは try/catch で囲まれていない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "Java 側の桁数チェックが消えたため、21 文字以上の値は insertIfAbsent まで届きます。PostgreSQL や MySQL の strict モードでは長さ超過の例外が出て、importLines はこれを捕捉しません。そのため @Transactional で取込全体がロールバックされます。残っているクラスの Javadoc は「DB の例外に任せず、登録前にここで確かめる」という方針で、今回の変更と矛盾しています。なお、DB が MySQL の非 strict モードなら、例外にならず値が黙って切り詰められます。切り詰めた order_no が既存の番号とぶつかると重複として飛ばされるため、別の不具合になります（DB の種類は推測）。",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "桁数チェック削除で、21文字以上の1行の誤りが取込全体のロールバックになる order_no または product_code が 20 文字を超える行が 1 行でもあると、insertIfAbsent で DB が値の長さ超過の例外（PostgreSQL なら value too long、MySQL strict なら Data too long）を投げる。importLines は @Transactional で例外を捕捉していないため、例外が外へ伝播してトランザクション全体がロールバックされ、それまでの正常行も全て取り消される。従来は「その行だけエラーとして飛ばして続行」できていた。ファイル全体が失敗し、どの行が原因かも結果（errors）に残らない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "桁数超過の行のテストを削除しており、回帰を検知できない",
+   "detail": "tooLongCodeSkipsOnlyThatLine、parseRejects の桁数ケース、ちょうど 20 文字を受け付ける境界テストが全て削除された。上記のロールバック退行を検知するテストが無くなる。FakeOrderMapper は桁数を検証しないと見えるため、単体テストでは DB 例外を再現できない。",
+   "line": 62,
+   "evidence": "差分で 3 つのテスト（tooLongCodeSkipsOnlyThatLine / parseRejects の 22 文字ケース / parseAcceptsExactlyTwentyChars）が削除されている。変更後のテスト全文に桁数に関するケースが存在しない。",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-opus-5-5"
+   ],
+   "status": "confirmed",
+   "verdict_note": "桁数のテストが消え、退行を検知できなくなったのは事実です。ただ、テストの削除は s1 の仕様変更に伴う結果です。s1 を直す（チェックを戻す）ときにテストも一緒に戻れば解消するため、重要度は WANT に下げます。",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:62",
+   "message": "桁数超過の行のテストを削除しており、回帰を検知できない tooLongCodeSkipsOnlyThatLine、parseRejects の桁数ケース、ちょうど 20 文字を受け付ける境界テストが全て削除された。上記のロールバック退行を検知するテストが無くなる。FakeOrderMapper は桁数を検証しないと見えるため、単体テストでは DB 例外を再現できない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "「定義の二重管理」の解消は、行単位のエラー処理を保ったまま行うべき",
+   "detail": "二重管理を避けたいという意図自体は妥当だが、DB に任せるだけでは行単位スキップの仕様が失われる。維持するなら、(a) 定数を残して DDL とのずれを検知するテストを置く、(b) insertIfAbsent の DB 例外を行単位で捕捉する（ただしトランザクションが abort 状態になる DB では SAVEPOINT や REQUIRES_NEW が必要）、(c) 桁数の上限を設定または DB メタデータから取得する、のいずれかが考えられる。",
+   "line": 21,
+   "evidence": "削除された定数のコメントに local/db/init/01_schema.sql の VARCHAR(20) への参照があった。現状は Java 側に上限の情報が無く、DDL の変更とも連動しない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:21",
+   "message": "「定義の二重管理」の解消は、行単位のエラー処理を保ったまま行うべき 二重管理を避けたいという意図自体は妥当だが、DB に任せるだけでは行単位スキップの仕様が失われる。維持するなら、(a) 定数を残して DDL とのずれを検知するテストを置く、(b) insertIfAbsent の DB 例外を行単位で捕捉する（ただしトランザクションが abort 状態になる DB では SAVEPOINT や REQUIRES_NEW が必要）、(c) 桁数の上限を設定または DB メタデータから取得する、のいずれかが考えられる。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "上位（JOB 側）で DB 例外をどう扱う想定か",
+   "detail": "ジョブ側で例外を捕捉して終了コードやログに反映する想定なのか、それとも桁数超過の入力は「ファイル全体の失敗」でよいという仕様変更なのかが差分からは読み取れない。後者なら、Javadoc と仕様書の更新、および運用側（再実行時に同じファイルが毎回失敗する点）への周知が必要。",
+   "line": 82,
+   "evidence": "呼び出し元（JOB0001）のコードは差分に含まれていないため、挙動は推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:82",
+   "message": "上位（JOB 側）で DB 例外をどう扱う想定か ジョブ側で例外を捕捉して終了コードやログに反映する想定なのか、それとも桁数超過の入力は「ファイル全体の失敗」でよいという仕様変更なのかが差分からは読み取れない。後者なら、Javadoc と仕様書の更新、および運用側（再実行時に同じファイルが毎回失敗する点）への周知が必要。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "auto"
+}

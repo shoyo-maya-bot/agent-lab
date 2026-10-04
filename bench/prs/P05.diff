@@ -1,0 +1,97 @@
+diff --git a/sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java b/sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+deleted file mode 100644
+index 4f8e52e..0000000
+--- a/sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
++++ /dev/null
+@@ -1,56 +0,0 @@
+-package com.example.sample.batch;
+-
+-import com.example.sample.common.MessageIds;
+-import java.util.List;
+-import org.slf4j.Logger;
+-import org.slf4j.LoggerFactory;
+-import org.springframework.beans.factory.ObjectProvider;
+-import org.springframework.beans.factory.annotation.Autowired;
+-import org.springframework.beans.factory.annotation.Value;
+-import org.springframework.boot.ApplicationArguments;
+-import org.springframework.boot.ApplicationRunner;
+-import org.springframework.boot.ExitCodeGenerator;
+-import org.springframework.context.annotation.Profile;
+-import org.springframework.stereotype.Component;
+-
+-/**
+- * バッチとして起動したのに、指定のジョブ ID に当たるジョブが無いときに異常終了させる.
+- *
+- * <p>これが無いと、ジョブ ID の誤りや指定漏れでも何も実行せずに終了コード 0 で終わり、
+- * スケジューラからは正常終了に見えてしまう。
+- */
+-@Component
+-@Profile("batch")
+-public class BatchJobGuard implements ApplicationRunner, ExitCodeGenerator {
+-
+-    private static final Logger log = LoggerFactory.getLogger(BatchJobGuard.class);
+-
+-    private final String requested;
+-    private final List<BatchJob> jobs;
+-    private int exitCode = BatchJob.OK;
+-
+-    @Autowired
+-    public BatchJobGuard(@Value("${app.batch.job:}") String requested, ObjectProvider<BatchJob> jobs) {
+-        this(requested, jobs.orderedStream().toList());
+-    }
+-
+-    BatchJobGuard(String requested, List<BatchJob> jobs) {
+-        this.requested = requested == null ? "" : requested.trim();
+-        this.jobs = List.copyOf(jobs);
+-    }
+-
+-    @Override
+-    public void run(ApplicationArguments args) {
+-        boolean found = jobs.stream().anyMatch(j -> j.jobId().equals(requested));
+-        if (!found) {
+-            log.error("{} ジョブ ID が不正です app.batch.job={}",
+-                    MessageIds.BATCH_UNKNOWN_JOB, requested.isEmpty() ? "(未指定)" : requested);
+-            exitCode = BatchJob.ERROR;
+-        }
+-    }
+-
+-    @Override
+-    public int getExitCode() {
+-        return exitCode;
+-    }
+-}
+diff --git a/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java b/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+deleted file mode 100644
+index cc50065..0000000
+--- a/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
++++ /dev/null
+@@ -1,29 +0,0 @@
+-package com.example.sample.batch;
+-
+-import static org.assertj.core.api.Assertions.assertThat;
+-
+-import java.util.List;
+-import org.junit.jupiter.api.Test;
+-import org.springframework.boot.DefaultApplicationArguments;
+-
+-class BatchJobGuardTest {
+-
+-    private final BatchJob job0001 = () -> "JOB0001";
+-
+-    @Test
+-    void okWhenRequestedJobExists() {
+-        BatchJobGuard guard = new BatchJobGuard("JOB0001", List.of(job0001));
+-        guard.run(new DefaultApplicationArguments());
+-        assertThat(guard.getExitCode()).isZero();
+-    }
+-
+-    @Test
+-    void errorWhenJobIdIsWrongOrMissing() {
+-        // ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない
+-        for (String requested : new String[] {"JOB9999", "", null}) {
+-            BatchJobGuard guard = new BatchJobGuard(requested, List.of());
+-            guard.run(new DefaultApplicationArguments());
+-            assertThat(guard.getExitCode()).as("app.batch.job=%s", requested).isEqualTo(BatchJob.ERROR);
+-        }
+-    }
+-}

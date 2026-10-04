@@ -1,0 +1,137 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 5958,
+   "output_tokens": 1749,
+   "cost_usd": 0.0429,
+   "seconds": 15.9,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0429,
+ "notes": [],
+ "summary": {
+  "findings": 6,
+  "shown": 6,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "存在しない member_id の 1 行で取込全体がロールバックされる",
+   "detail": "CSV に会員が存在しない member_id が 1 行でも含まれると、insertIfAbsent が外部キー違反の例外（DataIntegrityViolationException 等）を投げる。メソッドは @Transactional でこの例外を捕捉していないため、トランザクション全体が取り消され、それまでに取り込んだ正常行も全て失われ、ジョブも異常終了する。従来は該当行だけ errors に行番号付きで記録し、他の行は続行していた。「1 行の誤りで全体が取り消される」ことを避けるという、クラスのコメントに書かれた設計意図にも反する。",
+   "line": 52,
+   "evidence": "削除前は memberExists で事前確認し errors に追加して continue していた。変更後は parse の後すぐ mapper.insertIfAbsent(order) を呼ぶだけで、try/catch は parse のみ。クラス Javadoc に「DB の例外に任せると、1 行の誤りでトランザクション全体が取り消されてしまうため」とある。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "存在しない member_id の 1 行で取込全体がロールバックされる CSV に会員が存在しない member_id が 1 行でも含まれると、insertIfAbsent が外部キー違反の例外（DataIntegrityViolationException 等）を投げる。メソッドは @Transactional でこの例外を捕捉していないため、トランザクション全体が取り消され、それまでに取り込んだ正常行も全て失われ、ジョブも異常終了する。従来は該当行だけ errors に行番号付きで記録し、他の行は続行していた。「1 行の誤りで全体が取り消される」ことを避けるという、クラスのコメントに書かれた設計意図にも反する。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "insertIfAbsent の仕様次第で FK 違反が「重複」に見える、または握りつぶされる恐れ",
+   "detail": "insertIfAbsent の SQL は差分に含まれず推測だが、ON CONFLICT DO NOTHING / INSERT IGNORE 系の実装だと、FK 違反まで 0 件扱い（または警告のみ）になり、会員不在の行が duplicated に数えられて、エラーとして報告されないまま黙って取り込まれない可能性がある。逆に例外になる場合は上記の全体ロールバックになる。どちらでも従来の「行番号と理由を残す」挙動は失われる。",
+   "line": 52,
+   "evidence": "戻り値が 1 以外なら無条件に duplicated++ している（else 分岐）。Mapper の SQL は差分・全文に含まれないため推測。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "insertIfAbsent の仕様次第で FK 違反が「重複」に見える、または握りつぶされる恐れ insertIfAbsent の SQL は差分に含まれず推測だが、ON CONFLICT DO NOTHING / INSERT IGNORE 系の実装だと、FK 違反まで 0 件扱い（または警告のみ）になり、会員不在の行が duplicated に数えられて、エラーとして報告されないまま黙って取り込まれない可能性がある。逆に例外になる場合は上記の全体ロールバックになる。どちらでも従来の「行番号と理由を残す」挙動は失われる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "会員不在行のテストを削除しており、挙動変更が検証されない",
+   "detail": "unknownMemberSkipsOnlyThatLine を削除したため、会員不在時の挙動（続行するか、全体失敗か）を確認するテストが無くなった。FakeOrderMapper は FK 違反を再現しないと見られ、実 DB でのロールバックはこのテスト群では検出できない。",
+   "line": 52,
+   "evidence": "差分でテストが丸ごと削除されている。残りのテストは会員不在のケースを扱っていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:52",
+   "message": "会員不在行のテストを削除しており、挙動変更が検証されない unknownMemberSkipsOnlyThatLine を削除したため、会員不在時の挙動（続行するか、全体失敗か）を確認するテストが無くなった。FakeOrderMapper は FK 違反を再現しないと見られ、実 DB でのロールバックはこのテスト群では検出できない。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "Javadoc が実装と食い違っている",
+   "detail": "「存在しない会員の行は飛ばして続行し」「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」と書かれたままで、外部キーの事前確認は無くなった。後続の保守者が誤解する。",
+   "line": 12,
+   "evidence": "Javadoc の記述と、memberExists 呼び出しが削除された差分。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:12",
+   "message": "Javadoc が実装と食い違っている 「存在しない会員の行は飛ばして続行し」「DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる」と書かれたままで、外部キーの事前確認は無くなった。後続の保守者が誤解する。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "高速化の目的なら、存在確認を残したままバッチ化する方が安全",
+   "detail": "遅さの原因は行ごとの SELECT だが、キャッシュ（memberCache）で会員ごとに 1 回に抑えられていた。実測で遅いなら、先に全行をパースして member_id を集め、IN 句で一括確認（存在する ID の集合を取得）する方法なら、行単位のエラー報告を保ったまま往復を減らせる。",
+   "line": 52,
+   "evidence": "削除された memberCache は同じ会員を 1 回だけ確認する作りだった（削除されたテストの memberLookups の検証より）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "高速化の目的なら、存在確認を残したままバッチ化する方が安全 遅さの原因は行ごとの SELECT だが、キャッシュ（memberCache）で会員ごとに 1 回に抑えられていた。実測で遅いなら、先に全行をパースして member_id を集め、IN 句で一括確認（存在する ID の集合を取得）する方法なら、行単位のエラー報告を保ったまま往復を減らせる。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "実データで会員不在が起きないと言える根拠は？",
+   "detail": "PR 説明は「外部キーで守られている」とするが、FK は不正データを拒否するだけで、取込を継続する保証にはならない。上流のファイルに未登録会員が含まれる運用があるか、その場合のジョブの期待動作（部分取込か全体失敗か）を確認したい。",
+   "line": 52,
+   "evidence": "PR 説明の記述と、従来の仕様（会員不在行のみスキップ）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:52",
+   "message": "実データで会員不在が起きないと言える根拠は？ PR 説明は「外部キーで守られている」とするが、FK は不正データを拒否するだけで、取込を継続する保証にはならない。上流のファイルに未登録会員が含まれる運用があるか、その場合のジョブの期待動作（部分取込か全体失敗か）を確認したい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "standard"
+}

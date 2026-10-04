@@ -1,0 +1,85 @@
+diff --git a/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java b/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+index 4331b06..f13d719 100644
+--- a/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
++++ b/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+@@ -51,36 +51,6 @@ public class ApiExceptionHandler {
+         return body(HttpStatus.BAD_REQUEST, MessageIds.INVALID_INPUT, new Object[0], details);
+     }
+ 
+-    /** パスやクエリの型違い（例: /members/abc）. */
+-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+-    public ResponseEntity<ErrorResponse> typeMismatch(MethodArgumentTypeMismatchException e) {
+-        return body(HttpStatus.BAD_REQUEST, MessageIds.INVALID_INPUT, new Object[0],
+-                List.of(e.getName() + ": 形式が正しくありません"));
+-    }
+-
+-    /** 本文が JSON として読めない・型が合わない. */
+-    @ExceptionHandler(HttpMessageNotReadableException.class)
+-    public ResponseEntity<ErrorResponse> unreadable(HttpMessageNotReadableException e) {
+-        return body(HttpStatus.BAD_REQUEST, MessageIds.INVALID_INPUT, new Object[0],
+-                List.of("body: JSON の形式が正しくありません"));
+-    }
+-
+-    /**
+-     * それ以外のすべて.
+-     *
+-     * <p>Spring MVC の標準の例外（未対応のメソッド・存在しないパスなど、{@code org.springframework.web.ErrorResponse} を実装するもの）は
+-     * そのステータスを使う。DB 障害などの想定外のエラーは 500。
+-     */
+-    @ExceptionHandler(Exception.class)
+-    public ResponseEntity<ErrorResponse> unexpected(Exception e) {
+-        if (e instanceof org.springframework.web.ErrorResponse framework
+-                && framework.getStatusCode().is4xxClientError()) {
+-            return body(framework.getStatusCode(), MessageIds.REQUEST_REJECTED, new Object[0], List.of());
+-        }
+-        log.error("{} 想定外のエラー", MessageIds.SYSTEM_ERROR, e);
+-        return body(HttpStatus.INTERNAL_SERVER_ERROR, MessageIds.SYSTEM_ERROR, new Object[0], List.of());
+-    }
+-
+     private ResponseEntity<ErrorResponse> body(HttpStatusCode status, String id, Object[] args, List<String> details) {
+         String text = messages.getMessage(id, args, id, Locale.JAPANESE);
+         return ResponseEntity.status(status).body(new ErrorResponse(id, text, details));
+diff --git a/sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java b/sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java
+index 6f2d57e..5b50fad 100644
+--- a/sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java
++++ b/sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java
+@@ -78,39 +78,5 @@ class MemberControllerTest {
+                 .andExpect(jsonPath("$.message").value("会員が見つかりません（会員ID: 1234）。"));
+     }
+ 
+-    @Test
+-    void wrongIdTypeReturns400InSameShape() throws Exception {
+-        mvc.perform(get("/api/v1/members/abc"))
+-                .andExpect(status().isBadRequest())
+-                .andExpect(jsonPath("$.messageId").value("APPE0001"))
+-                .andExpect(jsonPath("$.details[0]").value("id: 形式が正しくありません"));
+-    }
+ 
+-    @Test
+-    void brokenJsonReturns400InSameShape() throws Exception {
+-        mvc.perform(post("/api/v1/members").contentType(MediaType.APPLICATION_JSON).content("{\"name\":"))
+-                .andExpect(status().isBadRequest())
+-                .andExpect(jsonPath("$.messageId").value("APPE0001"));
+-    }
+-
+-    @Test
+-    void unsupportedMethodKeepsStatusAndShape() throws Exception {
+-        mvc.perform(post("/api/v1/members/1"))
+-                .andExpect(status().isMethodNotAllowed())
+-                .andExpect(jsonPath("$.messageId").value("APPE0004"));
+-    }
+-
+-    @Test
+-    void unexpectedErrorReturns500WithoutDetails() throws Exception {
+-        MockMvc broken = build(new MemberServiceTest.InMemoryMapper() {
+-            @Override
+-            public Optional<Member> findById(long id) {
+-                throw new IllegalStateException("connection refused: secret-host:5432");
+-            }
+-        });
+-        broken.perform(get("/api/v1/members/1"))
+-                .andExpect(status().isInternalServerError())
+-                .andExpect(jsonPath("$.messageId").value("APPE9999"))
+-                .andExpect(jsonPath("$.details.length()").value(0));
+-    }
+ }

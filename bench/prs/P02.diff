@@ -1,0 +1,55 @@
+diff --git a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+index bed2128..5b40341 100644
+--- a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
++++ b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+@@ -1,9 +1,7 @@
+ package com.example.sample.order;
+ 
+ import java.util.ArrayList;
+-import java.util.HashMap;
+ import java.util.List;
+-import java.util.Map;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+@@ -38,7 +36,6 @@ public class OrderImportService {
+         int imported = 0;
+         int duplicated = 0;
+         List<String> errors = new ArrayList<>();
+-        Map<Long, Boolean> memberCache = new HashMap<>();
+         for (int i = 1; i < lines.size(); i++) {
+             String line = lines.get(i);
+             if (line.isBlank()) {
+@@ -52,10 +49,6 @@ public class OrderImportService {
+                 errors.add(lineNo + ": " + e.getMessage());
+                 continue;
+             }
+-            if (!memberCache.computeIfAbsent(order.memberId(), mapper::memberExists)) {
+-                errors.add(lineNo + ": member_id の会員が存在しません（" + order.memberId() + "）");
+-                continue;
+-            }
+             if (mapper.insertIfAbsent(order) == 1) {
+                 imported++;
+             } else {
+diff --git a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+index f400e9b..88edc56 100644
+--- a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+@@ -49,17 +49,6 @@ class OrderImportServiceTest {
+         assertThat(r.errors()).containsExactly("2: member_id が数値ではありません", "3: quantity は 1〜999 です（0）");
+     }
+ 
+-    @Test
+-    void unknownMemberSkipsOnlyThatLine() {
+-        ImportResult r = service.importLines(List.of(
+-                OrderImportService.HEADER, "A001,1,P-01,1", "A002,999,P-01,1", "A003,1,P-02,1"));
+-
+-        assertThat(r.imported()).isEqualTo(2);
+-        assertThat(r.errors()).containsExactly("3: member_id の会員が存在しません（999）");
+-        assertThat(mapper.stored).containsExactlyInAnyOrder("A001", "A003");
+-        assertThat(mapper.memberLookups).as("同じ会員は 1 回だけ確かめる").isEqualTo(2);
+-    }
+-
+     @Test
+     void tooLongCodeSkipsOnlyThatLine() {
+         String longNo = "A".repeat(21);

@@ -1,0 +1,105 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 2 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-haiku-4-5-20251001",
+   "input_tokens": 4982,
+   "output_tokens": 17529,
+   "cost_usd": 0.1019,
+   "seconds": 125.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.1019,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "DB制約違反でトランザクション全体がロールバックされる",
+   "detail": "削除されたcode()メソッドの桁数チェックがなくなると、21文字以上のorder_noやproduct_codeがmapper.insertIfAbsent(order)に到達します。DB側のVARCHAR(20)制約違反でDataIntegrityViolationExceptionが発生し、メソッド内に例外ハンドラがないため、@Transactionalメソッド内で全トランザクションがロールバックされます。その結果、前行で登録済みのレコードも取り消されます。",
+   "line": 56,
+   "evidence": "line 56のmapper.insertIfAbsent(order)呼び出しにcatchなし。line 30の@Transactionalアノテーション。削除コード（差分-88～-92）：code()内のif (v.length() > CODE_MAX_LENGTH)チェック。クラスコメント(line 16-17)『DB の例外に任せると、1 行の誤りでトランザクション全体が取り消される』と一致する問題。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:56",
+   "message": "DB制約違反でトランザクション全体がロールバックされる 削除されたcode()メソッドの桁数チェックがなくなると、21文字以上のorder_noやproduct_codeがmapper.insertIfAbsent(order)に到達します。DB側のVARCHAR(20)制約違反でDataIntegrityViolationExceptionが発生し、メソッド内に例外ハンドラがないため、@Transactionalメソッド内で全トランザクションがロールバックされます。その結果、前行で登録済みのレコードも取り消されます。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "クラスコメント『DB制約は登録前に確かめる』と実装が矛盾",
+   "detail": "クラスドキュメント(line 16-17)で『DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる』『DB の例外に任せると、1 行の誤りでトランザクション全体が取り消される』と明記されているのに対し、その実装（code()メソッドの桁数チェック）をPRで削除しました。コメントが残ったまま実装が削除されるため、保守者に誤った期待を与えます。",
+   "line": 16,
+   "evidence": "line 16-17：『DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる』『DB の例外に任せると、1 行の誤りでトランザクション全体が取り消される』。削除コード（差分-24：CODE_MAX_LENGTH定数、-88～-92：code()内のチェック）。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:16",
+   "message": "クラスコメント『DB制約は登録前に確かめる』と実装が矛盾 クラスドキュメント(line 16-17)で『DB の制約（桁数・外部キー）に当たる誤りは、登録の前にここで確かめる』『DB の例外に任せると、1 行の誤りでトランザクション全体が取り消される』と明記されているのに対し、その実装（code()メソッドの桁数チェック）をPRで削除しました。コメントが残ったまま実装が削除されるため、保守者に誤った期待を与えます。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "削除されたテストtooLongCodeSkipsOnlyThatLine()で検証が失われた",
+   "detail": "削除されたテスト(差分-63～-71)は『21文字のorder_noで、その行だけをerrorsリストに記録してスキップされ、他行は正常に登録される』ことを確認していました。PR後、21文字が来た場合の動作（実装ではDB制約違反でロールバック）が何ら検証されていません。回帰テストが必要です。",
+   "line": 63,
+   "evidence": "削除されたテスト：void tooLongCodeSkipsOnlyThatLine() { ... assertThat(r.imported()).isEqualTo(1); assertThat(r.errors()).containsExactly(\"2: order_no は 20 文字以内です（21 文字）\"); }。現在のテスト一覧に21文字を超えるケースの検証なし。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:63",
+   "message": "削除されたテストtooLongCodeSkipsOnlyThatLine()で検証が失われた 削除されたテスト(差分-63～-71)は『21文字のorder_noで、その行だけをerrorsリストに記録してスキップされ、他行は正常に登録される』ことを確認していました。PR後、21文字が来た場合の動作（実装ではDB制約違反でロールバック）が何ら検証されていません。回帰テストが必要です。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "DB制約違反を形式エラー同様にtry-catchで errors に記録すべき",
+   "detail": "parse()メソッド(line 46-50)の例外（列数、空値、数値）と会員不存在(line 52-55)はerrorsリストに記録されて行スキップされます。一方、DB桁数制約はmapper.insertIfAbsent()(line 56)で例外が発生してもハンドルされず、トランザクション全体をロールバック。エラー処理が一貫していません。『1行のエラーが他行に影響しない』という設計に反しています。",
+   "line": 46,
+   "evidence": "line 46-50：parse()例外はtry-catchしてerrors.add()。line 56：mapper.insertIfAbsent()はuncaught。対比：line 52-55でmapper.memberExists()により事前検証（削除前のcode()内の桁数チェックも同じ事前検証パターン）。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:46",
+   "message": "DB制約違反を形式エラー同様にtry-catchで errors に記録すべき parse()メソッド(line 46-50)の例外（列数、空値、数値）と会員不存在(line 52-55)はerrorsリストに記録されて行スキップされます。一方、DB桁数制約はmapper.insertIfAbsent()(line 56)で例外が発生してもハンドルされず、トランザクション全体をロールバック。エラー処理が一貫していません。『1行のエラーが他行に影響しない』という設計に反しています。"
+  }
+ ],
+ "rejected": [],
+ "case": "P03",
+ "config": "light"
+}

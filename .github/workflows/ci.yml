@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e "mcp-server[dev]" pyyaml
+      - run: pip install -e "mcp-server[dev]" -e "auto-review[dev]" pyyaml
       - run: ruff check . && ruff format --check .
       - name: MCP server
         run: |
@@ -24,3 +24,14 @@ jobs:
           pytest -q mcp-server/tests 2>&1 | tee mcp-test.log || { grep -E "Error|error|FAILED|assert" mcp-test.log | head -30 | sed 's/^/::error::/'; exit 1; }
       - name: scorer
         run: pytest -q runner/tests
+      - name: auto-review
+        run: pytest -q auto-review/tests
+      - name: PR の課題が作り直せる（差分が cases.yaml と一致）
+        run: |
+          git clone -q https://github.com/shoyo-maya-bot/dev-environment.git ../dev-environment
+          python bench/prs/make_prs.py ../dev-environment
+          git diff --exit-code bench/prs
+      - name: auto-review の見積もり（モデルは呼ばない）
+        run: |
+          for d in bench/prs/*.diff; do auto-review plan "$d" | head -1; done
+          auto-review run bench/prs/P05.diff -f json > /dev/null

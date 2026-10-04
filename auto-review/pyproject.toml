@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-review"
+version = "0.1.0"
+description = "PR の差分を危なさで振り分け、ふだんは中位モデル 1 回・必要なときだけ上位モデルを足す AI レビュー"
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+auto-review = "auto_review.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+auto_review = ["router.yaml", "prompts/*.md"]

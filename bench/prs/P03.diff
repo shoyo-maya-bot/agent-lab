@@ -1,0 +1,64 @@
+diff --git a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+index bed2128..5607551 100644
+--- a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
++++ b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+@@ -21,9 +21,6 @@ public class OrderImportService {
+ 
+     static final String HEADER = "order_no,member_id,product_code,quantity";
+ 
+-    /** orders.order_no・orders.product_code の桁数（local/db/init/01_schema.sql の VARCHAR(20)）. */
+-    static final int CODE_MAX_LENGTH = 20;
+-
+     private final OrderMapper mapper;
+ 
+     public OrderImportService(OrderMapper mapper) {
+@@ -85,10 +82,6 @@ public class OrderImportService {
+         if (v.isEmpty()) {
+             throw new IllegalArgumentException(name + " が空です");
+         }
+-        if (v.length() > CODE_MAX_LENGTH) {
+-            throw new IllegalArgumentException(
+-                    name + " は " + CODE_MAX_LENGTH + " 文字以内です（" + v.length() + " 文字）");
+-        }
+         return v;
+     }
+ 
+diff --git a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+index f400e9b..a3d08fb 100644
+--- a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+@@ -60,16 +60,6 @@ class OrderImportServiceTest {
+         assertThat(mapper.memberLookups).as("同じ会員は 1 回だけ確かめる").isEqualTo(2);
+     }
+ 
+-    @Test
+-    void tooLongCodeSkipsOnlyThatLine() {
+-        String longNo = "A".repeat(21);
+-        ImportResult r = service.importLines(List.of(
+-                OrderImportService.HEADER, longNo + ",1,P-01,1", "A002,1,P-01,1"));
+-
+-        assertThat(r.imported()).isEqualTo(1);
+-        assertThat(r.errors()).containsExactly("2: order_no は 20 文字以内です（21 文字）");
+-    }
+-
+     @Test
+     void wrongHeaderIsRejected() {
+         assertThatThrownBy(() -> service.importLines(List.of("no,member")))
+@@ -82,16 +72,10 @@ class OrderImportServiceTest {
+         "A001,1,P-01        | 列数が 4 ではありません（3 列）",
+         "' ,1,P-01,1'       | order_no が空です",
+         "'A001,1, ,1'       | product_code が空です",
+-        "A001,1,P-01,1000   | quantity は 1〜999 です（1000）",
+-        "A001,1,P-01234567890123456789,1 | product_code は 20 文字以内です（22 文字）"
++        "A001,1,P-01,1000   | quantity は 1〜999 です（1000）"
+     })
+     void parseRejects(String line, String message) {
+         assertThatThrownBy(() -> OrderImportService.parse(line)).hasMessage(message);
+     }
+ 
+-    @Test
+-    void parseAcceptsExactlyTwentyChars() {
+-        String twenty = "B".repeat(20);
+-        assertThat(OrderImportService.parse(twenty + ",1," + twenty + ",1").orderNo()).isEqualTo(twenty);
+-    }
+ }

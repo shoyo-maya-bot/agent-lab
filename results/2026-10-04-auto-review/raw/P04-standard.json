@@ -1,0 +1,87 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 1,
+  "reasons": [
+   "+1 sample-app/build.gradle: 依存・ビルド"
+  ],
+  "risky_files": [
+   "sample-app/build.gradle"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-sonnet-5-5",
+   "input_tokens": 3272,
+   "output_tokens": 1061,
+   "cost_usd": 0.0231,
+   "seconds": 11.1,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0231,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 1
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/build.gradle",
+   "title": "-DbaseUrl がテスト JVM に渡らなくなり、接続先の切替が効かない",
+   "detail": "`./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<dev-host>` のように実行しても、-DbaseUrl は Gradle 本体の JVM にしか設定されず、テスト用に fork された JVM には届かない。削除前は明示的に転送していたが、削除後は baseUrl が未設定になる。Karate 側が baseUrl 未設定時に local 用の既定値（例: localhost）へ落ちる構成だとすると、dev 向けのつもりで実行したテストがローカルのアプリ、または別の環境に対して走る。テストが通ったように見えるため、誤った環境で検証済みと誤認する危険がある。接続できなければ原因の分かりにくい失敗になる。",
+   "line": 55,
+   "evidence": "削除された行のコメントに「Gradle に渡した -DbaseUrl は、そのままではテストの JVM に届かない」とある。残った systemProperty は karate.env のみ。同ファイルの karateTest 直前のコメントには `-DbaseUrl=https://<your-dev-host>` を使う手順が残っており、この手順が動かなくなる。Test タスクは別 JVM で実行されるのが Gradle の標準動作。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/build.gradle:55",
+   "message": "-DbaseUrl がテスト JVM に渡らなくなり、接続先の切替が効かない `./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<dev-host>` のように実行しても、-DbaseUrl は Gradle 本体の JVM にしか設定されず、テスト用に fork された JVM には届かない。削除前は明示的に転送していたが、削除後は baseUrl が未設定になる。Karate 側が baseUrl 未設定時に local 用の既定値（例: localhost）へ落ちる構成だとすると、dev 向けのつもりで実行したテストがローカルのアプリ、または別の環境に対して走る。テストが通ったように見えるため、誤った環境で検証済みと誤認する危険がある。接続できなければ原因の分かりにくい失敗になる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/build.gradle",
+   "title": "使い方のコメントと実装が食い違う",
+   "detail": "削除を維持する場合でも、`-DbaseUrl=...` を使う案内コメントが残っているため、利用者や CI の設定が引き続き baseUrl を渡し、無視されていることに気づけない。また、削除によって karate-config.js などが baseUrl を参照しなくなったかどうかは、この差分からは確認できない（推測）。",
+   "line": 48,
+   "evidence": "build.gradle の 48 行目付近のコメント「接続先を変えるとき: ./gradlew karateTest -Dkarate.env=dev -DbaseUrl=https://<your-dev-host>」が変更されていない。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/build.gradle:48",
+   "message": "使い方のコメントと実装が食い違う 削除を維持する場合でも、`-DbaseUrl=...` を使う案内コメントが残っているため、利用者や CI の設定が引き続き baseUrl を渡し、無視されていることに気づけない。また、削除によって karate-config.js などが baseUrl を参照しなくなったかどうかは、この差分からは確認できない（推測）。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/build.gradle",
+   "title": "削除の意図と、削除しても動くことの確認方法は？",
+   "detail": "PR 説明は「不要そうな記述」としか書かれていない。baseUrl を別の方法（環境変数、karate-config.js 内の env 別設定、CI 側の設定など）で渡す形に移行済みで、この転送が不要になったのであれば問題ない。そうでなければ元に戻すべき。dev 向けに実行して、実際にその接続先へアクセスしていることを確認したか教えてほしい。",
+   "line": 55,
+   "evidence": "差分には baseUrl を他の経路で渡す変更が含まれていない。CI 定義と karate-config.js は提示されたファイルに含まれず、確認できない（推測）。",
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/build.gradle:55",
+   "message": "削除の意図と、削除しても動くことの確認方法は？ PR 説明は「不要そうな記述」としか書かれていない。baseUrl を別の方法（環境変数、karate-config.js 内の env 別設定、CI 側の設定など）で渡す形に移行済みで、この転送が不要になったのであれば問題ない。そうでなければ元に戻すべき。dev 向けに実行して、実際にその接続先へアクセスしていることを確認したか教えてほしい。"
+  }
+ ],
+ "rejected": [],
+ "case": "P04",
+ "config": "standard"
+}

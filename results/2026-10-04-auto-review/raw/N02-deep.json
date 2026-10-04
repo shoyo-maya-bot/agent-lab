@@ -1,0 +1,67 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "skip",
+  "score": 0,
+  "reasons": [],
+  "risky_files": [],
+  "forced_by": "文書・ロックファイルだけの変更"
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 3704,
+   "output_tokens": 745,
+   "cost_usd": 0.0415,
+   "seconds": 10.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0415,
+ "notes": [],
+ "summary": {
+  "findings": 2,
+  "shown": 2,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 0
+ },
+ "findings": [
+  {
+   "severity": "Q",
+   "file": "README.md",
+   "title": "PR の説明と変更内容が合っていない",
+   "detail": "PR タイトルは「README の誤字」、説明は「表記ゆれを直しました」ですが、差分は誤字や表記の修正ではありません。「（どちらか片方だけでも使えます）」という利用方針の文言を新しく足しています。レビューする人やリリースノートを読む人が、仕様の説明が変わったことに気づけないおそれがあります。意図した変更かどうか確認させてください。意図どおりなら、PR タイトルと説明を内容に合わせて直してください。",
+   "line": 4,
+   "evidence": "差分は 4 行目の末尾に「（どちらか片方だけでも使えます）」を追加しているだけで、既存の文字は変えていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "README.md:4",
+   "message": "PR の説明と変更内容が合っていない PR タイトルは「README の誤字」、説明は「表記ゆれを直しました」ですが、差分は誤字や表記の修正ではありません。「（どちらか片方だけでも使えます）」という利用方針の文言を新しく足しています。レビューする人やリリースノートを読む人が、仕様の説明が変わったことに気づけないおそれがあります。意図した変更かどうか確認させてください。意図どおりなら、PR タイトルと説明を内容に合わせて直してください。"
+  },
+  {
+   "severity": "Q",
+   "file": "README.md",
+   "title": "「片方だけでも使える」が各手順書と矛盾しないか",
+   "detail": "クラウド環境だけを使う場合に、ローカルで用意するもの（Java 17、Gradle Wrapper でのビルド、docker-compose の DB など）が不要なのかが、この差分からは分かりません。cloud/README.md や sample-app の手順が local の環境構築を前提にしていると、この一文を読んでクラウドだけで始めた人が手順の途中で詰まります。cloud/README.md と local/README.md が単独で使えることを確かめたか教えてください（両ファイルの中身は差分に含まれていないため推測です）。",
+   "line": 4,
+   "evidence": "同じ文の前半は「ローカルで…単体テストし、クラウドの共有環境で結合テスト…二段構えで使います」と両方を使う前提で書かれています。また『中身』の表では cloud/ の行に前提条件が書かれていません。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "README.md:4",
+   "message": "「片方だけでも使える」が各手順書と矛盾しないか クラウド環境だけを使う場合に、ローカルで用意するもの（Java 17、Gradle Wrapper でのビルド、docker-compose の DB など）が不要なのかが、この差分からは分かりません。cloud/README.md や sample-app の手順が local の環境構築を前提にしていると、この一文を読んでクラウドだけで始めた人が手順の途中で詰まります。cloud/README.md と local/README.md が単独で使えることを確かめたか教えてください（両ファイルの中身は差分に含まれていないため推測です）。"
+  }
+ ],
+ "rejected": [],
+ "case": "N02",
+ "config": "deep"
+}

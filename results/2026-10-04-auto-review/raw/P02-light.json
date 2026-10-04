@@ -1,0 +1,105 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/order/OrderImportService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "sample-app/src/main/java/com/example/sample/order/OrderImportService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-haiku-4-5-20251001",
+   "input_tokens": 4880,
+   "output_tokens": 8027,
+   "cost_usd": 0.0541,
+   "seconds": 62.3,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0541,
+ "notes": [],
+ "summary": {
+  "findings": 4,
+  "shown": 4,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "外部キー制約エラーのハンドリング漏れ",
+   "detail": "削除された memberExists チェックなしで mapper.insertIfAbsent() を呼び出すと、存在しない member_id で外部キー制約エラーが発生し、DataIntegrityViolationException が投げられます。これを catch していないため @Transactional が自動ロールバック（全行のインポートが失敗）し、エラーメッセージも errors に記録されません。元のコードは事前チェック（memberExists）で制約違反を防ぎ、該当行だけ errors に追加して続行していました。",
+   "line": 51,
+   "evidence": "Line 43-54（変更後）の try-catch は parse() のみを保護し、insertIfAbsent() の例外は処理していません。削除前のコード（diff の Line 55-57）では memberExists が false なら errors.add して continue していたため、insertIfAbsent は実行されませんでした。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "外部キー制約エラーのハンドリング漏れ 削除された memberExists チェックなしで mapper.insertIfAbsent() を呼び出すと、存在しない member_id で外部キー制約エラーが発生し、DataIntegrityViolationException が投げられます。これを catch していないため @Transactional が自動ロールバック（全行のインポートが失敗）し、エラーメッセージも errors に記録されません。元のコードは事前チェック（memberExists）で制約違反を防ぎ、該当行だけ errors に追加して続行していました。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java",
+   "title": "存在しない会員の動作テスト削除による検証欠落",
+   "detail": "unknownMemberSkipsOnlyThatLine() テストが削除されました。このテストは、存在しない member_id（999）でインポート実行時、該当行が errors に記録され、他の行は正常にインポートされることを検証していました。削除により、存在しない会員シナリオの動作が一切テストされず、将来の機能拡張やリグレッション時に気付きづらくなります。",
+   "line": 52,
+   "evidence": "差分の削除セクションで void unknownMemberSkipsOnlyThatLine() メソッド全体（約 11 行）が削除されています。このテストが削除前の『会員チェック後に errors に追加して continue』動作の唯一のテストケースでした。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java:52",
+   "message": "存在しない会員の動作テスト削除による検証欠落 unknownMemberSkipsOnlyThatLine() テストが削除されました。このテストは、存在しない member_id（999）でインポート実行時、該当行が errors に記録され、他の行は正常にインポートされることを検証していました。削除により、存在しない会員シナリオの動作が一切テストされず、将来の機能拡張やリグレッション時に気付きづらくなります。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "クラスドキュメントが実装と矛盾",
+   "detail": "クラスドキュメント（Line 12-16）に『形式エラーの行・存在しない会員の行は飛ばして続行』『DB の外部キー制約に当たる誤りは、登録の前にここで確かめる』『1 行の誤りでトランザクション全体が取り消されてしまうため』と記載されています。しかし新実装は外部キー制約を DB に任せているため、存在しない会員では実際に『1 行の誤りで全トランザクション失敗』が起きます。ドキュメントと実装を一致させてください。",
+   "line": 12,
+   "evidence": "Line 12-16 の仕様説明。『DB の制約に当たる誤りはここで確かめる』『DB の例外に任せると、1 行の誤りでトランザクション全体が取り消される』という設計方針が、新実装では実現されていません。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:12",
+   "message": "クラスドキュメントが実装と矛盾 クラスドキュメント（Line 12-16）に『形式エラーの行・存在しない会員の行は飛ばして続行』『DB の外部キー制約に当たる誤りは、登録の前にここで確かめる』『1 行の誤りでトランザクション全体が取り消されてしまうため』と記載されています。しかし新実装は外部キー制約を DB に任せているため、存在しない会員では実際に『1 行の誤りで全トランザクション失敗』が起きます。ドキュメントと実装を一致させてください。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java",
+   "title": "外部キー制約の DELETE 時動作確認が必要",
+   "detail": "スキーマファイルが見えないため、members テーブル削除時の外部キー設定（ON DELETE RESTRICT / CASCADE など）が不明です。RESTRICT なら、別プロセスが会員削除を試みるとき、存在する注文があれば削除が拒否されます。また、会員削除と本サービスの実行が同時に起きると外部キー制約エラーで全トランザクションが失敗します。同時実行シナリオを含むテストが必要か、要件確認してください。",
+   "line": 51,
+   "evidence": "PR の説明『member_id は DB の外部キーで守られています』のみで、制約の詳細（削除時動作）の記載がありません。本サービスは @Transactional でループ処理するため、member 削除との競合を想定する必要があります。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/order/OrderImportService.java:51",
+   "message": "外部キー制約の DELETE 時動作確認が必要 スキーマファイルが見えないため、members テーブル削除時の外部キー設定（ON DELETE RESTRICT / CASCADE など）が不明です。RESTRICT なら、別プロセスが会員削除を試みるとき、存在する注文があれば削除が拒否されます。また、会員削除と本サービスの実行が同時に起きると外部キー制約エラーで全トランザクションが失敗します。同時実行シナリオを含むテストが必要か、要件確認してください。"
+  }
+ ],
+ "rejected": [],
+ "case": "P02",
+ "config": "light"
+}

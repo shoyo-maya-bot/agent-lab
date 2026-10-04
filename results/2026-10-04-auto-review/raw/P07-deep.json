@@ -1,0 +1,89 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "standard",
+  "score": 5,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/member/MemberService.java: 業務ロジック・トランザクション",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 1 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "sample-app/src/main/java/com/example/sample/member/MemberService.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-opus-5-5",
+   "input_tokens": 5332,
+   "output_tokens": 1571,
+   "cost_usd": 0.0721,
+   "seconds": 18.2,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0721,
+ "notes": [],
+ "summary": {
+  "findings": 3,
+  "shown": 3,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 2
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "ID が 1000 以上だと 404 メッセージに桁区切りが入る",
+   "detail": "GET /api/v1/members/1234 のように ID が 1000 以上で会員が見つからないと、レスポンスの message が「会員が見つかりません（会員ID: 1,234）。」になります。ID を画面に表示したり、問い合わせ時に検索キーとしてコピーしたりすると、実在しない値に見えます。ロケールによっては区切り文字が「.」や空白に変わるため、表記が環境ごとに揺れます。ログに同じメッセージを出していれば、ID で grep しても引っかかりません（ログ出力の有無は差分から見えないので推測）。PR の説明は「引数は Object なので変換は不要」としていますが、型として渡せることと、整形結果が同じになることは別の話です。",
+   "line": 23,
+   "evidence": "削除されたコメントに「数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる」とはっきり書かれています。テストのメッセージ定義は \"会員が見つかりません（会員ID: {0}）。\" で、書式指定のない {0} です。ApiExceptionHandler は StaticMessageSource（MessageFormat ベース）で解決しています。今回 String.valueOf(id) をやめて long（Long にオートボクシングされる）のまま渡すようにしたので、MessageFormat は Number として桁区切り付きで整形します。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "ID が 1000 以上だと 404 メッセージに桁区切りが入る GET /api/v1/members/1234 のように ID が 1000 以上で会員が見つからないと、レスポンスの message が「会員が見つかりません（会員ID: 1,234）。」になります。ID を画面に表示したり、問い合わせ時に検索キーとしてコピーしたりすると、実在しない値に見えます。ロケールによっては区切り文字が「.」や空白に変わるため、表記が環境ごとに揺れます。ログに同じメッセージを出していれば、ID で grep しても引っかかりません（ログ出力の有無は差分から見えないので推測）。PR の説明は「引数は Object なので変換は不要」としていますが、型として渡せることと、整形結果が同じになることは別の話です。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "退行を検出するテストを削除して、不具合を見えなくしている",
+   "detail": "notFoundMessageHasNoThousandsSeparator は、まさにこの変更で起きる退行（1234 → 1,234）を検出するテストです。このテストは今回の変更で失敗するはずで、失敗したので消したように見えます。残っている notFoundReturns404WithMessageId は ID が 42 で 1000 未満なので、桁区切りの問題を検出できません。このままマージすると、同じ退行が今後も CI で見逃されます。",
+   "line": 73,
+   "evidence": "差分で @Test notFoundMessageHasNoThousandsSeparator（/api/v1/members/1234 の message が「会員ID: 1234」であることを確認していた）が削除されています。変更後の全文を見ると、404 系のテストは /members/42 の 1 件だけです。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:73",
+   "message": "退行を検出するテストを削除して、不具合を見えなくしている notFoundMessageHasNoThousandsSeparator は、まさにこの変更で起きる退行（1234 → 1,234）を検出するテストです。このテストは今回の変更で失敗するはずで、失敗したので消したように見えます。残っている notFoundReturns404WithMessageId は ID が 42 で 1000 未満なので、桁区切りの問題を検出できません。このままマージすると、同じ退行が今後も CI で見逃されます。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/member/MemberService.java",
+   "title": "数値を渡すと崩れる罠を、呼び出し側のコメントだけで防いでいる",
+   "detail": "String.valueOf(id) に戻すのが最小の修正です。ただ、この PR のように「引数は Object だから不要」と判断して消されやすい構造そのものが問題です。対策としては、メッセージ定義側を {0,number,#} にする、NotFoundException や ApiExceptionHandler の引数解決で Number を文字列化する、といった方法があります。どちらかで呼び出し側に依存しない形にし、テストを戻すことを勧めます。他の Service でも数値 ID を同じように渡している箇所があれば、同じ不具合が出ます（差分外のため推測）。",
+   "line": 23,
+   "evidence": "不具合の回避が、MemberService.get の String.valueOf と削除されたコメントにしか存在していませんでした。NotFoundException のシグネチャが Object であることは PR の説明から読み取れます。",
+   "models": [
+    "claude-opus-5-5"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/member/MemberService.java:23",
+   "message": "数値を渡すと崩れる罠を、呼び出し側のコメントだけで防いでいる String.valueOf(id) に戻すのが最小の修正です。ただ、この PR のように「引数は Object だから不要」と判断して消されやすい構造そのものが問題です。対策としては、メッセージ定義側を {0,number,#} にする、NotFoundException や ApiExceptionHandler の引数解決で Number を文字列化する、といった方法があります。どちらかで呼び出し側に依存しない形にし、テストを戻すことを勧めます。他の Service でも数値 ID を同じように渡している箇所があれば、同じ不具合が出ます（差分外のため推測）。"
+  }
+ ],
+ "rejected": [],
+ "case": "P07",
+ "config": "deep"
+}

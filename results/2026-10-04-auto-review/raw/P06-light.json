@@ -1,0 +1,170 @@
+{
+ "tool": "auto-review",
+ "plan": {
+  "tier": "deep",
+  "score": 7,
+  "reasons": [
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: エラー応答",
+   "+2 sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java: 例外の扱いの変更",
+   "+3 sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java: テストが 4 件減った"
+  ],
+  "risky_files": [
+   "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java"
+  ],
+  "forced_by": null
+ },
+ "calls": [
+  {
+   "step": "single",
+   "model": "claude-haiku-4-5-20251001",
+   "input_tokens": 4971,
+   "output_tokens": 7641,
+   "cost_usd": 0.0525,
+   "seconds": 59.8,
+   "estimated": false
+  }
+ ],
+ "cost_usd": 0.0525,
+ "notes": [],
+ "summary": {
+  "findings": 8,
+  "shown": 8,
+  "confirmed": 0,
+  "rejected": 0,
+  "open_must": 5
+ },
+ "findings": [
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "MethodArgumentTypeMismatchException が処理されず、エラー形式が変わる",
+   "detail": "削除前は型エラー（例: GET /api/v1/members/abc）で MethodArgumentTypeMismatchException をキャッチして ErrorResponse 形式で返していた。削除後は Spring のデフォルト例外ハンドラに委譲され、ErrorResponse 形式ではなく Spring の標準形式（timestamp, status, error など）で返される。クライアント側が ErrorResponse を期待していると、JSON パース失敗などの問題が発生する可能性がある。",
+   "line": 1,
+   "evidence": "削除された @ExceptionHandler(MethodArgumentTypeMismatchException.class) メソッド（差分の 52-57 行目）が削除されており、同様の処理を他のハンドラで行っていない。変更後の ApiExceptionHandler には このハンドラがない。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s1",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:1",
+   "message": "MethodArgumentTypeMismatchException が処理されず、エラー形式が変わる 削除前は型エラー（例: GET /api/v1/members/abc）で MethodArgumentTypeMismatchException をキャッチして ErrorResponse 形式で返していた。削除後は Spring のデフォルト例外ハンドラに委譲され、ErrorResponse 形式ではなく Spring の標準形式（timestamp, status, error など）で返される。クライアント側が ErrorResponse を期待していると、JSON パース失敗などの問題が発生する可能性がある。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "HttpMessageNotReadableException が処理されず、エラー形式が変わる",
+   "detail": "削除前は破損 JSON（例: POST body が {\"name\": のまま）で HttpMessageNotReadableException をキャッチして ErrorResponse 形式で返していた。削除後は Spring のデフォルト形式で返される。API 全体のエラー形式一貫性が損なわれ、クライアント側の統一的なエラー処理ができなくなる。",
+   "line": 1,
+   "evidence": "削除された @ExceptionHandler(HttpMessageNotReadableException.class) メソッド（差分の 58-63 行目）。変更後のコードには同等の処理がない。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s2",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:1",
+   "message": "HttpMessageNotReadableException が処理されず、エラー形式が変わる 削除前は破損 JSON（例: POST body が {\"name\": のまま）で HttpMessageNotReadableException をキャッチして ErrorResponse 形式で返していた。削除後は Spring のデフォルト形式で返される。API 全体のエラー形式一貫性が損なわれ、クライアント側の統一的なエラー処理ができなくなる。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "想定外エラーのロギングが失われ、運用トレーサビリティが低下",
+   "detail": "削除前は Exception ハンドラで log.error(\"{} 想定外のエラー\", MessageIds.SYSTEM_ERROR, e) としていた。DB 接続障害など想定外エラーの発生時に error レベルのログが出力されていた。削除後、これらのエラーが ApiExceptionHandler で処理されず、Spring のデフォルト例外ハンドラに委譲されると、ログ出力が保証されず、運用で障害の追跡が困難になる可能性がある。",
+   "line": 1,
+   "evidence": "削除された Exception ハンドラ内の log.error() 呼び出し（差分の 73 行目）。変更後のコードには例外全般をキャッチして logging する処理がない。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s3",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:1",
+   "message": "想定外エラーのロギングが失われ、運用トレーサビリティが低下 削除前は Exception ハンドラで log.error(\"{} 想定外のエラー\", MessageIds.SYSTEM_ERROR, e) としていた。DB 接続障害など想定外エラーの発生時に error レベルのログが出力されていた。削除後、これらのエラーが ApiExceptionHandler で処理されず、Spring のデフォルト例外ハンドラに委譲されると、ログ出力が保証されず、運用で障害の追跡が困難になる可能性がある。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "Spring の ErrorResponse 例外（405 など）が ErrorResponse 形式で返されない",
+   "detail": "削除前は汎用 Exception ハンドラで『org.springframework.web.ErrorResponse framework && framework.getStatusCode().is4xxClientError()』の条件で Spring の標準例外を ErrorResponse 形式に統一していた。例えば POST /api/v1/members/1（未対応メソッド）の 405 Method Not Allowed が ErrorResponse 形式で返されていた。削除後、405 など Spring が投げる例外は ErrorResponse 形式で返されず、API のエラー形式が混在する。",
+   "line": 1,
+   "evidence": "削除された Exception ハンドラの条件分岐（差分の 70-72 行目）で ErrorResponse を実装する例外を特別扱いしていた。この処理がない変更後は、Spring 標準例外が ErrorResponse で包装されず、Spring のデフォルト形式で返される。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s4",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:1",
+   "message": "Spring の ErrorResponse 例外（405 など）が ErrorResponse 形式で返されない 削除前は汎用 Exception ハンドラで『org.springframework.web.ErrorResponse framework && framework.getStatusCode().is4xxClientError()』の条件で Spring の標準例外を ErrorResponse 形式に統一していた。例えば POST /api/v1/members/1（未対応メソッド）の 405 Method Not Allowed が ErrorResponse 形式で返されていた。削除後、405 など Spring が投げる例外は ErrorResponse 形式で返されず、API のエラー形式が混在する。"
+  },
+  {
+   "severity": "MUST",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "削除されたテストにより型エラー・破損JSON・未対応メソッドの動作が検証されなくなる",
+   "detail": "削除されたテスト：wrongIdTypeReturns400InSameShape（型エラーが ErrorResponse 形式で 400），brokenJsonReturns400InSameShape（破損 JSON が ErrorResponse 形式で 400），unsupportedMethodKeepsStatusAndShape（未対応メソッドが ErrorResponse 形式で 405），unexpectedErrorReturns500WithoutDetails（想定外エラーが ErrorResponse 形式で 500）。これらが削除されると、PR 変更後に実装ハンドラが削除された例外の動作が検証されず、実装と期待値の齟齬が発見されない可能性がある。",
+   "line": 1,
+   "evidence": "MemberControllerTest.java から 4 つの @Test メソッドが削除（差分の 81-116 行目）。特に wrongIdTypeReturns400InSameShape は GET /api/v1/members/abc の型エラーを、brokenJsonReturns400InSameShape は破損 JSON を、unsupportedMethodKeepsStatusAndShape は POST /api/v1/members/1 を検証していた。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s5",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:1",
+   "message": "削除されたテストにより型エラー・破損JSON・未対応メソッドの動作が検証されなくなる 削除されたテスト：wrongIdTypeReturns400InSameShape（型エラーが ErrorResponse 形式で 400），brokenJsonReturns400InSameShape（破損 JSON が ErrorResponse 形式で 400），unsupportedMethodKeepsStatusAndShape（未対応メソッドが ErrorResponse 形式で 405），unexpectedErrorReturns500WithoutDetails（想定外エラーが ErrorResponse 形式で 500）。これらが削除されると、PR 変更後に実装ハンドラが削除された例外の動作が検証されず、実装と期待値の齟齬が発見されない可能性がある。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "API エラー形式の一貫性が損なわれ、クライアント実装が複雑化する可能性",
+   "detail": "変更後は NotFoundException・BusinessException・MethodArgumentNotValidException のみ ErrorResponse で返す。しかし MethodArgumentTypeMismatchException や汎用例外は Spring のデフォルト形式で返される。これにより、同じ API でもエラーが業務例外なら ErrorResponse、Spring 関連なら異なる形式という混在状態になる。クライアント側が『すべてのエラー = ErrorResponse』という前提で実装していると、エラーハンドリングロジックが複雑化し、ケース漏れのリスクが高まる。",
+   "line": 1,
+   "evidence": "変更後の ApiExceptionHandler には 3 つのハンドラ（notFound, business, invalid）しかなく、MethodArgumentTypeMismatchException や HttpMessageNotReadableException を処理するハンドラがない。これらが発生した場合、ApiExceptionHandler の外で処理される。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s6",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:1",
+   "message": "API エラー形式の一貫性が損なわれ、クライアント実装が複雑化する可能性 変更後は NotFoundException・BusinessException・MethodArgumentNotValidException のみ ErrorResponse で返す。しかし MethodArgumentTypeMismatchException や汎用例外は Spring のデフォルト形式で返される。これにより、同じ API でもエラーが業務例外なら ErrorResponse、Spring 関連なら異なる形式という混在状態になる。クライアント側が『すべてのエラー = ErrorResponse』という前提で実装していると、エラーハンドリングロジックが複雑化し、ケース漏れのリスクが高まる。"
+  },
+  {
+   "severity": "WANT",
+   "file": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java",
+   "title": "削除されたテストで 500 エラーのレスポンス形式検証が無い",
+   "detail": "unexpectedErrorReturns500WithoutDetails テストが削除されたため、想定外エラー（connection refused など）が 500 + ErrorResponse（messageId = APPE9999）で返ること、かつ details が空であることが検証されなくなる。今後、DB 接続障害など想定外エラーが異なる形式で返されるようになっても、テストでキャッチできない。",
+   "line": 1,
+   "evidence": "削除されたテスト（差分の 107-116 行目）で、InMemoryMapper を override して例外を発生させ、500 と APPE9999、details.length() = 0 を検証していた。この検証がなくなる。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s7",
+   "location": "sample-app/src/test/java/com/example/sample/member/MemberControllerTest.java:1",
+   "message": "削除されたテストで 500 エラーのレスポンス形式検証が無い unexpectedErrorReturns500WithoutDetails テストが削除されたため、想定外エラー（connection refused など）が 500 + ErrorResponse（messageId = APPE9999）で返ること、かつ details が空であることが検証されなくなる。今後、DB 接続障害など想定外エラーが異なる形式で返されるようになっても、テストでキャッチできない。"
+  },
+  {
+   "severity": "Q",
+   "file": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java",
+   "title": "PR の意図確認：『Spring の既定に任せる』という選択の影響範囲",
+   "detail": "PR 説明では『それ以外は Spring の既定に任せます』とあるが、これは API エラーレスポンスの形式が業務例外と Spring 例外で異なることを意図しているのか、それとも形式は統一のまま Spring に委譲する設計なのか不明。削除前は汎用 Exception ハンドラで全て ErrorResponse 形式に統一していたが、削除後は形式の混在が確定する。この設計変更が明示的に意図されたものか、それとも想定外の副作用なのか。",
+   "line": 1,
+   "evidence": "PR 説明：『業務で使う例外（NotFound・Business・入力チェック）だけ残し、それ以外は Spring の既定に任せます』と記載されているが、『既定 = 異なるエラー形式』になることについて言及されていない。変更後のコードを見ると、3 つの例外のみ処理し、他は委譲される設計が明らか。",
+   "models": [
+    "claude-haiku-4-5-20251001"
+   ],
+   "status": "unverified",
+   "verdict_note": "",
+   "id": "s8",
+   "location": "sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java:1",
+   "message": "PR の意図確認：『Spring の既定に任せる』という選択の影響範囲 PR 説明では『それ以外は Spring の既定に任せます』とあるが、これは API エラーレスポンスの形式が業務例外と Spring 例外で異なることを意図しているのか、それとも形式は統一のまま Spring に委譲する設計なのか不明。削除前は汎用 Exception ハンドラで全て ErrorResponse 形式に統一していたが、削除後は形式の混在が確定する。この設計変更が明示的に意図されたものか、それとも想定外の副作用なのか。"
+  }
+ ],
+ "rejected": [],
+ "case": "P06",
+ "config": "light"
+}
