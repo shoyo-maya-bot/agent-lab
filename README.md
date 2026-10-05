@@ -26,3 +26,8 @@ AI エージェントに **どこまで任せられるか** を実験するリ�
 | [runner/mcp-e2e/](runner/mcp-e2e/) | エージェントに MCP ツールだけで点検させる実地検証（`run.sh`） |
 | [examples/](examples/) | VS Code・Claude Code への MCP の設定例、auto-review の GitHub Actions と Copilot のプロンプト |
 | [results/](results/) | 実験の結果。[モデルの大きさによる違い](results/2026-10-04-model-compare/README.md)、[MCP の実地検証](results/2026-10-04-mcp-e2e/README.md)、[PR 単位のレビューと自動の振り分け](results/2026-10-04-auto-review/README.md)、[3 回ずつ流したばらつきと誤った MUST の却下](results/2026-10-04-auto-review-repeat/README.md) |
+
+## セキュリティ・ライセンス
+
+- 脆弱性を見つけたら、公開の Issue ではなく [SECURITY.md](SECURITY.md) の方法で知らせてください
+- ライセンスは [MIT](LICENSE) です
