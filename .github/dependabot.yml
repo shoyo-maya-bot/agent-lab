@@ -10,4 +10,4 @@ updates:
     open-pull-requests-limit: 5
     ignore:
       - dependency-name: mcp
-        update-types: ["version-update:semver-major"]  # 2.x は API が変わるため、移行は手作業で
+        versions: [">=2"]  # 2.x は API が変わる（FastMCP → MCPServer）ため、移行は手作業で
