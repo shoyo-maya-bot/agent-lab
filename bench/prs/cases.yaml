@@ -4,7 +4,7 @@
 # 作り方: python bench/prs/make_prs.py <dev-environment のパス>   → bench/prs/<id>.diff
 # 採点:   expect の正解（bench/bugs/sample-app-known.yaml の ID）を見つけたか。expect が無い PR は MUST・WANT の数を「誤警報」として数える
 target: dev-environment
-base_commit: e68db72b6d4513072890ce37a4b8f6e5a913db8c
+base_commit: 26fc0874b66dce47264750f5fdab766a9e6de042
 cases:
   - id: P01
     expect: B01

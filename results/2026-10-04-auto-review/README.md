@@ -8,7 +8,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 課題 | [bench/prs](../../bench/prs/cases.yaml) の 11 PR。sample-app の修正済みの main（`e68db72`）に、弱いところを 1 つだけ戻す PR が 8 件（P01〜P08）、問題の無い PR が 3 件（N01 テスト追加、N02 README、N03 コメントと変数名） |
+| 課題 | [bench/prs](../../bench/prs/cases.yaml) の 11 PR。sample-app の修正済みの main（`26fc087`）に、弱いところを 1 つだけ戻す PR が 8 件（P01〜P08）、問題の無い PR が 3 件（N01 テスト追加、N02 README、N03 コメントと変数名） |
 | PR の説明 | 実際にありそうな題名と説明を付けた（例: P05「使われていないクラスの削除」） |
 | 入力 | PR の題名・説明・差分と、変更後のファイルの全文（auto-review の `build_context`） |
 | プロンプト | [auto-review の review.md / deep.md](../../auto-review/src/auto_review/prompts/)（全構成で同じ） |

@@ -9,7 +9,7 @@
 #   git -C dev-environment switch exercise-base   （または git checkout <target_commit>）
 target: dev-environment/sample-app
 target_ref: exercise-base
-target_commit: 2aee458696da6bd7564b5166df9d75c2b8110e5a
+target_commit: 038cd4200622d0032bdb13aa889ab912d7bfa2e2
 fixed_in: main   # 直し方の参考（git diff exercise-base main -- sample-app）
 version: 1
 bugs:
