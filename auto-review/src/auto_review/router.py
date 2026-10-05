@@ -93,6 +93,12 @@ def score_changes(changes: list[FileChange], cfg: dict) -> tuple[int, list[str],
                 s += w
                 what = "テストの削除" if ch.status == "deleted" else f"テストが {removed - added} 件減った"
                 reasons.append(f"+{w} {ch.path}: {what}")
+            # 秘密情報らしき値は、テストのファイルでも数える
+            body = "\n".join([t for _, t in ch.added] + ch.removed)
+            for rule in risk.get("patterns", []):
+                if "秘密" in rule.get("reason", "") and re.search(rule["regex"], body):
+                    s += rule["weight"]
+                    reasons.append(f"+{rule['weight']} {ch.path}: {rule['reason']}")
             per_file[ch.path] = s
             total += s
             continue

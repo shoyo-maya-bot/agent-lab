@@ -102,13 +102,19 @@ def _bigrams(s: str) -> set[str]:
     return {s[i : i + 2] for i in range(len(s) - 1)} or {s}
 
 
+def _same_file(a: str, b: str) -> bool:
+    a, b = a.lower().split(":")[0], b.lower().split(":")[0]
+    if "/" in a and "/" in b:
+        return a == b or a.endswith("/" + b) or b.endswith("/" + a)
+    return bool(a) and a.rsplit("/", 1)[-1] == b.rsplit("/", 1)[-1]
+
+
 def similar(a: Finding, b: Finding) -> bool:
     """同じ問題を指しているか（ファイルが同じで、行が近いか題名が似ている）."""
-    fa, fb = a.file.rsplit("/", 1)[-1].lower(), b.file.rsplit("/", 1)[-1].lower()
-    if not fa or fa != fb:
+    if not _same_file(a.file, b.file):
         return False
-    if a.line and b.line and abs(a.line - b.line) <= 5:
-        return True
+    if a.line and b.line:
+        return abs(a.line - b.line) <= 5
     x, y = _bigrams(a.title), _bigrams(b.title)
     return len(x & y) / max(1, len(x | y)) >= 0.35
 

@@ -5,7 +5,9 @@
 #   - 社内の中継・閉域の窓口に向けるときは Variables に ANTHROPIC_BASE_URL
 #   - 費用の上限は 2 段で: router.yaml の budget.per_pr_usd（1 PR）と、API 側のワークスペースの月の上限
 #
-# pull_request で動かす（pull_request_target は使わない）. フォークからの PR には Secrets が渡らないので、見積もりだけになる.
+# pull_request で動かす（pull_request_target は使わない）. フォークからの PR では Secrets が渡らず、コメントも書けないので動かさない.
+# PR の中身（差分・ファイル）は信用しないデータとして扱う: 認証情報を checkout に残さない、シンボリックリンクは読まない（auto-review 側）、
+# LLM の出力は無害化してからコメントにする.
 name: auto-review
 
 on:
@@ -24,6 +26,7 @@ jobs:
   review:
     if: >-
       github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       (github.event.action != 'labeled' || startsWith(github.event.label.name, 'review:'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -31,19 +34,20 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false   # トークンを .git/config に残さない
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: auto-review を入れる
-        run: pip install "auto-review @ git+https://github.com/shoyo-maya-bot/agent-lab.git@main#subdirectory=auto-review"
+      - name: auto-review を入れる（コミット SHA で固定する）
+        env:
+          REF: ${{ vars.AUTO_REVIEW_REF }}   # リポジトリの Variables に agent-lab のコミット SHA を入れる
+        run: |
+          [ -n "$REF" ] || { echo "::error::Variables の AUTO_REVIEW_REF にコミット SHA を入れてください"; exit 1; }
+          pip install "auto-review @ git+https://github.com/shoyo-maya-bot/agent-lab.git@${REF}#subdirectory=auto-review"
       - name: 差分を取る
         run: |
-          # synchronize では前回からの差分だけを見る（同じ箇所に何度も費用をかけない）
-          if [ "${{ github.event.action }}" = "synchronize" ] && [ -n "${{ github.event.before }}" ]; then
-            git diff "${{ github.event.before }}" "${{ github.event.after }}" > pr.diff
-          else
-            git diff "origin/${{ github.base_ref }}...HEAD" > pr.diff
-          fi
+          # いつも PR 全体の差分を見る（追加の push のたびに前の指摘が消えないように. 費用は 1 PR 数セント）
+          git diff "origin/${{ github.base_ref }}...HEAD" > pr.diff
           wc -l pr.diff
       - name: レビュー
         env:
@@ -54,9 +58,14 @@ jobs:
         run: |
           YES=""
           [ -n "$ANTHROPIC_API_KEY" ] && YES="--yes"
-          # 終了コード 1（MUST あり）でもジョブは失敗にしない. AI の指摘は下書きで、採否は人が決める
+          # 終了コード 1（MUST あり）でもジョブは失敗にしない. AI の指摘は下書きで、採否は人が決める.
+          # 3（モデルを呼べない・出力を読めない）は失敗にする（「指摘 0 件」と見分けるため）
+          set +e
           auto-review run pr.diff --repo . --labels "$LABELS" --author "$AUTHOR" $YES \
-            --out-md comment.md --out-json auto-review.json -f json > /dev/null || [ $? -eq 1 ]
+            --out-md comment.md --out-json auto-review.json -f json > /dev/null
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
       - name: コメントを書く（前回のコメントがあれば置き換える）
         env:
           GH_TOKEN: ${{ github.token }}

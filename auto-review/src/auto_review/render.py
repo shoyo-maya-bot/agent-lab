@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from .review import Result
 
 MARKER = "<!-- auto-review -->"
@@ -15,8 +17,14 @@ def _short(model: str) -> str:
     return model
 
 
+_MENTION = re.compile(r"[@＠](channel|here|everyone|all)\b", re.I)
+
+
 def _cell(s: str) -> str:
-    return s.replace("|", "\\|").replace("\n", " ")
+    """AI の出力を PR のコメントに載せる前に無害化する（HTML・画像・全員へのメンション・表の区切り・改行）."""
+    s = (s or "")[:2000].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("![", "!\\[")
+    s = _MENTION.sub(lambda m: "@\u200b" + m.group(1), s)
+    return s.replace("|", "\\|").replace("\r", " ").replace("\n", " ")
 
 
 def to_markdown(r: Result, max_rows: int = 20) -> str:

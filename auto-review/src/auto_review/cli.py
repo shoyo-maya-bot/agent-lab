@@ -19,7 +19,7 @@ from pathlib import Path
 from .backends import BackendError, get_backend
 from .diff import parse_diff
 from .render import to_markdown, to_report
-from .review import Reviewer
+from .review import Reviewer, UnreadableOutput
 from .router import load_config, plan
 
 
@@ -75,6 +75,9 @@ def main(argv: list[str] | None = None) -> int:
         result = reviewer.single(args.only, diff_text, changes, p) if args.only else reviewer.auto(diff_text, changes, p)
     except BackendError as e:
         print(f"モデルを呼べません: {e}", file=sys.stderr)
+        return 3
+    except UnreadableOutput as e:
+        print(f"結果を読めません: {e}", file=sys.stderr)
         return 3
     md, report = to_markdown(result), to_report(result)
     if args.out_md:

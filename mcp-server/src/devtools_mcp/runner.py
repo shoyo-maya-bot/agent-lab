@@ -45,7 +45,13 @@ class Workspace:
 
     @classmethod
     def from_env(cls) -> Workspace:
-        return cls(Path(os.environ.get("DEVTOOLS_MCP_ROOT") or os.getcwd()).resolve())
+        raw = os.environ.get("DEVTOOLS_MCP_ROOT", "").strip()
+        if not raw:
+            raise ToolError("環境変数 DEVTOOLS_MCP_ROOT に作業フォルダを指定してください（未指定で PC 全体を扱わないため）")
+        root = Path(raw).resolve()
+        if root == Path(root.anchor) or root == Path.home().resolve():
+            raise ToolError(f"作業フォルダにドライブの直下やホームフォルダは指定できません: {root}")
+        return cls(root)
 
     def path(self, value: str, *, must_exist: bool = True) -> Path:
         """作業フォルダからの相対パス（または中の絶対パス）を検証して返す."""
@@ -55,6 +61,9 @@ class Workspace:
         p = (p if p.is_absolute() else self.root / p).resolve()
         if p != self.root and self.root not in p.parents:
             raise ToolError(f"作業フォルダの外は扱えません: {value}（作業フォルダ: {self.root}）")
+        rel_parts = p.relative_to(self.root).parts if p != self.root else ()
+        if any(part == ".git" or part == ".env" or part.startswith(".env.") for part in rel_parts):
+            raise ToolError(f"秘密情報を含みうる場所は扱えません: {value}")
         if must_exist and not p.exists():
             raise ToolError(f"見つかりません: {value}")
         return p
@@ -85,6 +94,9 @@ def resolve_command(tool: str) -> list[str] | None:
     return [found] if found else None
 
 
+REPORT_LIMIT = 200_000  # エージェントに返すレポートの上限（文字）
+
+
 def run(tool: str, args: list[str], ws: Workspace) -> dict[str, Any]:
     cmd = resolve_command(tool)
     if cmd is None:
@@ -95,6 +107,17 @@ def run(tool: str, args: list[str], ws: Workspace) -> dict[str, Any]:
     except subprocess.TimeoutExpired:
         raise ToolError(f"{tool} が {TIMEOUT} 秒以内に終わりませんでした") from None
     report: Any = None
+    if len(proc.stdout) > REPORT_LIMIT:
+        return {
+            "tool": tool,
+            "exit_code": proc.returncode,
+            "meaning": EXIT_MEANING.get(proc.returncode, "不明な終了コード"),
+            "report": None,
+            "truncated": True,
+            "message": f"レポートが大きすぎます（{len(proc.stdout):,} 文字）. 対象を絞るか、CLI で直接 -o に書き出してください",
+            "stderr": proc.stderr[-STDERR_LIMIT:],
+            "seconds": round(time.monotonic() - started, 2),
+        }
     if proc.stdout.strip():
         try:
             report = json.loads(proc.stdout)

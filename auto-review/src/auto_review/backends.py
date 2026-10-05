@@ -66,6 +66,8 @@ class AnthropicBackend:
             raise BackendError(f"API エラー {e.code}: {e.read()[:300]!r}") from e
         except urllib.error.URLError as e:
             raise BackendError(f"API に接続できません: {e.reason}") from e
+        if data.get("stop_reason") == "max_tokens":
+            raise BackendError("出力が上限で切れました（max_tokens）. 結果は使えません")
         text = "".join(c.get("text", "") for c in data.get("content", []) if c.get("type") == "text")
         u = data.get("usage", {})
         inp = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)

@@ -6,6 +6,7 @@ devtools-mcp            # VS Code / Claude などの MCP クライアントか�
 from __future__ import annotations
 
 import functools
+import re
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -66,6 +67,8 @@ def doc2md_convert(path: str, recursive: bool = False) -> dict[str, Any]:
 @_guard
 def design_diff_excel(doc_type: str, before: str, after: str, config_dir: str = "config") -> dict[str, Any]:
     """Excel 設計書の新旧の差分を取る。doc_type は設定の種類（config/<doc_type>.yaml。例: api / batch / if）。"""
+    if not re.fullmatch(r"[a-z0-9_-]{1,40}", doc_type or ""):
+        raise ToolError("doc_type は英小文字・数字・_ - だけで指定してください（例: api）")
     ws = Workspace.from_env()
     args = [
         "--config-dir", str(ws.path(config_dir)),

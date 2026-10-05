@@ -11,7 +11,7 @@ devtools の CLI を、AI エージェント（VS Code の Copilot・Claude な�
 | `spec_trace_check` | 要件と実装・テストの対応表の検査 |
 
 安全のための決まり:
-- 扱えるのは作業フォルダ（`DEVTOOLS_MCP_ROOT`、既定はカレントディレクトリ）の中のファイルだけ
+- 扱えるのは作業フォルダ（`DEVTOOLS_MCP_ROOT`。必須。ドライブの直下とホームフォルダは不可）の中のファイルだけ。`.git` と `.env` は扱わない
 - CLI が書き出すのは `.mcp-out/` の下だけ。元のファイルは書き換えない
 - 外部への送信・書き込みを伴うツール（office-replace の実行、Backlog・Slack）は入れていない
 - stdio で動く（ネットワークのポートを開けない）

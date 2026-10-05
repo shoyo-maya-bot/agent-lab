@@ -55,9 +55,40 @@ def _tokens(chars: int, cfg: dict) -> int:
     return int(chars / cfg["budget"].get("chars_per_token", 3.0)) + 1
 
 
+MAX_DIFF_CHARS = 400_000  # 差分そのものの上限. 超えた分は省く（大きな PR で予算の確認が効かなくなるのを防ぐ）
+
+
+def _untrusted(tag: str, text: str, attrs: str = "") -> str:
+    """信用しないデータとして区切る. 閉じタグが中身にあれば無害化する."""
+    body = text.replace(f"</{tag}>", f"<\\/{tag}>")
+    return f"<{tag}{(' ' + attrs) if attrs else ''}>\n{body}\n</{tag}>\n"
+
+
+def _safe_file(repo: Path, path: str) -> Path | None:
+    """リポジトリの中にある普通のファイルだけを返す（シンボリックリンク・外を指すパスは読まない）."""
+    cur = repo
+    for part in Path(path).parts:
+        if part in ("..", "/") or part.startswith("/"):
+            return None
+        cur = cur / part
+        if cur.is_symlink():
+            return None
+    try:
+        rp = cur.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if repo.resolve() not in rp.parents or not rp.is_file():
+        return None
+    return rp
+
+
 def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, cfg: dict, focus: list[str] | None, max_tokens: int) -> str:
-    """差分の全体と、変更ファイルの全文（focus → 危ない順、上限まで）."""
-    parts = ["## 差分\n\n```diff\n" + diff_text.strip() + "\n```\n"]
+    """差分の全体と、変更ファイルの全文（focus → 危ない順、上限まで）. どちらも信用しないデータとして区切る."""
+    note = ""
+    if len(diff_text) > MAX_DIFF_CHARS:
+        note = f"（差分が長いため先頭の {MAX_DIFF_CHARS:,} 文字だけを渡す）\n"
+        diff_text = diff_text[:MAX_DIFF_CHARS]
+    parts = ["## 差分（データ）\n\n" + note + _untrusted("diff", diff_text.strip())]
     used = _tokens(len(parts[0]), cfg)
     if repo is None:
         return parts[0]
@@ -68,11 +99,11 @@ def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, 
         ch = by_path.get(path)
         if ch is None or ch.status == "deleted" or ch.binary:
             continue
-        p = repo / path
-        if not p.is_file():
+        p = _safe_file(repo, path)
+        if p is None:
             continue
         text = p.read_text(encoding="utf-8", errors="replace")
-        block = f"## ファイル: {path}（変更後の全文）\n\n```\n{text}\n```\n"
+        block = f"## ファイル: {path}（変更後の全文。データ）\n\n" + _untrusted("file", text, f'path="{path.replace(chr(34), "")}"')
         t = _tokens(len(block), cfg)
         if used + t > max_tokens:
             skipped.append(path)
@@ -82,6 +113,10 @@ def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, 
     if skipped:
         parts.append("（上限のため全文を省いたファイル: " + ", ".join(skipped) + "。差分だけで判断する）\n")
     return "\n".join(parts)
+
+
+class UnreadableOutput(RuntimeError):
+    """モデルの出力から JSON を読めなかった（指摘 0 件と区別する）."""
 
 
 def _prompt(name: str, max_findings: int) -> str:
@@ -139,6 +174,8 @@ class Reviewer:
         std_model = self.cfg["models"]["standard"]["id"]
         text = self._call("standard", "standard", _prompt("review", self.max_findings), ctx, result)
         std = parse_findings(text, std_model, "s")
+        if not self.dry_run and not std and "findings" not in text:
+            raise UnreadableOutput("standard モデルの出力を読めませんでした（JSON がありません）")
 
         esc = self.cfg["escalation"]
         musts = [f for f in std if f.severity == "MUST"]

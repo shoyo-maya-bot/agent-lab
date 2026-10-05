@@ -112,3 +112,27 @@ def test_real_design_diff_if_available(tmp_path: Path, monkeypatch: pytest.Monke
     assert r["exit_code"] == 0
     rules = {f["rule_id"] for f in r["report"]["findings"]}
     assert {"value_changed", "row_added", "cell_changed"} <= rules
+
+
+def test_workspace_requires_root_and_blocks_secrets(tmp_path, monkeypatch):
+    from devtools_mcp.runner import ToolError, Workspace
+
+    monkeypatch.delenv("DEVTOOLS_MCP_ROOT", raising=False)
+    with pytest.raises(ToolError):
+        Workspace.from_env()
+    monkeypatch.setenv("DEVTOOLS_MCP_ROOT", str(tmp_path))
+    (tmp_path / ".env").write_text("KEY=1", encoding="utf-8")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text("x", encoding="utf-8")
+    ws = Workspace.from_env()
+    for bad in (".env", ".git/config"):
+        with pytest.raises(ToolError):
+            ws.path(bad)
+
+
+def test_design_diff_rejects_bad_doc_type(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEVTOOLS_MCP_ROOT", str(tmp_path))
+    from devtools_mcp import server
+
+    res = server.design_diff_excel("../../etc/passwd", "a.xlsx", "b.xlsx")
+    assert res.get("error") or res.get("ok") is False or "doc_type" in json.dumps(res, ensure_ascii=False)
