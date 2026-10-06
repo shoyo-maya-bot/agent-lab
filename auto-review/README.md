@@ -77,6 +77,10 @@ auto-review run pr.diff --repo . --yes --backend claude-cli    # Claude Code の
 
 - 終了コード: 0 MUST なし / 1 MUST あり（却下されたものを除く）/ 2 入力の誤り / 3 実行時エラー
 - `ANTHROPIC_BASE_URL` で、社内の中継や閉域の窓口に向けられる（Messages API と同じ形の窓口であること）
+- API の呼び出しは [devtools-common](https://github.com/shoyo-maya-bot/devtools-common) の `devtools_common.llm.LLMClient` を使う（依存はコミット SHA で固定）。
+  混雑（429・529 など）は `retry-after` に従って再試行し、出力が `max_tokens` で切れたら「結果を読めません」で終了コード 3（途中までの結果は使わない）
+- 費用は共通の料金表（`devtools_common.llm.price_for`）で計算する。表に無いモデル ID のときだけ `router.yaml` の単価を使う
+- 外部に送る前に、差分・ファイルの中身のメールアドレスと電話番号を伏せ字（`＊＊＊`）にする（下の「安全のための作り」）
 - AI の指摘は下書きです。CI を失敗させる使い方はせず、採否は人が決めます
 
 ### GitHub Actions で自動化する
@@ -127,6 +131,10 @@ python runner/pr_bench.py --diff-only out/replay --configs auto --cases P01,P05,
 - 読めない重要度（`URGENT` など）は WANT に下げず、MUST の候補として「要確認」を付ける（`CRITICAL`・`HIGH` などのよくある別名はそろえる）
 - プロンプトの例に bench の答え（ファイル名・題名）が混じらないことをテストで確かめる（[tests/test_prompt_leak.py](tests/test_prompt_leak.py)）
 - シンボリックリンクやリポジトリの外を指すファイルは読まない
+- **個人情報の伏せ字**: `anthropic` と `claude-cli` の呼び出し先は、送る前にプロンプト（差分・ファイルの中身を含む）のメールアドレスと日本の電話番号
+  （全角・区切りなし・`+81` を含む）を `devtools_common.llm.Masker` で `＊＊＊` に置き換える。
+  メールアドレスの検査そのものをレビューしたいときなどは、環境変数 `AUTO_REVIEW_MASK_PII=0` で止められる。
+  記録した返答を返す `ReplayBackend`（CI）は外部に送らないので伏せない
 - モデルの出力は、PR のコメントに載せる前に HTML・画像・全員へのメンションを無害化する
 - 出力が上限で切れた・JSON を読めないときは終了コード 3（「指摘 0 件」と見分ける）
 - GitHub Actions の例は、checkout に認証情報を残さず、auto-review をコミット SHA で固定し、フォークからの PR では動かさない

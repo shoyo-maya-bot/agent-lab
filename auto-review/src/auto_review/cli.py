@@ -16,7 +16,7 @@ import json
 import sys
 from pathlib import Path
 
-from .backends import BackendError, get_backend
+from .backends import BackendError, OutputTruncated, get_backend
 from .diff import parse_diff
 from .render import to_markdown, to_report
 from .review import Reviewer, UnreadableOutput
@@ -73,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
         backend = get_backend(args.backend) if args.yes else None
         reviewer = Reviewer(cfg, backend, repo=args.repo, dry_run=not args.yes, max_findings=args.max_findings)
         result = reviewer.single(args.only, diff_text, changes, p) if args.only else reviewer.auto(diff_text, changes, p)
+    except OutputTruncated as e:  # 途中で切れた出力は「指摘 0 件」と区別する
+        print(f"結果を読めません: {e}", file=sys.stderr)
+        return 3
     except BackendError as e:
         print(f"モデルを呼べません: {e}", file=sys.stderr)
         return 3

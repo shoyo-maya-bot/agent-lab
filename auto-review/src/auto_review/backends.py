@@ -1,9 +1,14 @@
 """モデルの呼び出し先.
 
-- anthropic : Messages API を直接呼ぶ（ANTHROPIC_API_KEY。ANTHROPIC_BASE_URL で社内の中継・閉域の窓口に向けられる）
+- anthropic : devtools-common の `devtools_common.llm.LLMClient` で Messages API を呼ぶ
+  （ANTHROPIC_API_KEY。ANTHROPIC_BASE_URL で社内の中継・閉域の窓口に向けられる）。
+  429 / 5xx（529 を含む）は `retry-after` に従って再試行し、出力が max_tokens で切れたら OutputTruncated
 - claude-cli: Claude Code の `claude -p` を道具なしで呼ぶ（ローカルで試すとき）
 - ReplayBackend: 記録しておいた生の返答を返すだけ（モデルは呼ばない. CI で配線の退行を見るため）
 - 外部に送るのは `--yes` を付けたときだけ。付けなければ見積もりだけ（cli.py）
+- 外部に送る前に、差分・プロンプトの中のメールアドレスと電話番号を `devtools_common.llm.Masker` で伏せる
+  （anthropic・claude-cli の両方。環境変数 AUTO_REVIEW_MASK_PII=0 で止められる）
+- 費用は共通の料金表（`devtools_common.llm.price_for`）で計算する。表に無いモデルだけ router.yaml の単価を使う
 """
 
 from __future__ import annotations
@@ -13,10 +18,11 @@ import os
 import shutil
 import subprocess
 import time
-import urllib.error
-import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+from devtools_common.llm import LLMClient, LLMError, Masker, MaxTokensError, price_for
 
 
 @dataclass
@@ -32,59 +38,93 @@ class BackendError(RuntimeError):
     pass
 
 
+class OutputTruncated(BackendError):
+    """出力が max_tokens で途中で切れた. 途中までの JSON は使わない（cli は「結果を読めません」で終了コード 3）."""
+
+
 def price(model: dict, input_tokens: int, output_tokens: int) -> float:
+    """費用の見積もり（USD）. モデル ID が共通の料金表にあればそれを、無ければ router.yaml の単価を使う."""
+    p = price_for(str(model.get("id", "")))
+    if p is not None:
+        return (input_tokens * p.input + output_tokens * p.output) / 1_000_000
+    if "input_per_mtok" not in model or "output_per_mtok" not in model:
+        raise BackendError(f"モデル {model.get('id')!r} の単価がわかりません（共通の料金表にも router.yaml にもありません）")
     return (input_tokens * model["input_per_mtok"] + output_tokens * model["output_per_mtok"]) / 1_000_000
+
+
+def mask_enabled() -> bool:
+    """外部に送る前に個人情報（メールアドレス・電話番号）を伏せるか. 既定は伏せる."""
+    return os.environ.get("AUTO_REVIEW_MASK_PII", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def default_masker() -> Masker | None:
+    return Masker() if mask_enabled() else None
 
 
 class AnthropicBackend:
     name = "anthropic"
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None, timeout: int = 600):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        timeout: int = 600,
+        max_retries: int = 3,
+        masker: Masker | None = None,
+        client_factory: Callable[[str], LLMClient] | None = None,
+    ):
+        """client_factory: モデル ID から LLMClient を作る関数（テストで FakeLLM を渡す）."""
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-        self.base_url = (base_url or os.environ.get("ANTHROPIC_BASE_URL") or "https://api.anthropic.com").rstrip("/")
+        self.base_url = base_url
         self.timeout = timeout
-        if not self.api_key:
+        self.max_retries = max_retries
+        self.masker = masker if masker is not None else default_masker()
+        self._factory = client_factory or self._make_client
+        self._clients: dict[str, LLMClient] = {}
+        if not (self.api_key or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
             raise BackendError("ANTHROPIC_API_KEY が設定されていません")
 
-    def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "") -> Reply:
-        body = json.dumps(
-            {
-                "model": model["id"],
-                "max_tokens": max_tokens,
-                "system": system,
-                "messages": [{"role": "user", "content": user}],
-            }
-        ).encode()
-        req = urllib.request.Request(
-            f"{self.base_url}/v1/messages",
-            data=body,
-            headers={"x-api-key": self.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+    def _make_client(self, model_id: str) -> LLMClient:
+        return LLMClient(
+            model_id,
+            api_key=self.api_key or None,
+            base_url=self.base_url,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            masker=self.masker,
         )
+
+    def _client(self, model_id: str) -> LLMClient:
+        if model_id not in self._clients:
+            self._clients[model_id] = self._factory(model_id)
+        return self._clients[model_id]
+
+    def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "") -> Reply:
         t0 = time.monotonic()
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as res:
-                data = json.loads(res.read())
-        except urllib.error.HTTPError as e:
-            raise BackendError(f"API エラー {e.code}: {e.read()[:300]!r}") from e
-        except urllib.error.URLError as e:
-            raise BackendError(f"API に接続できません: {e.reason}") from e
-        if data.get("stop_reason") == "max_tokens":
-            raise BackendError("出力が上限で切れました（max_tokens）. 結果は使えません")
-        text = "".join(c.get("text", "") for c in data.get("content", []) if c.get("type") == "text")
-        u = data.get("usage", {})
-        inp = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
-        out = u.get("output_tokens", 0)
-        return Reply(text, inp, out, price(model, inp, out), time.monotonic() - t0)
+            comp = self._client(model["id"]).complete(user, system=system, max_tokens=max_tokens)
+        except MaxTokensError as e:
+            raise OutputTruncated(f"出力が上限で切れました（max_tokens={max_tokens}）. 結果は使えません") from e
+        except LLMError as e:
+            raise BackendError(f"API エラー: {e}") from e
+        u = comp.usage
+        inp = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
+        out = u.output_tokens
+        cost = comp.cost_usd if comp.cost_usd is not None else price(model, inp, out)
+        return Reply(comp.text, inp, out, cost, time.monotonic() - t0)
 
 
 class ClaudeCliBackend:
     name = "claude-cli"
 
-    def __init__(self, exe: str = "claude", timeout: int = 900):
+    def __init__(self, exe: str = "claude", timeout: int = 900, masker: Masker | None = None):
         self.exe = shutil.which(exe) or exe
         self.timeout = timeout
+        self.masker = masker if masker is not None else default_masker()
 
     def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "") -> Reply:
+        if self.masker:
+            system, user = self.masker.text(system), self.masker.text(user)
         cmd = [
             self.exe,
             "-p",

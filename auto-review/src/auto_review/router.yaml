@@ -3,7 +3,9 @@
 # 値を変えたら bench で流し直し、検出率・確認する件数・費用がどう変わるかを results/ に残す.
 version: 1
 
-# モデルと単価（USD / 100 万トークン）. 単価は 2026-10-02 時点の公開価格. 変わったらここだけ直す
+# モデルと単価（USD / 100 万トークン）.
+# 費用の計算は devtools-common の共通の料金表（devtools_common.llm.PRICES）を優先する。
+# ここの単価は、共通の料金表に無いモデル（社内の中継の独自 ID など）のときだけ使う予備の値（2026-10-02 時点の公開価格）
 prices_checked: "2026-10-02"
 models:
   light:    {id: claude-haiku-4-5-20251001, input_per_mtok: 1.0, output_per_mtok: 5.0}
