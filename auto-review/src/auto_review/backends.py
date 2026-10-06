@@ -2,6 +2,7 @@
 
 - anthropic : Messages API を直接呼ぶ（ANTHROPIC_API_KEY。ANTHROPIC_BASE_URL で社内の中継・閉域の窓口に向けられる）
 - claude-cli: Claude Code の `claude -p` を道具なしで呼ぶ（ローカルで試すとき）
+- ReplayBackend: 記録しておいた生の返答を返すだけ（モデルは呼ばない. CI で配線の退行を見るため）
 - 外部に送るのは `--yes` を付けたときだけ。付けなければ見積もりだけ（cli.py）
 """
 
@@ -15,6 +16,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -44,7 +46,7 @@ class AnthropicBackend:
         if not self.api_key:
             raise BackendError("ANTHROPIC_API_KEY が設定されていません")
 
-    def call(self, model: dict, system: str, user: str, max_tokens: int) -> Reply:
+    def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "") -> Reply:
         body = json.dumps(
             {
                 "model": model["id"],
@@ -82,7 +84,7 @@ class ClaudeCliBackend:
         self.exe = shutil.which(exe) or exe
         self.timeout = timeout
 
-    def call(self, model: dict, system: str, user: str, max_tokens: int) -> Reply:
+    def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "") -> Reply:
         cmd = [
             self.exe,
             "-p",
@@ -112,6 +114,61 @@ class ClaudeCliBackend:
         out = u.get("output_tokens", 0)
         cost = data.get("total_cost_usd")
         return Reply(data.get("result", ""), inp, out, float(cost) if cost is not None else price(model, inp, out), time.monotonic() - t0)
+
+
+class ReplayBackend:
+    """記録した生の返答（JSONL）を、（ケース ID, 役割, モデル ID）で引いて返す. 外部には何も送らない.
+
+    1 行 1 件: {"case": "P01", "role": "standard", "model": "claude-sonnet-5-5", "text": "<モデルの生の返答>",
+               "input_tokens": 1000, "output_tokens": 200, "expect_in_user": ["<findings>"]}
+    - role は Reviewer の段階（standard / verify / deep / single）
+    - expect_in_user（任意）: 渡されたメッセージに含まれているべき文字列. 無ければ失敗にする（プロンプトの配線の退行を見る）
+    - `#` で始まる行と空行は読み飛ばす（ファイルの説明を書くため）
+    - 記録が無い呼び出しは BackendError（黙って 0 件にしない）
+    """
+
+    name = "replay"
+
+    def __init__(self, path: Path | str, case: str = ""):
+        self.path = Path(path)
+        self.case = case
+        self.records: dict[tuple[str, str, str], dict] = {}
+        for n, line in enumerate(self.path.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            try:
+                r = json.loads(line)
+                key = (str(r["case"]), str(r["role"]), str(r["model"]))
+                str(r["text"])
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                raise BackendError(f"{self.path}:{n} を読めません: {e}") from e
+            if key in self.records:
+                raise BackendError(f"{self.path}:{n} 同じ組み合わせの記録が 2 つあります: {key}")
+            self.records[key] = r
+        self.used: list[tuple[str, str, str]] = []
+        self.errors: list[str] = []  # 呼び出し側が BackendError を握りつぶしても（deep の失敗など）、あとで確かめられるように残す
+
+    def for_case(self, case: str) -> ReplayBackend:
+        """同じ記録（と使った記録・失敗の一覧）を共有し、ケース ID だけ違うものを返す."""
+        other = object.__new__(ReplayBackend)
+        other.path, other.case, other.records, other.used, other.errors = self.path, case, self.records, self.used, self.errors
+        return other
+
+    def _fail(self, msg: str) -> BackendError:
+        self.errors.append(msg)
+        return BackendError(msg)
+
+    def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "") -> Reply:
+        key = (self.case, role, model["id"])
+        r = self.records.get(key)
+        if r is None:
+            raise self._fail(f"記録がありません: case={key[0]} role={key[1]} model={key[2]}（{self.path}）")
+        missing = [x for x in r.get("expect_in_user", []) if x not in user]
+        if missing:
+            raise self._fail(f"{key} のメッセージに、あるべき文字列がありません: {missing}")
+        self.used.append(key)
+        inp, out = int(r.get("input_tokens", 0)), int(r.get("output_tokens", 0))
+        return Reply(r["text"], inp, out, price(model, inp, out), 0.0)
 
 
 def get_backend(name: str):

@@ -22,6 +22,7 @@ AI エージェントに **どこまで任せられるか** を実験するリ�
 | [reviewers/](reviewers/) | 実験で使うレビューのプロンプト |
 | [auto-review/](auto-review/) | **PR の自動レビュー**。危なさで振り分け、ふだんは Sonnet 1 回・必要なときだけ Opus が検証（[考え方と費用](auto-review/README.md)） |
 | [bench/prs/](bench/prs/) | PR 単位の課題 16 件（弱いところを 1 つ戻した PR 8 件 + 問題の無い PR 3 件 + 危なそうに見えるが正しい「おとり」5 件） |
+| [bench/replay/](bench/replay/) | CI 用の **手書きの合成の返答**（実際のモデルの出力ではない）。モデルを呼ばずに auto-review の配線の退行を見る |
 | [runner/pr_bench.py](runner/pr_bench.py) | PR の課題を構成ごと（Haiku・Sonnet・Opus・auto）に流して比べる |
 | [runner/mcp-e2e/](runner/mcp-e2e/) | エージェントに MCP ツールだけで点検させる実地検証（`run.sh`） |
 | [examples/](examples/) | VS Code・Claude Code への MCP の設定例、auto-review の GitHub Actions と Copilot のプロンプト |

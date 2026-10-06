@@ -50,9 +50,26 @@ def _json_blocks(text: str) -> list:
     return out
 
 
-def _norm_sev(s: str) -> str:
-    s = str(s or "").upper().strip()
-    return {"NIT": "NITS", "QUESTION": "Q"}.get(s, s if s in SEVERITY_ORDER else "WANT")
+# モデルがよく使う別名. ここに無い値は「読めない重要度」として扱う（下の norm_severity）
+SEVERITY_ALIASES = {
+    "MUST": ("MUST", "CRITICAL", "BLOCKER", "BLOCKING", "HIGH", "SEVERE", "MAJOR", "ERROR", "P0", "P1", "必須", "重大", "致命的", "高"),
+    "WANT": ("WANT", "SHOULD", "MEDIUM", "MODERATE", "WARNING", "WARN", "P2", "推奨", "中"),
+    "NITS": ("NITS", "NIT", "NITPICK", "MINOR", "LOW", "TRIVIAL", "STYLE", "INFO", "SUGGESTION", "P3", "軽微", "低"),
+    "Q": ("Q", "QUESTION", "QUESTIONS", "ASK", "質問", "確認"),
+}
+_ALIAS = {a: sev for sev, names in SEVERITY_ALIASES.items() for a in names}
+
+
+def norm_severity(s) -> tuple[str, bool]:
+    """重要度をそろえる. 戻り値は（重要度, 読めたか）.
+
+    読めない値（空・未知の語）は WANT に下げず、MUST の候補として返す（呼び出し側で「要確認」を付ける）.
+    「CRITICAL」を WANT に下げて見落とすより、人が 1 件多く確かめるほうが安全なため.
+    """
+    key = re.sub(r"[\s\[\]【】()（）:：!！._-]", "", str(s or "")).upper()
+    if key in _ALIAS:
+        return _ALIAS[key], True
+    return "MUST", False
 
 
 def _to_int(v) -> int | None:
@@ -71,9 +88,10 @@ def parse_findings(text: str, model: str, prefix: str) -> list[Finding]:
             items += [x for x in data if isinstance(x, dict)]
     out = []
     for i, x in enumerate(items, start=1):
+        sev, known = norm_severity(x.get("severity"))
         out.append(
             Finding(
-                severity=_norm_sev(x.get("severity")),
+                severity=sev,
                 file=str(x.get("file") or x.get("location") or "").strip(),
                 line=_to_int(x.get("line")),
                 title=str(x.get("title") or x.get("message") or "").strip(),
@@ -83,6 +101,10 @@ def parse_findings(text: str, model: str, prefix: str) -> list[Finding]:
                 id=f"{prefix}{i}",
             )
         )
+        if not known:
+            # 下げずに MUST の候補として残し、人が確かめる印を付ける（検証役が判定すればそちらで上書きされる）
+            out[-1].status = "uncertain"
+            out[-1].verdict_note = f"重要度「{str(x.get('severity') or '')[:30]}」を読めないため、MUST として扱っています（要確認）"
     return [f for f in out if f.title]
 
 
@@ -129,8 +151,9 @@ def apply_verdicts(findings: list[Finding], verdicts: dict[str, dict], model: st
         if kind.startswith("confirm"):
             f.status = "confirmed"
             f.models.append(model)
-            if v.get("severity"):
-                f.severity = _norm_sev(v["severity"])
+            sev, known = norm_severity(v.get("severity"))
+            if known:  # 検証役の重要度が読めないときは、元の重要度を残す
+                f.severity = sev
         elif kind.startswith("reject"):
             f.status = "rejected"
         else:

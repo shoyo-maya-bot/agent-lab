@@ -1,0 +1,10 @@
+# 記録した返答（auto-synthetic.jsonl）で流したときに守るべき値. 合成データなので「ちょうどこの値」になるはず.
+# 変わったら、パーサー・プロンプトの組み立て・採点のどこかが変わったということ（意図した変更なら、記録としきい値を一緒に直す）.
+#   min_* はこの値以上、max_* はこの値以下
+auto:
+  min_runs: 8               # P01 P05 P06 P08 N01 N02 N03 D01
+  max_runs: 8
+  min_detected: 4           # P01 P05 P06 P08 の正解をすべて見つける
+  max_must_noise: 0         # 正解以外の MUST（P06 の読めない重要度は検証で WANT に直る）
+  max_false_alarm: 0        # N01〜N03 の MUST・WANT
+  max_decoy_must: 0         # おとり D01 の誤った MUST は検証で却下される

@@ -28,6 +28,11 @@ jobs:
         run: pytest -q runner/tests
       - name: auto-review
         run: pytest -q auto-review/tests
+      - name: auto-review の回帰（記録した合成の返答で再生. モデルは呼ばない・費用ゼロ）
+        run: >-
+          python runner/pr_bench.py --diff-only "$RUNNER_TEMP/replay" --configs auto --workers 1
+          --cases P01,P05,P06,P08,N01,N02,N03,D01
+          --replay bench/replay/auto-synthetic.jsonl --check bench/replay/thresholds.yaml
       - name: PR の課題が作り直せる（差分が cases.yaml と一致）
         run: |
           git clone -q https://github.com/shoyo-maya-bot/dev-environment.git ../dev-environment

@@ -23,8 +23,8 @@
 
 ```json
 {"findings": [
-  {"severity": "MUST", "file": "src/main/java/.../MemberService.java", "line": 42,
-   "title": "同時登録で 500 になる", "detail": "…", "evidence": "…"}
+  {"severity": "MUST", "file": "src/main/java/.../PageCursor.java", "line": 42,
+   "title": "最終ページの末尾の 1 行が返らない", "detail": "…", "evidence": "…"}
 ]}
 ```
 

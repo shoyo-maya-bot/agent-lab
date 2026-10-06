@@ -48,3 +48,53 @@ def test_bullets_and_json(tmp_path: Path):
         encoding="utf-8",
     )
     assert score.score(BUGS, score.load_findings(js))["detected"] == ["B08"]
+
+
+# ---- 記録した返答での PR の課題（モデルは呼ばない. 配線の退行を見る）
+
+REPLAY = ROOT / "bench/replay/auto-synthetic.jsonl"
+REPLAY_CASES = "P01,P05,P06,P08,N01,N02,N03,D01"  # CI（.github/workflows/ci.yml）と同じ
+THRESHOLDS = ROOT / "bench/replay/thresholds.yaml"
+
+
+def _pr_bench():
+    sys.path.insert(0, str(ROOT / "runner"))
+    import pr_bench
+
+    return pr_bench
+
+
+def test_replay_bench_meets_thresholds(tmp_path):
+    pb = _pr_bench()
+    args = [
+        "--diff-only",
+        str(tmp_path / "out"),
+        "--configs",
+        "auto",
+        "--cases",
+        REPLAY_CASES,
+        "--workers",
+        "1",
+        "--replay",
+        str(REPLAY),
+        "--check",
+        str(THRESHOLDS),
+    ]
+    assert pb.main(args) == 0
+    m = pb.metrics(tmp_path / "out")["auto"]
+    assert (m["detected"], m["must_noise"], m["false_alarm"], m["decoy_must"]) == (4, 0, 0, 0)
+
+
+def test_replay_bench_fails_when_a_recording_is_missing(tmp_path):
+    """検証役の記録が無いと（deep の失敗は本体では握りつぶされる）、確認で失敗になる."""
+    pb = _pr_bench()
+    lines = [x for x in REPLAY.read_text(encoding="utf-8").splitlines() if '"role": "verify"' not in x or '"D01"' not in x]
+    rec = tmp_path / "rec.jsonl"
+    rec.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    args = ["--diff-only", str(tmp_path / "out"), "--configs", "auto", "--cases", "D01", "--replay", str(rec), "--check", str(THRESHOLDS)]
+    assert pb.main(args) == 1
+
+
+def test_replay_fixture_is_labeled_synthetic():
+    head = REPLAY.read_text(encoding="utf-8").splitlines()[0]
+    assert head.startswith("#") and "合成" in head and "実際のモデルの出力ではありません" in head

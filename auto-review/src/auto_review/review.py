@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -58,10 +59,20 @@ def _tokens(chars: int, cfg: dict) -> int:
 MAX_DIFF_CHARS = 400_000  # 差分そのものの上限. 超えた分は省く（大きな PR で予算の確認が効かなくなるのを防ぐ）
 
 
+# 信用しないデータを区切るタグ. 中身にこれらの閉じタグ（大文字小文字・空白・属性の違いも含む）があれば無害化する
+UNTRUSTED_TAGS = ("diff", "file", "findings", "focus")
+_CLOSING = re.compile(r"<\s*/\s*(" + "|".join(UNTRUSTED_TAGS) + r")\b[^>]*>", re.I)
+
+
+def _neutralize(text: str) -> str:
+    """`</diff>`・`</DIFF >`・`< /diff>`・`</file\n>` などを `<\\/diff>` に変える（区切りを中から閉じさせない）."""
+    return _CLOSING.sub(lambda m: f"<\\/{m.group(1).lower()}>", text)
+
+
 def _untrusted(tag: str, text: str, attrs: str = "") -> str:
     """信用しないデータとして区切る. 閉じタグが中身にあれば無害化する."""
-    body = text.replace(f"</{tag}>", f"<\\/{tag}>")
-    return f"<{tag}{(' ' + attrs) if attrs else ''}>\n{body}\n</{tag}>\n"
+    assert tag in UNTRUSTED_TAGS
+    return f"<{tag}{(' ' + attrs) if attrs else ''}>\n{_neutralize(text)}\n</{tag}>\n"
 
 
 def _safe_file(repo: Path, path: str) -> Path | None:
@@ -103,7 +114,8 @@ def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, 
         if p is None:
             continue
         text = p.read_text(encoding="utf-8", errors="replace")
-        block = f"## ファイル: {path}（変更後の全文。データ）\n\n" + _untrusted("file", text, f'path="{path.replace(chr(34), "")}"')
+        safe_path = re.sub(r'["<>]', "", path)
+        block = f"## ファイル: {safe_path}（変更後の全文。データ）\n\n" + _untrusted("file", text, f'path="{safe_path}"')
         t = _tokens(len(block), cfg)
         if used + t > max_tokens:
             skipped.append(path)
@@ -124,8 +136,14 @@ def _prompt(name: str, max_findings: int) -> str:
 
 
 def _findings_block(findings: list[Finding]) -> str:
+    """一次レビューの指摘. 信用しない差分の影響を受けたモデルの出力なので、差分と同じくデータとして区切る."""
     rows = [f"- id={f.id} [{f.severity}] {f.location}: {f.title} — {f.detail}（根拠: {f.evidence}）" for f in findings]
-    return "## 一次レビューの指摘\n\n" + ("\n".join(rows) if rows else "（なし）") + "\n"
+    return "## 一次レビューの指摘（データ）\n\n" + _untrusted("findings", "\n".join(rows) if rows else "（なし）")
+
+
+def _focus_block(paths: list[str]) -> str:
+    """重点ファイル. パスは差分や一次レビューの出力から来るので、これもデータとして区切る."""
+    return "## 重点ファイル（データ）\n\n" + _untrusted("focus", "\n".join(f"- {p}" for p in paths))
 
 
 class Reviewer:
@@ -145,7 +163,7 @@ class Reviewer:
             inp = _tokens(len(system) + len(user), self.cfg)
             result.calls.append(Call(step, model["id"], inp, max_out, round(price(model, inp, max_out), 4), 0.0, estimated=True))
             return ""
-        reply: Reply = self.backend.call(model, system, user, max_out)
+        reply: Reply = self.backend.call(model, system, user, max_out, role=step)
         result.calls.append(
             Call(step, model["id"], reply.input_tokens, reply.output_tokens, round(reply.cost_usd, 4), round(reply.seconds, 1))
         )
@@ -199,13 +217,13 @@ class Reviewer:
         deep_ctx = (
             ctx if step == "deep" else build_context(diff_text, changes, self.repo, self.cfg, focus, budget["context_max_tokens"] // 2)
         )
-        user = deep_ctx + "\n## 重点ファイル\n\n" + "\n".join(f"- {p}" for p in focus) + "\n\n" + _findings_block(targets)
+        user = deep_ctx + "\n" + _focus_block(focus) + "\n" + _findings_block(targets)
 
         spent = result.cost_usd
         out_key = "deep" if step == "deep" else "verify"
         if spent + self._estimate("deep", len(system) + len(user), out_key) > budget["per_pr_usd"]:
             narrow = build_context(diff_text, changes, self.repo, self.cfg, focus[:3], budget["context_max_tokens"] // 3)
-            user = narrow + "\n## 重点ファイル\n\n" + "\n".join(f"- {p}" for p in focus[:3]) + "\n\n" + _findings_block(targets)
+            user = narrow + "\n" + _focus_block(focus[:3]) + "\n" + _findings_block(targets)
             if spent + self._estimate("deep", len(system) + len(user), out_key) > budget["per_pr_usd"]:
                 result.notes.append(f"予算 ${budget['per_pr_usd']:.2f} を超える見込みのため、deep モデルの検証を省きました")
                 result.findings = ordered(std)
