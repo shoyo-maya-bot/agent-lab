@@ -5,6 +5,7 @@
 #   - 社内の中継・閉域の窓口に向けるときは Variables に ANTHROPIC_BASE_URL
 #   - 費用の上限は 2 段で: router.yaml の budget.per_pr_usd（1 PR）と、API 側のワークスペースの月の上限
 #
+# actions はタグではなくコミット SHA で固定する（タグは付け替えられるため. Dependabot の github-actions で上げる）.
 # pull_request で動かす（pull_request_target は使わない）. フォークからの PR では Secrets が渡らず、コメントも書けないので動かさない.
 # PR の中身（差分・ファイル）は信用しないデータとして扱う: 認証情報を checkout に残さない、シンボリックリンクは読まない（auto-review 側）、
 # LLM の出力は無害化してからコメントにする.
@@ -31,11 +32,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false   # トークンを .git/config に残さない
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: auto-review を入れる（コミット SHA で固定する）
@@ -78,7 +79,7 @@ jobs:
           else
             gh api -X POST "repos/${{ github.repository }}/issues/$PR/comments" -F body=@comment.md > /dev/null
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: auto-review
           path: auto-review.json

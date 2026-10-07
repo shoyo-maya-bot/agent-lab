@@ -18,7 +18,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - run: pip install -e "mcp-server[dev]" -e "auto-review[dev]" pyyaml
+      - name: 依存を入れる（constraints.txt があれば版をそろえる）
+        shell: bash
+        run: |
+          C=""; [ -f constraints.txt ] && C="-c constraints.txt"
+          pip install $C -e "mcp-server[dev]" -e "auto-review[dev]" pyyaml
       - run: ruff check . && ruff format --check .
       - name: MCP server
         run: |
@@ -26,8 +30,8 @@ jobs:
           pytest -q mcp-server/tests 2>&1 | tee mcp-test.log || { grep -E "Error|error|FAILED|assert" mcp-test.log | head -30 | sed 's/^/::error::/'; exit 1; }
       - name: scorer
         run: pytest -q runner/tests
-      - name: auto-review
-        run: pytest -q auto-review/tests
+      - name: auto-review（カバレッジ付き）
+        run: pytest -q auto-review/tests --cov=auto_review --cov-report=term-missing --cov-fail-under=85
       - name: auto-review の回帰（記録した合成の返答で再生. モデルは呼ばない・費用ゼロ）
         run: >-
           python runner/pr_bench.py --diff-only "$RUNNER_TEMP/replay" --configs auto --workers 1
@@ -42,3 +46,49 @@ jobs:
         run: |
           for d in bench/prs/*.diff; do auto-review plan "$d" | head -1; done
           auto-review run bench/prs/P05.diff -f json > /dev/null
+
+  # Windows でも単体テストを流す（パス・改行・文字コード・コマンドの分け方の違いを見る）
+  test-windows:
+    name: test (Windows, Python 3.12)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: 依存を入れる（constraints.txt があれば版をそろえる）
+        shell: bash
+        run: |
+          C=""; [ -f constraints.txt ] && C="-c constraints.txt"
+          pip install $C -e "mcp-server[dev]" -e "auto-review[dev]" pyyaml
+      - name: MCP server
+        run: pytest -q mcp-server/tests
+      - name: scorer
+        run: pytest -q runner/tests
+      - name: auto-review
+        run: pytest -q auto-review/tests
+
+  # 配布物（auto-review・mcp-server）の SAST と依存の脆弱性
+  security:
+    name: security (bandit・pip-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: 依存とツールを入れる（ツールの版は固定）
+        run: |
+          C=""; [ -f constraints.txt ] && C="-c constraints.txt"
+          pip install $C -e mcp-server -e auto-review
+          pip install "bandit==1.8.6" "pip-audit==2.9.0"
+      - name: SAST（bandit. 中以上）
+        run: bandit -q -r auto-review/src mcp-server/src -ll
+      - name: 依存の脆弱性（pip-audit）
+        run: pip-audit --skip-editable --progress-spinner off
