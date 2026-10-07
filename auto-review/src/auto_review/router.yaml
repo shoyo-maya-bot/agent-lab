@@ -35,7 +35,7 @@ budget:
   per_pr_usd: 1.00
   context_max_tokens: 60000      # 変更ファイルの全文を入れる上限（危ない順に入れる）
   output_tokens: {standard: 4000, deep: 6000, verify: 3000}
-  chars_per_token: 3.0           # 見積もり用（日本語・コード混じりで少し多めに見る）
+  chars_per_token: 3.0           # 見積もり用. ASCII（英数字・記号）の何文字で 1 トークンか. 日本語など ASCII 以外は 1 文字 1 トークンで数える（tokens.py）
 
 # 危なさの点数
 risk:

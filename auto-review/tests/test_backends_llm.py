@@ -159,3 +159,45 @@ def test_real_client_is_built_with_masker_and_base_url(monkeypatch):
     assert client is be._client("claude-sonnet-5-5")  # モデルごとに 1 つ
     assert client.masker is be.masker and client.masker is not None
     assert client.base_url == "https://gateway.example.internal" and client.max_retries == 5 and client.timeout == 600
+
+
+# ---- 構造化出力（道具の強制）
+
+
+def _tool(data, *, name: str = "submit_review") -> dict:
+    return {
+        "id": "msg_t",
+        "model": "claude-sonnet-5-5",
+        "content": [{"type": "tool_use", "id": "toolu_1", "name": name, "input": data}],
+        "stop_reason": "tool_use",
+        "usage": {"input_tokens": 100, "output_tokens": 20},
+    }
+
+
+def test_schema_forces_the_result_tool_and_returns_its_input_as_json():
+    from auto_review.findings import FINDINGS_SCHEMA
+
+    be, fakes = _backend([_tool({"findings": [{"severity": "MUST", "title": "t"}]})])
+    reply = be.call(SONNET, "s", "u", 100, role="standard", schema=FINDINGS_SCHEMA)
+    assert json.loads(reply.text) == {"findings": [{"severity": "MUST", "title": "t"}]}
+    req = fakes["claude-sonnet-5-5"].requests[0]
+    assert req["tool_choice"] == {"type": "tool", "name": "submit_review"}
+    assert req["tools"][0]["input_schema"] == FINDINGS_SCHEMA
+
+
+def test_schema_reply_without_tool_is_unreadable():
+    from auto_review.findings import FINDINGS_SCHEMA, UnreadableOutput
+
+    be, _ = _backend([_ok("findings はありません")])
+    with pytest.raises(UnreadableOutput):
+        be.call(SONNET, "s", "u", 100, schema=FINDINGS_SCHEMA)
+
+
+def test_reviewer_uses_structured_output_and_rejects_off_schema_tool_input(tmp_path, monkeypatch, capsys):
+    """道具の入力がスキーマに合わない（findings が文字列）なら、cli は終了コード 3."""
+    d = tmp_path / "pr.diff"
+    d.write_text(DIFF, encoding="utf-8")
+    be, _ = _backend([_tool({"findings": "なし"})])
+    monkeypatch.setattr(cli, "get_backend", lambda name: be)
+    assert cli.main(["run", str(d), "--yes"]) == 3
+    assert "スキーマ" in capsys.readouterr().err

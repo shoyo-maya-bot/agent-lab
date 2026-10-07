@@ -164,7 +164,7 @@ python runner/blind_score.py scoring/sheet.xlsx ~/secret/key.json --bench bench/
 | auto | 99 | 0.43 M | 0.148 M | **$3.16**（$1.75〜$4.49） | $11.67 | $0.032 |
 | 合計 | 297 | | | **$8.88** | $25.25 | |
 
-- 入力トークンは、実際に渡すプロンプト（差分 + 変更後のファイルの全文 + システムプロンプト）の文字数 ÷ 3（`router.yaml` の `chars_per_token`）
+- 入力トークンは、実際に渡すプロンプト（差分 + 変更後のファイルの全文 + システムプロンプト）の ASCII の文字数 ÷ 3（`router.yaml` の `chars_per_token`）+ 日本語など ASCII 以外の文字数（1 文字 1 トークン。`auto_review.tokens`）
 - 出力トークンの見込みは、2026-10-04 の実測の平均（段階・モデルごと）。上限は `router.yaml` の `max_tokens` をすべて使い切った場合
 - auto は、Sonnet が MUST を出して Opus の検証に回る割合しだいで変わる。見込みは v1 の実測の 51%、幅は 0%〜100%。振り分けは deep 2 件・skip 1 件（文書だけの PR）・standard 30 件
 - プロンプトのキャッシュは使わない前提、再試行の分は含まない。**予算は $30 を上限に見ておけば足りる**

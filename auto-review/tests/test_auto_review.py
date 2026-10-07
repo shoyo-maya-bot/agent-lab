@@ -94,10 +94,86 @@ def test_deleted_tests_push_to_deep():
 
 
 def test_parse_findings_accepts_fenced_json_and_normalizes():
-    text = 'まえおき\n```json\n{"findings": [{"severity": "nit", "file": "A.java", "line": "3", "title": "t"}, {"severity": "MUST"}]}\n```'
+    text = 'まえおき\n```json\n{"findings": [{"severity": "nit", "file": "A.java", "line": "3", "title": "t"}]}\n```'
     fs = parse_findings(text, "m", "s")
-    assert len(fs) == 1  # 題名の無いものは捨てる
+    assert len(fs) == 1
     assert (fs[0].severity, fs[0].line, fs[0].id) == ("NITS", 3, "s1")
+
+
+# ---- 読めない出力は「指摘 0 件」にしない（スキーマで検証し、合わなければ UnreadableOutput）
+
+BROKEN_OUTPUTS = [
+    # 末尾のカンマ（壊れた JSON）. MUST が入っていても 0 件の成功になっていた
+    '```json\n{"findings": [{"severity": "MUST", "file": "A.java", "title": "SQL インジェクション"},]}\n```',
+    # findings という単語を含む文章だけ
+    "findings はありませんでした。問題は見つかりません。",
+    "I reviewed the diff. No findings worth reporting, but see above.",
+    # 形が違う（findings が配列でない・無い・指摘に題名が無い・重要度が無い）
+    '{"findings": "なし"}',
+    '{"result": []}',
+    '[{"severity": "MUST", "title": "t"}]',
+    '{"findings": [{"severity": "MUST"}]}',
+    '{"findings": [{"title": "t", "file": "A.java"}]}',
+    '{"findings": [{"severity": "MUST", "title": ""}]}',
+    # 2 つ目のコードブロックが壊れている
+    '```json\n{"findings": []}\n```\n```json\n{"findings": [{"severity": "MUST", "title": "t",}]}\n```',
+    "",
+]
+
+
+@pytest.mark.parametrize("text", BROKEN_OUTPUTS)
+def test_unreadable_or_off_schema_output_raises(text):
+    from auto_review.findings import UnreadableOutput
+
+    with pytest.raises(UnreadableOutput):
+        parse_findings(text, "m", "s")
+
+
+@pytest.mark.parametrize("text", BROKEN_OUTPUTS[:3])
+def test_cli_returns_3_for_broken_standard_output(text, tmp_path: Path, monkeypatch, capsys):
+    d = tmp_path / "pr.diff"
+    d.write_text(JAVA_SERVICE, encoding="utf-8")
+    monkeypatch.setattr(cli, "get_backend", lambda name: FakeBackend([text]))
+    assert cli.main(["run", str(d), "--yes"]) == 3
+    assert "結果を読めません" in capsys.readouterr().err
+
+
+def test_empty_findings_is_still_a_valid_zero():
+    assert parse_findings('```json\n{"findings": []}\n```', "m", "s") == []
+    assert parse_findings('{"findings": []}', "m", "s") == []
+    assert parse_findings('了解です。{"findings": []}', "m", "s") == []  # 前置きの文章だけなら読む
+
+
+def test_broken_verifier_output_falls_back_with_note():
+    """検証役の出力が壊れていたら、standard の結果を検証なしとして出し、注記を残す（黙って検証済みにしない）."""
+    std = _std([{"severity": "MUST", "file": "MemberService.java", "line": 12, "title": "本物"}])
+    fb = FakeBackend([std, '{"verdicts": [{"id": "s1", "verdict": "reject"},]}'])
+    changes = parse_diff(JAVA_SERVICE)
+    r = Reviewer(CFG, fb).auto(JAVA_SERVICE, changes, plan(changes, CFG))
+    assert [(f.title, f.status) for f in r.findings] == [("本物", "unverified")]
+    assert r.open_must == 1
+    assert any("deep モデルの出力を読めなかった" in n for n in r.notes)
+
+
+def test_single_model_also_rejects_broken_output():
+    from auto_review.findings import UnreadableOutput
+
+    fb = FakeBackend(["findings: 0 件"])
+    changes = parse_diff(JAVA_SERVICE)
+    with pytest.raises(UnreadableOutput):
+        Reviewer(CFG, fb).single("standard", JAVA_SERVICE, changes, plan(changes, CFG))
+
+
+def test_public_api_for_other_tools():
+    """review-platform などが非公開関数に頼らずに使える公開 API."""
+    from auto_review import findings as F
+
+    data = F.load_output('{"findings": [{"severity": "high", "title": "t"}]}', F.FINDINGS_SCHEMA)
+    fs = F.findings_from_data(data["findings"], "m", "s")
+    assert (fs[0].severity, fs[0].status) == ("MUST", "unverified")
+    verdicts, new = F.parse_verification('{"verdicts": [{"id": "s1", "verdict": "confirm"}]}', "m", "d")
+    assert verdicts["s1"]["verdict"] == "confirm" and new == []
+    assert F.norm_severity("query") == ("Q", True)
 
 
 def test_merge_joins_same_problem_and_marks_agreement():
@@ -390,3 +466,26 @@ def test_replay_backend_checks_expected_text_and_rejects_duplicates(tmp_path: Pa
     dup = {"case": "C", "role": "standard", "model": sid, "text": "x"}
     with pytest.raises(BackendError, match="2 つ"):
         ReplayBackend(_replay_file(tmp_path, [dup, dup]))
+
+
+# ---- 入力トークンの見積もり（日本語を甘く見ない）
+
+
+def test_estimate_tokens_counts_japanese_as_one_token_per_char():
+    from auto_review.tokens import estimate_tokens
+
+    assert estimate_tokens("a" * 300) == 101  # ASCII は 3 文字で 1
+    assert estimate_tokens("あ" * 300) == 301  # 日本語は 1 文字で 1（3 文字で 1 だと 101 になり 3 倍甘い）
+    assert estimate_tokens("ab" * 3 + "設計") == 2 + 2 + 1
+
+
+def test_context_budget_uses_japanese_aware_estimate(tmp_path: Path):
+    """日本語の多いファイルは、文字数 ÷ 3 では上限に収まっても、実際の見積もりでは収まらない."""
+    from auto_review.review import build_context
+
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "docs" / "a.md").write_text("仕様" * 3000, encoding="utf-8")  # 6000 文字
+    diff = "diff --git a/docs/a.md b/docs/a.md\n--- a/docs/a.md\n+++ b/docs/a.md\n@@ -1 +1 @@\n-x\n+y\n"
+    ctx = build_context(diff, parse_diff(diff), repo, CFG, None, 5000)  # ÷3 なら約 2000 トークンで収まってしまう
+    assert '<file path="docs/a.md">' not in ctx and "上限のため全文を省いた" in ctx
