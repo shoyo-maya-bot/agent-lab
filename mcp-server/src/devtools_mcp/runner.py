@@ -1,9 +1,11 @@
-"""CLI の呼び出しと、ファイルの置き場所の制限.
+r"""CLI の呼び出しと、ファイルの置き場所の制限.
 
 - 呼び出すのは決まった CLI だけ（シェルを通さない。引数はリストで渡す）
 - 引数に渡すパスは、作業フォルダ（DEVTOOLS_MCP_ROOT。既定はカレントディレクトリ）の中だけ
 - CLI が書き出すファイルは作業フォルダの .mcp-out/ の下だけ
 - 結果は CLI の JSON レポートをそのまま返す（終了コードの意味を添える）
+- コマンドの上書き（DEVTOOLS_MCP_*）は JSON の配列（`["C:\\py\\python.exe", "-m", "x"]`）でも書ける.
+  文字列で書いた場合、Windows では `\` を消さない分け方（posix=False）をする
 """
 
 from __future__ import annotations
@@ -62,7 +64,9 @@ class Workspace:
         if p != self.root and self.root not in p.parents:
             raise ToolError(f"作業フォルダの外は扱えません: {value}（作業フォルダ: {self.root}）")
         rel_parts = p.relative_to(self.root).parts if p != self.root else ()
-        if any(part == ".git" or part == ".env" or part.startswith(".env.") for part in rel_parts):
+        # Windows は大文字小文字を区別しないので、`.ENV`・`.Git` でも抜けられないよう casefold で比べる
+        folded = [part.casefold() for part in rel_parts]
+        if any(part == ".git" or part == ".env" or part.startswith(".env.") for part in folded):
             raise ToolError(f"秘密情報を含みうる場所は扱えません: {value}")
         if must_exist and not p.exists():
             raise ToolError(f"見つかりません: {value}")
@@ -85,11 +89,35 @@ class Workspace:
             return str(p)
 
 
+def split_command(value: str, *, windows: bool | None = None) -> list[str]:
+    r"""上書き用の環境変数の値をコマンドの配列にする.
+
+    - `[` で始まれば JSON の配列として読む（どの OS でもそのまま。パスの `\` は JSON の書き方で `\\`）
+    - Windows では shlex.split(posix=False) で分け、`"` で囲んだ語の引用符だけを外す（`C:\Users\a\.venv\…` の `\` を消さない）
+    - それ以外は shlex.split（POSIX）
+    """
+    v = value.strip()
+    if v.startswith("["):
+        try:
+            data = json.loads(v)
+        except json.JSONDecodeError as e:
+            raise ToolError(f"コマンドの指定（JSON の配列）を読めません: {e.msg}") from None
+        if not data or not all(isinstance(x, str) and x for x in data):
+            raise ToolError("コマンドの指定（JSON の配列）は、空でない文字列の配列にしてください")
+        return list(data)
+    if windows is None:
+        windows = os.name == "nt"
+    if windows:
+        parts = shlex.split(v, posix=False)
+        return [x[1:-1] if len(x) >= 2 and x[0] == x[-1] == '"' else x for x in parts]
+    return shlex.split(v)
+
+
 def resolve_command(tool: str) -> list[str] | None:
     name, env = COMMANDS[tool]
     override = os.environ.get(env)
-    if override:
-        return shlex.split(override)
+    if override and override.strip():
+        return split_command(override)
     found = shutil.which(name)
     return [found] if found else None
 

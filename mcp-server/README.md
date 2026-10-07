@@ -11,7 +11,7 @@ devtools の CLI を、AI エージェント（VS Code の Copilot・Claude な�
 | `spec_trace_check` | 要件と実装・テストの対応表の検査 |
 
 安全のための決まり:
-- 扱えるのは作業フォルダ（`DEVTOOLS_MCP_ROOT`。必須。ドライブの直下とホームフォルダは不可）の中のファイルだけ。`.git` と `.env` は扱わない
+- 扱えるのは作業フォルダ（`DEVTOOLS_MCP_ROOT`。必須。ドライブの直下とホームフォルダは不可）の中のファイルだけ。`.git` と `.env`（`.ENV` など大文字小文字の違いも含む）は扱わない
 - CLI が書き出すのは `.mcp-out/` の下だけ。元のファイルは書き換えない
 - 外部への送信・書き込みを伴うツール（office-replace の実行、Backlog・Slack）は入れていない
 - stdio で動く（ネットワークのポートを開けない）
@@ -47,6 +47,17 @@ VS Code（`.vscode/mcp.json`）の例:
 ```
 
 CLI が PATH に無いときは `DEVTOOLS_MCP_DOC2MD="python -m doc_to_markdown"` のように、環境変数でコマンドを指定します。
+
+- Windows のパス（`\` を含む）は、JSON の配列で書くのが確実です（どの OS でも同じに読みます）。
+
+```json
+"env": {
+  "DEVTOOLS_MCP_ROOT": "${workspaceFolder}",
+  "DEVTOOLS_MCP_DOC2MD": "[\"C:\\\\tools\\\\.venv\\\\Scripts\\\\python.exe\", \"-m\", \"doc_to_markdown\"]"
+}
+```
+
+- 文字列で書いた場合、Windows では `\` を消さずに空白で分けます（空白を含むパスは `"` で囲む）。Linux・macOS ではシェルと同じ分け方です。
 
 ## テスト
 
