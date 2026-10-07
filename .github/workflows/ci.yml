@@ -64,12 +64,18 @@ jobs:
         run: |
           C=""; [ -f constraints.txt ] && C="-c constraints.txt"
           pip install $C -e "mcp-server[dev]" -e "auto-review[dev]" pyyaml
+      # 失敗したら出力の最後を注釈（::error::）に出す. どれかが落ちても残りも流す
       - name: MCP server
-        run: pytest -q mcp-server/tests
+        shell: bash
+        run: .github/scripts/run.sh pytest -q mcp-server/tests
       - name: scorer
-        run: pytest -q runner/tests
+        if: success() || failure()
+        shell: bash
+        run: .github/scripts/run.sh pytest -q runner/tests
       - name: auto-review
-        run: pytest -q auto-review/tests
+        if: success() || failure()
+        shell: bash
+        run: .github/scripts/run.sh pytest -q auto-review/tests
 
   # 配布物（auto-review・mcp-server）の SAST と依存の脆弱性
   security:
