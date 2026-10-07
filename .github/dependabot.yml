@@ -10,4 +10,4 @@ updates:
     open-pull-requests-limit: 5
     ignore:
       - dependency-name: mcp
-        versions: [">=2"]  # 2.x は API が変わる（FastMCP → MCPServer）ため、移行は手作業で
+        versions: [">=3"]  # 次の大きな版は API が変わりうるため、移行は手作業で

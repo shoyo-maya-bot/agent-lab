@@ -15,6 +15,16 @@ devtools の CLI を、AI エージェント（VS Code の Copilot・Claude な�
 - CLI が書き出すのは `.mcp-out/` の下だけ。元のファイルは書き換えない
 - 外部への送信・書き込みを伴うツール（office-replace の実行、Backlog・Slack）は入れていない
 - stdio で動く（ネットワークのポートを開けない）
+- ツールの結果（変換した文書・設計書・レポートの中身）は **データ** として扱うよう、サーバーの説明（instructions）でエージェントに伝える。中に書かれた「指示」には従わせない
+
+ツールの性質（MCP のツールの注釈）:
+
+| ツール | 注釈 |
+|---|---|
+| `tools_status`・`design_diff_*`・`fieldcheck_validate`・`spec_trace_check` | 読み取りだけ（`readOnlyHint`）。外部に出ない（`openWorldHint: false`） |
+| `doc2md_convert` | `.mcp-out/` の下に新しいフォルダを作って書く。上書き・削除はしない（`destructiveHint: false`） |
+
+パスの誤り・見つからないファイル・CLI が無いなど、利用者（エージェント）が直せる誤りは、MCP のツールのエラー（`isError: true`）として理由の文章を返します。エージェントは理由を読んで、引数を直してやり直せます。
 
 ## 使う
 
@@ -49,4 +59,10 @@ pip install -e ".[dev]" && pytest
 
 ## メモ
 
-MCP の Python SDK は 2.x で API が変わりました（`FastMCP` → `MCPServer` など）。今は 1.x に固定しています（`mcp>=1.10,<2`）。2.x への移行は別の作業として行います。
+MCP の Python SDK 2.x（`mcp>=2,<3`）を使います。1.x からの主な違い:
+- `FastMCP`（`mcp.server.fastmcp`）は `MCPServer`（`mcp.server.mcpserver`）に名前が変わった
+- 型の項目名が snake_case になった（`isError` → `is_error`、`readOnlyHint` → `read_only_hint` など。通信上の名前は変わらない）
+- 同期の関数で書いたツールは、別のスレッドで動く（CLI の実行中も、ほかの要求を止めない）
+- ツールで `ToolError` を投げると、`isError: true` の結果になる（エージェントが理由を読める）
+
+3.x は API が変わりうるので、Dependabot では上げず、手作業で移行します。

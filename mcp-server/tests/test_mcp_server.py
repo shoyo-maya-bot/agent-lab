@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.server.mcpserver.exceptions import ToolError as MCPToolError
 
 from devtools_mcp import runner, server
 
@@ -55,8 +56,11 @@ def test_exit_code_meaning_and_errors(ws: Path, monkeypatch: pytest.MonkeyPatch)
     r = server.fieldcheck_validate("docs/a.xlsx", "docs/b.xlsx", table="申請一覧")
     assert r["exit_code"] == 2 and "前提の誤り" in r["meaning"]
     assert r["report"]["args"][-2:] == ["--table", "申請一覧"]
-    assert "error" in server.fieldcheck_validate("../x.csv", "docs/b.xlsx")  # 外のパスは結果として返す（例外にしない）
-    assert "error" in server.spec_trace_check(require="done")
+    # 利用者が直せる誤りは MCP のツールのエラー（isError）になる（プロトコルのエラーやクラッシュにしない）
+    with pytest.raises(MCPToolError, match="作業フォルダの外"):
+        server.fieldcheck_validate("../x.csv", "docs/b.xlsx")
+    with pytest.raises(MCPToolError, match="implemented か proven"):
+        server.spec_trace_check(require="done")
 
 
 def test_doc2md_writes_only_under_mcp_out(ws: Path):
@@ -68,25 +72,32 @@ def test_doc2md_writes_only_under_mcp_out(ws: Path):
 def test_missing_command(ws: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("DEVTOOLS_MCP_SPEC_TRACE")
     monkeypatch.setenv("PATH", "")
-    assert "見つかりません" in server.spec_trace_check()["error"]
+    with pytest.raises(MCPToolError, match="見つかりません"):
+        server.spec_trace_check()
     assert server.tools_status()["tools"]["spec-trace"] is False
 
 
-def _call(env: dict[str, str], tool: str, arguments: dict) -> tuple[list[str], dict]:
+def _call(env: dict[str, str], calls: list[tuple[str, dict]]):
     async def go():
         params = StdioServerParameters(command=sys.executable, args=["-m", "devtools_mcp.server"], env={**os.environ, **env})
         async with stdio_client(params) as (r, w), ClientSession(r, w) as s:
-            await s.initialize()
-            names = [t.name for t in (await s.list_tools()).tools]
-            res = await s.call_tool(tool, arguments)
-            return names, json.loads(res.content[0].text)
+            init = await s.initialize()
+            tools = {t.name: t for t in (await s.list_tools()).tools}
+            results = [await s.call_tool(name, arguments) for name, arguments in calls]
+            return init, tools, results
 
     return asyncio.run(go())
 
 
 def test_over_stdio_protocol(ws: Path):
-    names, result = _call({}, "design_diff_spec", {"excel": "docs/a.xlsx", "oas": "docs/b.xlsx"})
-    assert set(names) == {
+    init, tools, (ok, bad) = _call(
+        {},
+        [
+            ("design_diff_spec", {"excel": "docs/a.xlsx", "oas": "docs/b.xlsx"}),
+            ("design_diff_spec", {"excel": "../outside.xlsx", "oas": "docs/b.xlsx"}),
+        ],
+    )
+    assert set(tools) == {
         "tools_status",
         "doc2md_convert",
         "design_diff_excel",
@@ -94,7 +105,19 @@ def test_over_stdio_protocol(ws: Path):
         "fieldcheck_validate",
         "spec_trace_check",
     }
+    assert "データです" in (init.instructions or "")  # 結果の中の「指示」に従わないよう伝えている
+    # 読み取りだけの道具と、.mcp-out/ に書く道具を区別して伝える
+    assert tools["design_diff_spec"].annotations.read_only_hint is True
+    assert tools["doc2md_convert"].annotations.read_only_hint is False
+    assert tools["doc2md_convert"].annotations.destructive_hint is False
+    assert all(t.annotations.open_world_hint is False for t in tools.values())
+
+    assert not ok.is_error
+    result = ok.structured_content or json.loads(ok.content[0].text)
     assert result["report"]["args"][0] == "spec"
+
+    assert bad.is_error  # 引数の誤りはツールのエラー. 理由の文章がエージェントに届く
+    assert "作業フォルダの外" in bad.content[0].text
 
 
 def test_real_design_diff_if_available(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -134,5 +157,5 @@ def test_design_diff_rejects_bad_doc_type(tmp_path, monkeypatch):
     monkeypatch.setenv("DEVTOOLS_MCP_ROOT", str(tmp_path))
     from devtools_mcp import server
 
-    res = server.design_diff_excel("../../etc/passwd", "a.xlsx", "b.xlsx")
-    assert res.get("error") or res.get("ok") is False or "doc_type" in json.dumps(res, ensure_ascii=False)
+    with pytest.raises(MCPToolError, match="doc_type"):
+        server.design_diff_excel("../../etc/passwd", "a.xlsx", "b.xlsx")
