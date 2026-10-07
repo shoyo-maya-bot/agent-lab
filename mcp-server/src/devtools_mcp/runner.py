@@ -122,6 +122,14 @@ def resolve_command(tool: str) -> list[str] | None:
     return [found] if found else None
 
 
+def child_env() -> dict[str, str]:
+    """CLI に渡す環境変数. 出力を UTF-8 で読むので、Python 製の CLI にも UTF-8 で書かせる.
+
+    Windows ではパイプへの出力が既定で cp932 / cp1252 になり、日本語を書くと UnicodeEncodeError で落ちる（終了コード 1）ため.
+    """
+    return {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+
+
 REPORT_LIMIT = 200_000  # エージェントに返すレポートの上限（文字）
 
 
@@ -131,7 +139,17 @@ def run(tool: str, args: list[str], ws: Workspace) -> dict[str, Any]:
         raise ToolError(f"{tool} が見つかりません。インストールするか、環境変数 {COMMANDS[tool][1]} でコマンドを指定してください")
     started = time.monotonic()
     try:
-        proc = subprocess.run([*cmd, *args], cwd=ws.root, capture_output=True, text=True, encoding="utf-8", timeout=TIMEOUT, check=False)
+        proc = subprocess.run(
+            [*cmd, *args],
+            cwd=ws.root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=TIMEOUT,
+            check=False,
+            env=child_env(),
+        )
     except subprocess.TimeoutExpired:
         raise ToolError(f"{tool} が {TIMEOUT} 秒以内に終わりませんでした") from None
     report: Any = None

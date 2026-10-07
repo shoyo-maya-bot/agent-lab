@@ -47,3 +47,17 @@ def test_secret_places_are_blocked_regardless_of_case(tmp_path: Path, monkeypatc
     w = runner.Workspace.from_env()
     with pytest.raises(runner.ToolError, match="秘密情報"):
         w.path(name, must_exist=False)
+
+
+def test_cli_writes_japanese_as_utf8(tmp_path: Path, monkeypatch):
+    """日本語を出す CLI でも（Windows の既定の文字コードに関係なく）文字化け・失敗にならない."""
+    import sys
+
+    monkeypatch.setenv("DEVTOOLS_MCP_ROOT", str(tmp_path))
+    monkeypatch.setenv("PYTHONIOENCODING", "ascii")  # 既定の文字コードが日本語を書けない環境のまね
+    monkeypatch.setenv(
+        "DEVTOOLS_MCP_FIELDCHECK",
+        json.dumps([sys.executable, "-c", "import json; print(json.dumps({'表': '申請一覧'}, ensure_ascii=False))"]),
+    )
+    r = runner.run("fieldcheck", [], runner.Workspace.from_env())
+    assert r["exit_code"] == 0 and r["report"] == {"表": "申請一覧"}
