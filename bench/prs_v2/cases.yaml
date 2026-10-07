@@ -1,0 +1,105 @@
+# PR の課題 v2（モデルに渡す題名と説明）. make_prs_v2.py が spec.yaml から作る. 手で書き換えない
+# 種類（バグ・問題なし・おとり）はここには書かない（answers.yaml にだけある）
+target: dev-environment
+base_commit: 49d093f0a2b1604de223ebe80d9d62ad7523e6a4
+diff_dir: tasks
+cases:
+- id: T01
+  title: 手順書の表記を直す
+  description: README・ローカル・クラウドの手順書の言い回しを直しました。
+- id: T02
+  title: s3:// を定数にする
+  description: 2 か所に書いていた "s3://" を定数にまとめました。
+- id: T03
+  title: MyBatis の設定の整理
+  description: 設定ファイルの MyBatis の部分を整えました。メッセージのファイルと登録 API に説明を足しています。
+- id: T04
+  title: S3 から読む処理の整理
+  description: S3 から読む処理の書き方をそろえました。README とエラー応答の説明も少し直しています。
+- id: T05
+  title: 注文の登録の SQL の書式をそろえる
+  description: 長い SQL を読みやすいよう、列と値を改行して並べました。
+- id: T06
+  title: 取込バッチの引数の確認を簡素化
+  description: getOptionValues は未指定なら null を返すので、null だけを確かめるようにしました。登録 API に説明も足しています。
+- id: T07
+  title: 原因をたどる処理を while 文にする
+  description: 例外の原因をたどる for 文を while 文に書き換えました。動作は同じです。
+- id: T08
+  title: S3 の接続先の判定を整理
+  description: S3 の接続先の判定の書き方を整理しました。FileFetcher とローカルの設定に説明を足しています。
+- id: T09
+  title: 会員の存在確認のキャッシュを明示的に書く
+  description: computeIfAbsent の中で DB を呼ぶのをやめ、取り出しと登録を分けて書きました。
+- id: T10
+  title: 数量の int への変換を Math.toIntExact にする
+  description: キャストをやめ、範囲を超えたら例外になる Math.toIntExact にしました。
+- id: T11
+  title: ジョブ ID の空白の除き方を strip にする
+  description: trim() を strip() に変えました（全角空白などの Unicode の空白も除くため）。
+- id: T12
+  title: 取込のループの整理
+  description: 取込の処理を読みやすくしました。あわせて FileFetcher に説明を足し、版を 0.1.1 にしています。
+- id: T13
+  title: コードの検査の変数名を分かりやすくする
+  description: code() の変数名 v を trimmed に変えました。版を 0.1.1 にし、Mapper に説明を足しています。
+- id: T14
+  title: 注文の登録の競合の対象を制約名で書く
+  description: ON CONFLICT の対象を、主キーの制約名で明示しました。
+- id: T15
+  title: 取込の列数の確認の整理
+  description: 列数の確認を整理しました。ガードのテストを 1 つ足しています。
+- id: T16
+  title: 取込の数量の上限を定数にする
+  description: 数量の上限をメソッドの中に直接書いていたので、定数にしました。README の表記も少し直しています。
+- id: T17
+  title: トランザクションの指定をクラスにまとめる
+  description: メソッドごとに付けていたトランザクションの指定をクラスにまとめました（既定は読み取り専用）。
+- id: T18
+  title: ローカルファイルの読み込みで文字コードの指定を省く
+  description: Files.readAllLines(Path) は UTF-8 で読むので、引数を減らしました。
+- id: T19
+  title: 設定ファイルに説明を足す
+  description: ローカルの設定とメッセージのファイルに説明を足し、版を 0.1.1 にしました。
+- id: T20
+  title: 数量の境界値のテストを追加
+  description: quantity の 1 と 999 を受け付けることを確かめるテストを足しました。
+- id: T21
+  title: 会員が見つからないときの文言を見直す
+  description: 「会員が見つかりません」の文言を、問い合わせ窓口の表現に合わせました。取込バッチの変数名も変えています。
+- id: T22
+  title: ジョブ ID の誤りを警告として扱う
+  description: ジョブ ID の指定ミスでは処理を何も行っていないので、異常ではなく警告として扱うようにしました。
+- id: T23
+  title: 氏名の上限を 100 文字に広げる
+  description: 長い氏名の方から登録できないと問い合わせがあったので、入力チェックの上限を 100 文字にしました。
+- id: T24
+  title: 500 のときに原因の要約を返す
+  description: 問い合わせのときに利用者から原因を伝えてもらえるよう、想定外のエラーの応答の details に原因の要約を入れました。
+- id: T25
+  title: ジョブ ID の前後の空白のテストを足す
+  description: ジョブ ID の前後に空白があっても動くことのテストを足しました。取込結果に件数のメソッドを足しています。
+- id: T26
+  title: 取込バッチの変数名を分かりやすくする
+  description: 取込結果の変数 r を result に変えました。BatchJob に説明を足し、空行のテストを 1 つ足しています。
+- id: T27
+  title: 取込バッチの例外の捕捉を絞る
+  description: catch (Exception) が広すぎるので、起こりうる IOException と実行時例外に絞りました。
+- id: T28
+  title: ID の文字列への変換を Long.toString にする
+  description: String.valueOf(long) を Long.toString(long) に変えました。
+- id: T29
+  title: 会員まわりの説明を足す
+  description: 会員の Mapper・登録用のクラス・API に Javadoc を足しました。動作は変えていません。
+- id: T30
+  title: 照会 API の引数の型を見直す
+  description: 照会 API の引数を見直しました。取込結果に件数のメソッドも足しています。
+- id: T31
+  title: 登録したメールアドレスを入力どおりの表記で返す
+  description: 利用者から「登録したメールアドレスの表記が変わる」と問い合わせがあったので、入力された表記のまま保存して返すようにしました。
+- id: T32
+  title: S3 クライアントの組み立ての変数名を変える
+  description: 1 文字の変数名 b を builder に変え、説明を足しました。
+- id: T33
+  title: コンパイルの対象を Java 21 にする
+  description: ローカルの JDK 21 に合わせ、21 の API（SequencedCollection など）を使えるようにしました。手順書の所要時間の書き方も直しています。

@@ -1,0 +1,37 @@
+diff --git a/README.md b/README.md
+index 38f8fc3..3d03088 100644
+--- a/README.md
++++ b/README.md
+@@ -1,7 +1,7 @@
+ # dev-environment
+ 
+ Java（Spring Boot + MyBatis）開発の **ローカル開発環境** と **クラウド開発環境（AWS + Terraform）** の雛形・手順書です。
+-「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います。
++「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います（片方だけでも使えます）。
+ 
+ > 特定の企業・案件の構成の写しではなく、一般的な構成で作り直したものです。実案件では値と命名を自分たちの設計に合わせてください。
+ 
+diff --git a/sample-app/src/main/java/com/example/sample/common/ErrorResponse.java b/sample-app/src/main/java/com/example/sample/common/ErrorResponse.java
+index 54a5447..9e91cb3 100644
+--- a/sample-app/src/main/java/com/example/sample/common/ErrorResponse.java
++++ b/sample-app/src/main/java/com/example/sample/common/ErrorResponse.java
+@@ -8,5 +8,6 @@ import java.util.List;
+  * @param messageId メッセージ ID（例: APPE0001）
+  * @param message 利用者向けメッセージ
+  * @param details 入力チェックの項目別エラー（無ければ空）
++ *     入力チェックのときは項目名の順に並べる
+  */
+ public record ErrorResponse(String messageId, String message, List<String> details) {}
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java b/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+index 3cd09e9..85c07d9 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+@@ -38,7 +38,7 @@ public class DefaultFileFetcher implements FileFetcher {
+                 .key(rest.substring(slash + 1))
+                 .build();
+         try (ResponseInputStream<GetObjectResponse> in = s3.getObject(req);
+-                BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
++                BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
+             return reader.lines().toList();
+         }
+     }

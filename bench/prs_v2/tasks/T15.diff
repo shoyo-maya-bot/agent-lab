@@ -1,0 +1,43 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+index 39c74db..ca63110 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+@@ -12,6 +12,7 @@ public class MemberRecord {
+         this.email = email;
+     }
+ 
++    /** 登録前は null（登録すると MyBatis が採番した値を入れる）. */
+     public Long getId() {
+         return id;
+     }
+diff --git a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+index bed2128..aafb828 100644
+--- a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
++++ b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+@@ -67,7 +67,7 @@ public class OrderImportService {
+ 
+     static Order parse(String line) {
+         String[] cols = line.split(",", -1);
+-        if (cols.length != 4) {
++        if (cols.length < 4) {
+             throw new IllegalArgumentException("列数が 4 ではありません（" + cols.length + " 列）");
+         }
+         String orderNo = code(cols[0], "order_no");
+diff --git a/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java b/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+index cc50065..e67f559 100644
+--- a/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
++++ b/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+@@ -17,6 +17,13 @@ class BatchJobGuardTest {
+         assertThat(guard.getExitCode()).isZero();
+     }
+ 
++    @Test
++    void requestedJobIdMayHaveSurroundingSpaces() {
++        BatchJobGuard guard = new BatchJobGuard(" JOB0001 ", List.of(job0001));
++        guard.run(new DefaultApplicationArguments());
++        assertThat(guard.getExitCode()).isZero();
++    }
++
+     @Test
+     void errorWhenJobIdIsWrongOrMissing() {
+         // ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない

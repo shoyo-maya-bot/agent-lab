@@ -1,0 +1,44 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberService.java b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+index 2912e45..d6e0834 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberService.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+@@ -32,7 +32,7 @@ public class MemberService {
+         if (mapper.existsByEmail(normalized)) {
+             throw new BusinessException(MessageIds.EMAIL_ALREADY_USED, normalized);
+         }
+-        MemberRecord rec = new MemberRecord(name.trim(), normalized);
++        MemberRecord rec = new MemberRecord(name.trim(), email.trim());
+         try {
+             mapper.insert(rec);
+         } catch (DuplicateKeyException e) {
+diff --git a/sample-app/src/main/resources/application-local.yml b/sample-app/src/main/resources/application-local.yml
+index c345a2a..cfe75a4 100644
+--- a/sample-app/src/main/resources/application-local.yml
++++ b/sample-app/src/main/resources/application-local.yml
+@@ -5,6 +5,7 @@ spring:
+ app:
+   s3:
+     endpoint: ${S3_ENDPOINT:http://localhost:9090}
++# SQL のログも見たいときは、下の level に com.example.sample.member: TRACE などを足す
+ logging:
+   level:
+     com.example.sample: DEBUG
+diff --git a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+index f400e9b..7f25a64 100644
+--- a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+@@ -89,6 +89,14 @@ class OrderImportServiceTest {
+         assertThatThrownBy(() -> OrderImportService.parse(line)).hasMessage(message);
+     }
+ 
++    @Test
++    void blankLinesAreIgnored() {
++        ImportResult r = service.importLines(List.of(OrderImportService.HEADER, "", "A001,1,P-01,1", "   "));
++
++        assertThat(r.imported()).isEqualTo(1);
++        assertThat(r.errors()).isEmpty();
++    }
++
+     @Test
+     void parseAcceptsExactlyTwentyChars() {
+         String twenty = "B".repeat(20);

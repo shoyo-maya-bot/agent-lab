@@ -1,0 +1,34 @@
+diff --git a/sample-app/build.gradle b/sample-app/build.gradle
+index 6774f30..55d84a1 100644
+--- a/sample-app/build.gradle
++++ b/sample-app/build.gradle
+@@ -8,7 +8,7 @@ plugins {
+ }
+ 
+ group = 'com.example'
+-version = '0.1.0'
++version = '0.1.1'
+ 
+ // 本番・CI は Java 17。ローカルが 21 でも 17 向けにコンパイルする（21 固有の API を使わせない）
+ tasks.withType(JavaCompile).configureEach {
+diff --git a/sample-app/src/main/resources/application-local.yml b/sample-app/src/main/resources/application-local.yml
+index c345a2a..cfe75a4 100644
+--- a/sample-app/src/main/resources/application-local.yml
++++ b/sample-app/src/main/resources/application-local.yml
+@@ -5,6 +5,7 @@ spring:
+ app:
+   s3:
+     endpoint: ${S3_ENDPOINT:http://localhost:9090}
++# SQL のログも見たいときは、下の level に com.example.sample.member: TRACE などを足す
+ logging:
+   level:
+     com.example.sample: DEBUG
+diff --git a/sample-app/src/main/resources/messages.properties b/sample-app/src/main/resources/messages.properties
+index d05e961..dcd8aff 100644
+--- a/sample-app/src/main/resources/messages.properties
++++ b/sample-app/src/main/resources/messages.properties
+@@ -1,3 +1,4 @@
++# メッセージ本文（キーは MessageIds の定数）
+ APPE0001=入力内容に誤りがあります。
+ APPE0002=会員が見つかりません（会員ID: {0}）。
+ APPE0003=このメールアドレスは既に登録されています（{0}）。

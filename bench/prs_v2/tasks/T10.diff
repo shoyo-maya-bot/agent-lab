@@ -1,0 +1,26 @@
+diff --git a/sample-app/build.gradle b/sample-app/build.gradle
+index 6774f30..55d84a1 100644
+--- a/sample-app/build.gradle
++++ b/sample-app/build.gradle
+@@ -8,7 +8,7 @@ plugins {
+ }
+ 
+ group = 'com.example'
+-version = '0.1.0'
++version = '0.1.1'
+ 
+ // 本番・CI は Java 17。ローカルが 21 でも 17 向けにコンパイルする（21 固有の API を使わせない）
+ tasks.withType(JavaCompile).configureEach {
+diff --git a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+index bed2128..19d398b 100644
+--- a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
++++ b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+@@ -77,7 +77,7 @@ public class OrderImportService {
+         if (quantity < 1 || quantity > 999) {
+             throw new IllegalArgumentException("quantity は 1〜999 です（" + quantity + "）");
+         }
+-        return new Order(orderNo, memberId, product, (int) quantity);
++        return new Order(orderNo, memberId, product, Math.toIntExact(quantity));
+     }
+ 
+     private static String code(String value, String name) {

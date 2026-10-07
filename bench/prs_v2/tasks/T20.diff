@@ -1,0 +1,30 @@
+diff --git a/README.md b/README.md
+index 38f8fc3..3d03088 100644
+--- a/README.md
++++ b/README.md
+@@ -1,7 +1,7 @@
+ # dev-environment
+ 
+ Java（Spring Boot + MyBatis）開発の **ローカル開発環境** と **クラウド開発環境（AWS + Terraform）** の雛形・手順書です。
+-「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います。
++「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います（片方だけでも使えます）。
+ 
+ > 特定の企業・案件の構成の写しではなく、一般的な構成で作り直したものです。実案件では値と命名を自分たちの設計に合わせてください。
+ 
+diff --git a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+index f400e9b..1c8577e 100644
+--- a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+@@ -89,6 +89,12 @@ class OrderImportServiceTest {
+         assertThatThrownBy(() -> OrderImportService.parse(line)).hasMessage(message);
+     }
+ 
++    @ParameterizedTest
++    @CsvSource({"1", "999"})
++    void parseAcceptsQuantityBoundaries(int quantity) {
++        assertThat(OrderImportService.parse("A001,1,P-01," + quantity).quantity()).isEqualTo(quantity);
++    }
++
+     @Test
+     void parseAcceptsExactlyTwentyChars() {
+         String twenty = "B".repeat(20);

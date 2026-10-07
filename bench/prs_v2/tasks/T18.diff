@@ -1,0 +1,25 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberController.java b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+index 4e3202a..563113b 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberController.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+@@ -33,6 +33,7 @@ public class MemberController {
+         return service.get(id);
+     }
+ 
++    /** 登録し、201 と Location（照会の URL）を返す. */
+     @PostMapping
+     public ResponseEntity<Member> register(@Valid @RequestBody RegisterRequest req) {
+         Member created = service.register(req.name(), req.email());
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java b/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+index 3cd09e9..276e20a 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+@@ -26,7 +26,7 @@ public class DefaultFileFetcher implements FileFetcher {
+     @Override
+     public List<String> readLines(String location) throws IOException {
+         if (!location.startsWith("s3://")) {
+-            return Files.readAllLines(Path.of(location), StandardCharsets.UTF_8);
++            return Files.readAllLines(Path.of(location));
+         }
+         String rest = location.substring("s3://".length());
+         int slash = rest.indexOf('/');

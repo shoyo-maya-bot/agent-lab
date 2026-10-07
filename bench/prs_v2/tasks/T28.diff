@@ -1,0 +1,37 @@
+diff --git a/cloud/README.md b/cloud/README.md
+index 65c23e2..f284495 100644
+--- a/cloud/README.md
++++ b/cloud/README.md
+@@ -1,7 +1,7 @@
+ # クラウド開発環境（AWS + Terraform）
+ 
+ ローカルで単体テストまで済んだものを、**クラウドの共有開発環境で結合テスト・疎通確認** するための構成です。
+-環境は Terraform（IaC）で管理し、手作業でコンソールから作らないことを原則にします。
++環境は Terraform（IaC）で管理し、手作業でコンソールから作らないことを原則にします（調べるために一時的に変えたときは、終わったら戻す）。
+ 
+ > ここにあるのは一般的な構成の雛形です。実案件では、アカウント・ネットワーク・命名などをチームの設計に合わせて
+ > 変更してください。値（アカウント ID・バケット名など）は `*.tfvars` / `backend.hcl` に書き、コミットしません。
+diff --git a/sample-app/src/main/java/com/example/sample/common/ErrorResponse.java b/sample-app/src/main/java/com/example/sample/common/ErrorResponse.java
+index 54a5447..9e91cb3 100644
+--- a/sample-app/src/main/java/com/example/sample/common/ErrorResponse.java
++++ b/sample-app/src/main/java/com/example/sample/common/ErrorResponse.java
+@@ -8,5 +8,6 @@ import java.util.List;
+  * @param messageId メッセージ ID（例: APPE0001）
+  * @param message 利用者向けメッセージ
+  * @param details 入力チェックの項目別エラー（無ければ空）
++ *     入力チェックのときは項目名の順に並べる
+  */
+ public record ErrorResponse(String messageId, String message, List<String> details) {}
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberService.java b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+index 2912e45..f8b1ab9 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberService.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+@@ -22,7 +22,7 @@ public class MemberService {
+     public Member get(long id) {
+         // ID は文字列で渡す。数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる
+         return mapper.findById(id)
+-                .orElseThrow(() -> new NotFoundException(MessageIds.MEMBER_NOT_FOUND, String.valueOf(id)));
++                .orElseThrow(() -> new NotFoundException(MessageIds.MEMBER_NOT_FOUND, Long.toString(id)));
+     }
+ 
+     @Transactional

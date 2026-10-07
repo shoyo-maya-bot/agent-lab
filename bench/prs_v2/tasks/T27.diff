@@ -1,0 +1,43 @@
+diff --git a/cloud/README.md b/cloud/README.md
+index 65c23e2..f284495 100644
+--- a/cloud/README.md
++++ b/cloud/README.md
+@@ -1,7 +1,7 @@
+ # クラウド開発環境（AWS + Terraform）
+ 
+ ローカルで単体テストまで済んだものを、**クラウドの共有開発環境で結合テスト・疎通確認** するための構成です。
+-環境は Terraform（IaC）で管理し、手作業でコンソールから作らないことを原則にします。
++環境は Terraform（IaC）で管理し、手作業でコンソールから作らないことを原則にします（調べるために一時的に変えたときは、終わったら戻す）。
+ 
+ > ここにあるのは一般的な構成の雛形です。実案件では、アカウント・ネットワーク・命名などをチームの設計に合わせて
+ > 変更してください。値（アカウント ID・バケット名など）は `*.tfvars` / `backend.hcl` に書き、コミットしません。
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+index 0921e80..2ad2c27 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+@@ -4,6 +4,7 @@ import com.example.sample.batch.BatchJob;
+ import com.example.sample.common.MessageIds;
+ import com.example.sample.order.ImportResult;
+ import com.example.sample.order.OrderImportService;
++import java.io.IOException;
+ import java.util.List;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -58,7 +59,7 @@ public class OrderImportJob implements BatchJob, ApplicationRunner, ExitCodeGene
+             log.info("{} JOB0001 終了 imported={} duplicated={} errors={}",
+                     MessageIds.IMPORT_FINISHED, r.imported(), r.duplicated(), r.errors().size());
+             exitCode = r.hasErrors() ? WARN : OK;
+-        } catch (Exception e) {
++        } catch (IOException | RuntimeException e) {
+             log.error("{} JOB0001 異常終了", MessageIds.BATCH_FAILED, e);
+             exitCode = ERROR;
+         }
+diff --git a/sample-app/src/main/resources/messages.properties b/sample-app/src/main/resources/messages.properties
+index d05e961..dcd8aff 100644
+--- a/sample-app/src/main/resources/messages.properties
++++ b/sample-app/src/main/resources/messages.properties
+@@ -1,3 +1,4 @@
++# メッセージ本文（キーは MessageIds の定数）
+ APPE0001=入力内容に誤りがあります。
+ APPE0002=会員が見つかりません（会員ID: {0}）。
+ APPE0003=このメールアドレスは既に登録されています（{0}）。

@@ -1,0 +1,640 @@
+# PR の課題 v2 の答え（採点する人だけが見る. モデルにもプロンプトにも渡さない）. make_prs_v2.py が spec.yaml から作る
+# lines は変更後のファイルでの行（anchor の位置）. kind: bug（不具合を 1 つ）/ clean（問題なし）/ decoy（危なそうだが正しい）
+base_commit: 49d093f0a2b1604de223ebe80d9d62ad7523e6a4
+answers:
+- id: T01
+  key: clean-docs
+  kind: clean
+  changed_files:
+  - README.md
+  - cloud/README.md
+  - local/README.md
+  noise:
+  - n_readme
+  - n_local_readme
+  - n_cloud_readme
+- id: T02
+  key: clean-s3-prefix
+  kind: clean
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+  - sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+  noise:
+  - n_fetcher_doc
+- id: T03
+  key: bug-mapper-location
+  kind: bug
+  file: sample-app/src/main/resources/application.yml
+  lines:
+  - 14
+  - 14
+  symbol: mybatis.mapper-locations
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: XML は src/main/resources/mapper/ にあるので mappers/ では SQL の定義が読み込まれず、会員 API と取込のすべての SQL の呼び出しが実行時に失敗する
+  detail: MyBatis は Mapper のインタフェースだけを登録し、呼び出し時に BindingException（Invalid bound statement）になる。単体テストは偽の Mapper を使うので気づけない
+  leak_terms:
+  - 見つからない
+  - 存在しない
+  - BindingException
+  - Invalid bound statement
+  - フォルダ名
+  - 読み込まれ
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberController.java
+  - sample-app/src/main/resources/application.yml
+  - sample-app/src/main/resources/messages.properties
+  noise:
+  - n_messages_comment
+  - n_controller_doc
+- id: T04
+  key: bug-s3-charset
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+  lines:
+  - 41
+  - 41
+  symbol: DefaultFileFetcher.readLines
+  severity: MUST
+  severity_ok:
+  - MUST
+  - WANT
+  summary: S3 のファイルを、UTF-8 ではなく実行環境の既定の文字コードで読むようになり、Java 17 の本番（コンテナの既定のロケール）では日本語が化ける
+  detail: InputStreamReader(in) は Java 17 では file.encoding（OS のロケール）に従う。ローカルファイルの側は UTF-8 のままなので、ローカルの確認では気づけず、S3 経由のときだけ商品コードなどが化ける・見出し行の比較に失敗する
+  leak_terms:
+  - 文字コード
+  - 文字化け
+  - 化ける
+  - 既定の文字
+  - charset
+  - UTF-8
+  - defaultCharset
+  - ロケール
+  changed_files:
+  - README.md
+  - sample-app/src/main/java/com/example/sample/common/ErrorResponse.java
+  - sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+  noise:
+  - n_errorresponse_doc
+  - n_readme
+- id: T05
+  key: bug-sql-values
+  kind: bug
+  file: sample-app/src/main/resources/mapper/OrderMapper.xml
+  lines:
+  - 10
+  - 10
+  symbol: OrderMapper.insertIfAbsent
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: VALUES の memberId と productCode の順が列の並びと逆になり、member_id（BIGINT）に商品コードの文字列を入れようとして、取込の登録がすべて失敗する
+  detail: 列は (order_no, member_id, product_code, quantity) なのに、値は (orderNo, productCode, memberId, quantity)。PostgreSQL では型の不一致で例外になり、取込のトランザクション全体が取り消される。単体テストは偽の Mapper を使うので気づけない
+  leak_terms:
+  - 列の順
+  - 入れ替
+  - 順番が
+  - 型が合わ
+  - bigint
+  - 逆になって
+  changed_files:
+  - local/README.md
+  - sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+  - sample-app/src/main/resources/mapper/OrderMapper.xml
+  noise:
+  - n_s3_doc
+  - n_local_readme
+- id: T06
+  key: bug-input-args
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+  lines:
+  - 49
+  - 49
+  symbol: OrderImportJob.run
+  severity: WANT
+  severity_ok:
+  - WANT
+  - MUST
+  summary: 値の無い --input では空のリストが返り、try の外の input.get(0) で例外になって終了コード 8 にならない。--input を 2 つ渡すと 2 つ目以降が黙って無視される
+  detail: getOptionValues は「--input」だけ（値なし）なら空のリストを返す。開始ログの input.get(0) は try の外なので、例外がそのまま起動の失敗になり、決めてある終了コード（8）と引数誤りのログ（APPE0005）が出ない
+  leak_terms:
+  - IndexOutOfBounds
+  - 空のリスト
+  - 2 つ以上
+  - 複数指定
+  - 終了コード 1
+  - 無視され
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberController.java
+  - sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+  - sample-app/src/main/resources/messages.properties
+  noise:
+  - n_controller_doc
+  - n_messages_comment
+- id: T07
+  key: decoy-while-loop
+  kind: decoy
+  file: sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+  why_correct: 初期値・条件・次への進め方（自分自身を原因に持つときに止める）がどれも for 文と同じで、判定の結果は変わらない
+  looks_risky: 503 と 500 を分ける例外ハンドラの判定を書き換えている
+  changed_files:
+  - README.md
+  - sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+  - sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+  noise:
+  - n_s3_doc
+  - n_readme
+- id: T08
+  key: bug-s3-endpoint
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+  lines:
+  - 30
+  - 30
+  symbol: S3Config.s3Client
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: app.s3.endpoint の既定値は空文字で null にならないため、クラウドでも常にエミュレータ用の分岐に入り、空の接続先と固定の test の認証情報で S3 に接続しようとして失敗する
+  detail: '@Value の既定値 ${app.s3.endpoint:} は空文字。endpoint == null は常に偽なので、IAM ロールの標準の認証情報を使う分岐に入らない。ローカル（値あり）では同じ動きなので気づけない'
+  leak_terms:
+  - null にならない
+  - 空文字
+  - 既定値
+  - IAM
+  - 本番で
+  - 常に
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+  - sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+  - sample-app/src/main/resources/application-local.yml
+  noise:
+  - n_fetcher_doc
+  - n_local_yml
+- id: T09
+  key: decoy-member-cache
+  kind: decoy
+  file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  why_correct: memberExists は boolean を返すので null は入らず、同じ会員は 1 回だけ確かめる動きも同じ。memberCache はメソッドの中の変数で、ほかのスレッドと共有しない
+  looks_risky: 外部キーの事前確認の行を書き換えている
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+  - sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  noise:
+  - n_record_doc
+- id: T10
+  key: decoy-toint-exact
+  kind: decoy
+  file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  why_correct: 直前で 1〜999 に収まることを確かめているので、toIntExact が例外を投げることは無く、結果はキャストと同じ
+  looks_risky: 取込の検証の中で、例外を投げうる呼び出しを足している
+  changed_files:
+  - sample-app/build.gradle
+  - sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  noise:
+  - n_gradle_version
+- id: T11
+  key: decoy-strip
+  kind: decoy
+  file: sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+  why_correct: ジョブ ID は JOB + 4 桁の ASCII で、ASCII の空白の扱いは trim と strip で同じ。strip は Java 11 からあり、Java 17 で使える
+  looks_risky: 起動の判定（終了コード）に関わる行を変えている
+  changed_files:
+  - local/README.md
+  - sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+  noise:
+  - n_local_readme
+- id: T12
+  key: bug-line-number
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  lines:
+  - 47
+  - 47
+  symbol: OrderImportService.importLines
+  severity: WANT
+  severity_ok:
+  - WANT
+  - MUST
+  summary: 取込結果のエラーに残す番号が、ファイルの実際の位置より 1 小さくなる
+  detail: i は 0 始まりの添字で、見出しが 1 行目なので、ファイル上の位置は i + 1。運用者がログの番号で元のファイルを直すと、別の行を直してしまう
+  leak_terms:
+  - 行番号
+  - 1 つずれ
+  - ずれる
+  - off-by-one
+  - 0 始まり
+  changed_files:
+  - sample-app/build.gradle
+  - sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  - sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+  noise:
+  - n_fetcher_doc
+  - n_gradle_version
+- id: T13
+  key: bug-untrimmed
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  lines:
+  - 92
+  - 92
+  symbol: OrderImportService.code
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: 桁数は前後の空白を除いた値で確かめるのに、返すのは空白付きの元の値になり、空白付きの注文番号が別の注文として登録されたり、20 文字を超えて DB の桁数の誤りで取込全体が取り消されたりする
+  detail: 「 A001」と「A001」が別の注文番号になり、再実行しても重複と判定されない（冪等でなくなる）。空白を含めて 21 文字以上なら VARCHAR(20) を超え、1 行の誤りでトランザクション全体が取り消される
+  leak_terms:
+  - 前後の空白
+  - 空白付き
+  - trim 前
+  - trim されていない
+  - そのまま返
+  - 冪等
+  changed_files:
+  - sample-app/build.gradle
+  - sample-app/src/main/java/com/example/sample/member/MemberMapper.java
+  - sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  noise:
+  - n_mapper_doc
+  - n_gradle_version
+- id: T14
+  key: decoy-on-constraint
+  kind: decoy
+  file: sample-app/src/main/resources/mapper/OrderMapper.xml
+  why_correct: order_no は orders の主キーで、PostgreSQL は主キーの制約に orders_pkey と名前を付ける。対象の制約は同じなので動きは変わらない
+  looks_risky: SQL の Mapper の変更で、制約名に依存している
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+  - sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+  - sample-app/src/main/resources/mapper/OrderMapper.xml
+  noise:
+  - n_fetcher_doc
+  - n_record_doc
+- id: T15
+  key: bug-extra-columns
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  lines:
+  - 70
+  - 70
+  symbol: OrderImportService.parse
+  severity: MUST
+  severity_ok:
+  - MUST
+  - WANT
+  summary: 5 列以上の行が誤りにならず、先頭の 4 列だけで取り込まれる。値にカンマが混じった行は列がずれたまま、誤った商品コード・数量で登録される
+  detail: 例「A001,1,P,01,2」は product_code=P・quantity=1 として登録される（本来は列数の誤りで飛ばす行）。誤りのメッセージは「4 ではありません」のままで実際の判定と食い違う
+  leak_terms:
+  - 5 列
+  - 余分な列
+  - 列が多い
+  - カンマを含
+  - ずれた
+  - 黙って
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+  - sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  - sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+  noise:
+  - n_guard_test
+  - n_record_doc
+- id: T16
+  key: bug-quantity-max
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  lines:
+  - 80
+  - 80
+  symbol: OrderImportService.parse
+  severity: MUST
+  severity_ok:
+  - MUST
+  - WANT
+  summary: 数量の判定が「QUANTITY_MAX 以上なら誤り」になり、仕様と DB の CHECK で正しい値である 999 の行が取り込まれなくなる
+  detail: 比較が > 999 から >= 999 に変わった。数量 999 の行は形式エラーとして飛ばされ、終了コードも 4 になる。エラーの文言は「1〜999 です」のままで食い違う
+  leak_terms:
+  - 999 を
+  - 999 以上
+  - 999 未満
+  - 上限値を含
+  - 含まない
+  - off-by-one
+  - 境界値
+  changed_files:
+  - README.md
+  - sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+  - sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+  noise:
+  - n_readme
+  - n_record_doc
+- id: T17
+  key: bug-readonly-class
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+  lines:
+  - 28
+  - 28
+  symbol: MemberService.register
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: register から書き込み用の指定を外したので、クラスの readOnly = true が効き、PostgreSQL では会員の INSERT が読み取り専用のトランザクションの誤りで失敗する
+  detail: クラスにまとめるなら、書き込むメソッドには @Transactional（readOnly = false）を残す必要がある。単体テストは偽の Mapper で Spring のトランザクションを通らないので気づけない
+  leak_terms:
+  - 読み取り専用のまま
+  - read-only transaction
+  - INSERT できない
+  - 書き込めない
+  - 上書き
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberService.java
+  - sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+  - sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+  noise:
+  - n_guard_test
+  - n_s3_doc
+- id: T18
+  key: decoy-readalllines
+  kind: decoy
+  file: sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+  why_correct: Files.readAllLines(Path) は API の仕様で常に UTF-8 を使う（既定の文字コードには従わない）ので、結果は同じ
+  looks_risky: 文字コードの指定を消している
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberController.java
+  - sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+  noise:
+  - n_controller_doc
+- id: T19
+  key: clean-config-comments
+  kind: clean
+  changed_files:
+  - sample-app/build.gradle
+  - sample-app/src/main/resources/application-local.yml
+  - sample-app/src/main/resources/messages.properties
+  noise:
+  - n_gradle_version
+  - n_messages_comment
+  - n_local_yml
+- id: T20
+  key: clean-quantity-test
+  kind: clean
+  changed_files:
+  - README.md
+  - sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+  noise:
+  - n_readme
+- id: T21
+  key: bug-message-arg
+  kind: bug
+  file: sample-app/src/main/resources/messages.properties
+  lines:
+  - 2
+  - 2
+  symbol: APPE0002
+  severity: WANT
+  severity_ok:
+  - WANT
+  - MUST
+  summary: 埋め込む値は 1 つ（会員 ID）だけなのに {1} を参照しているので、会員 ID が入らず「{1}」の文字がそのまま利用者に表示される
+  detail: 'NotFoundException(MEMBER_NOT_FOUND, id) の引数は 1 つで、MessageFormat の番号は 0 から。404 の本文が「会員ID: {1}」になる'
+  leak_terms:
+  - 引数の番号
+  - 番号が違
+  - 置き換わらない
+  - そのまま表示
+  - 0 から
+  changed_files:
+  - README.md
+  - sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+  - sample-app/src/main/resources/messages.properties
+  noise:
+  - n_job_rename
+  - n_readme
+- id: T22
+  key: bug-guard-warn
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+  lines:
+  - 48
+  - 48
+  symbol: BatchJobGuard.run
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: ジョブ ID が誤っている・未指定のときの終了コードが 8 から 4 になり、何も実行していないのにスケジューラからは「警告付きで続行した」に見える
+  detail: このクラスの目的（クラスの説明）は、ジョブ ID の誤りで何も実行せずに終わるのを異常終了として知らせること。4 は「処理は続行した」の意味で、運用では失敗として扱われず、取込漏れに気づけない
+  leak_terms:
+  - 終了コード 8
+  - 異常終了にならない
+  - 正常終了に見え
+  - スケジューラ
+  - 気づけない
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+  - sample-app/src/main/java/com/example/sample/member/MemberMapper.java
+  - sample-app/src/main/java/com/example/sample/order/ImportResult.java
+  noise:
+  - n_importresult
+  - n_mapper_doc
+- id: T23
+  key: bug-name-size
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/member/MemberController.java
+  lines:
+  - 29
+  - 29
+  symbol: MemberController.RegisterRequest
+  severity: MUST
+  severity_ok:
+  - MUST
+  - WANT
+  summary: DB の member.name は VARCHAR(50) のままなので、51〜100 文字の氏名は入力チェックを通ったあと INSERT で失敗し、400 ではなく 500 になる
+  detail: スキーマ（local/db/init/01_schema.sql）を変えずに上限だけを広げている。DB の例外は想定外のエラーとして 500 と APPE9999 で返る
+  leak_terms:
+  - VARCHAR(50)
+  - 50 文字
+  - DB の桁
+  - 桁あふれ
+  - スキーマ
+  - マイグレーション
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+  - sample-app/src/main/java/com/example/sample/member/MemberController.java
+  - sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+  noise:
+  - n_order_test
+  - n_batchjob_doc
+- id: T24
+  key: bug-500-details
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+  lines:
+  - 90
+  - 90
+  symbol: ApiExceptionHandler.unexpected
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: 想定外のエラーの例外クラス名とメッセージ（SQL 文・テーブル名・接続先などを含みうる）を、API の応答として利用者にそのまま返してしまう
+  detail: 設計（クラスの説明）は「例外の中身はログにだけ出す」。rootMessage は根本原因のクラス名とメッセージを返すので、DB のエラーなら SQL やスキーマの情報が外部に出る
+  leak_terms:
+  - 漏え
+  - 漏れ
+  - 内部情報
+  - 露出
+  - スタックトレース
+  - 攻撃者
+  - 機密
+  changed_files:
+  - cloud/README.md
+  - sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+  - sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+  noise:
+  - n_batchjob_doc
+  - n_cloud_readme
+- id: T25
+  key: clean-guard-test
+  kind: clean
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/order/ImportResult.java
+  - sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+  noise:
+  - n_guard_test
+  - n_importresult
+- id: T26
+  key: clean-job-rename
+  kind: clean
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+  - sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+  - sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+  noise:
+  - n_job_rename
+  - n_batchjob_doc
+  - n_order_test
+- id: T27
+  key: decoy-narrow-catch
+  kind: decoy
+  file: sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+  why_correct: try の中で投げうる検査例外は readLines の IOException だけで、ほかは実行時例外。Exception で捕まえていたものはすべて捕まえ、終了コード 8 になる動きは同じ（Error はどちらでも捕まえない）
+  looks_risky: 異常終了（終了コード 8）を決める例外の捕捉を狭めている
+  changed_files:
+  - cloud/README.md
+  - sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+  - sample-app/src/main/resources/messages.properties
+  noise:
+  - n_messages_comment
+  - n_cloud_readme
+- id: T28
+  key: decoy-long-tostring
+  kind: decoy
+  file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+  why_correct: String.valueOf(long) は中で Long.toString(long) を呼ぶだけで、どちらも桁区切りの無い文字列を返す。直前の説明（文字列で渡す）にも合っている
+  looks_risky: 桁区切りを避けるための変換の行を変えている
+  changed_files:
+  - cloud/README.md
+  - sample-app/src/main/java/com/example/sample/common/ErrorResponse.java
+  - sample-app/src/main/java/com/example/sample/member/MemberService.java
+  noise:
+  - n_cloud_readme
+  - n_errorresponse_doc
+- id: T29
+  key: clean-javadoc
+  kind: clean
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberController.java
+  - sample-app/src/main/java/com/example/sample/member/MemberMapper.java
+  - sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+  noise:
+  - n_record_doc
+  - n_mapper_doc
+  - n_controller_doc
+- id: T30
+  key: bug-id-int
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/member/MemberController.java
+  lines:
+  - 32
+  - 32
+  symbol: MemberController.get
+  severity: WANT
+  severity_ok:
+  - WANT
+  - NITS
+  summary: 会員 ID は BIGSERIAL（long）なのに int で受けるため、2,147,483,647 を超える ID の会員を照会できず 400 になる
+  detail: Service と Mapper は long のまま。今の件数では起きにくいが、ID の型が層ごとに食い違い、上限を超えたときに型違いの 400 として返る
+  leak_terms:
+  - int の範囲
+  - 21 億
+  - '2147483647'
+  - オーバーフロー
+  - BIGSERIAL
+  - bigint
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberController.java
+  - sample-app/src/main/java/com/example/sample/order/ImportResult.java
+  noise:
+  - n_importresult
+- id: T31
+  key: bug-email-raw
+  kind: bug
+  file: sample-app/src/main/java/com/example/sample/member/MemberService.java
+  lines:
+  - 35
+  - 35
+  symbol: MemberService.register
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: 重複の確認は小文字にそろえた値で行うのに、保存は入力どおりの値になるため、表記だけが違う同じアドレスを何件でも登録できる
+  detail: existsByEmail は正規化した値で探すが、DB に入るのは正規化前の値。DB の一意制約は表記の違いを区別するので、User@example.com と user@example.com が両方登録でき、以後の重複確認もすり抜ける
+  leak_terms:
+  - 大文字
+  - 小文字
+  - 正規化
+  - 一意制約
+  - すり抜け
+  - 重複登録
+  - case
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/member/MemberService.java
+  - sample-app/src/main/resources/application-local.yml
+  - sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+  noise:
+  - n_order_test
+  - n_local_yml
+- id: T32
+  key: clean-s3-builder-name
+  kind: clean
+  changed_files:
+  - sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+  noise:
+  - n_s3_doc
+- id: T33
+  key: bug-release-21
+  kind: bug
+  file: sample-app/build.gradle
+  lines:
+  - 15
+  - 15
+  symbol: build.gradle tasks.withType(JavaCompile)
+  severity: MUST
+  severity_ok:
+  - MUST
+  summary: 本番と CI は Java 17 なので、21 向けのクラスファイルは起動時に UnsupportedClassVersionError になり、アプリもバッチも動かない
+  detail: すぐ上の説明に「本番・CI は Java 17」とある。release を上げるなら、実行環境（コンテナのイメージ・CI の setup-java）を同時に 21 にする必要がある
+  leak_terms:
+  - 17 で動
+  - UnsupportedClassVersionError
+  - クラスファイルの版
+  - 本番は 17
+  - 実行できない
+  - 起動しない
+  changed_files:
+  - local/README.md
+  - sample-app/build.gradle
+  noise:
+  - n_local_readme

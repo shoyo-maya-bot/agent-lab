@@ -1,0 +1,36 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberController.java b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+index 4e3202a..563113b 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberController.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+@@ -33,6 +33,7 @@ public class MemberController {
+         return service.get(id);
+     }
+ 
++    /** 登録し、201 と Location（照会の URL）を返す. */
+     @PostMapping
+     public ResponseEntity<Member> register(@Valid @RequestBody RegisterRequest req) {
+         Member created = service.register(req.name(), req.email());
+diff --git a/sample-app/src/main/resources/application.yml b/sample-app/src/main/resources/application.yml
+index b34e46e..0dfd5e2 100644
+--- a/sample-app/src/main/resources/application.yml
++++ b/sample-app/src/main/resources/application.yml
+@@ -9,8 +9,9 @@ spring:
+     url: ${DB_URL:jdbc:postgresql://localhost:5432/sampledb}
+     username: ${DB_USER:app}
+     password: ${DB_PASSWORD:}
++# MyBatis（SQL の本体は resources の XML）
+ mybatis:
+-  mapper-locations: classpath:mapper/*.xml
++  mapper-locations: classpath:mappers/*.xml
+   configuration:
+     map-underscore-to-camel-case: true
+ server:
+diff --git a/sample-app/src/main/resources/messages.properties b/sample-app/src/main/resources/messages.properties
+index d05e961..dcd8aff 100644
+--- a/sample-app/src/main/resources/messages.properties
++++ b/sample-app/src/main/resources/messages.properties
+@@ -1,3 +1,4 @@
++# メッセージ本文（キーは MessageIds の定数）
+ APPE0001=入力内容に誤りがあります。
+ APPE0002=会員が見つかりません（会員ID: {0}）。
+ APPE0003=このメールアドレスは既に登録されています（{0}）。

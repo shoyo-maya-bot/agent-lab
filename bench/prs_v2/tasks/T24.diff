@@ -1,0 +1,37 @@
+diff --git a/cloud/README.md b/cloud/README.md
+index 65c23e2..f284495 100644
+--- a/cloud/README.md
++++ b/cloud/README.md
+@@ -1,7 +1,7 @@
+ # クラウド開発環境（AWS + Terraform）
+ 
+ ローカルで単体テストまで済んだものを、**クラウドの共有開発環境で結合テスト・疎通確認** するための構成です。
+-環境は Terraform（IaC）で管理し、手作業でコンソールから作らないことを原則にします。
++環境は Terraform（IaC）で管理し、手作業でコンソールから作らないことを原則にします（調べるために一時的に変えたときは、終わったら戻す）。
+ 
+ > ここにあるのは一般的な構成の雛形です。実案件では、アカウント・ネットワーク・命名などをチームの設計に合わせて
+ > 変更してください。値（アカウント ID・バケット名など）は `*.tfvars` / `backend.hcl` に書き、コミットしません。
+diff --git a/sample-app/src/main/java/com/example/sample/batch/BatchJob.java b/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+index d3ef10d..b361634 100644
+--- a/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
++++ b/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+@@ -10,5 +10,6 @@ public interface BatchJob {
+     /** 終了コード: 異常終了. */
+     int ERROR = 8;
+ 
++    /** ジョブ ID（例: JOB0001）. 起動引数 app.batch.job と突き合わせる. */
+     String jobId();
+ }
+diff --git a/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java b/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+index c64011f..3889d91 100644
+--- a/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
++++ b/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+@@ -87,7 +87,7 @@ public class ApiExceptionHandler {
+             return body(HttpStatus.SERVICE_UNAVAILABLE, MessageIds.SERVICE_UNAVAILABLE, new Object[0], List.of());
+         }
+         log.error("{} 想定外のエラー", MessageIds.SYSTEM_ERROR, e);
+-        return body(HttpStatus.INTERNAL_SERVER_ERROR, MessageIds.SYSTEM_ERROR, new Object[0], List.of());
++        return body(HttpStatus.INTERNAL_SERVER_ERROR, MessageIds.SYSTEM_ERROR, new Object[0], List.of(rootMessage(e)));
+     }
+ 
+     /** 一時的に依存先（DB）へつながらないことによる失敗か. 原因の連鎖もたどる. */

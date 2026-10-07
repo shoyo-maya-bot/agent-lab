@@ -1,0 +1,30 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+index 39c74db..ca63110 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+@@ -12,6 +12,7 @@ public class MemberRecord {
+         this.email = email;
+     }
+ 
++    /** 登録前は null（登録すると MyBatis が採番した値を入れる）. */
+     public Long getId() {
+         return id;
+     }
+diff --git a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+index bed2128..1ef5705 100644
+--- a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
++++ b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+@@ -52,7 +52,12 @@ public class OrderImportService {
+                 errors.add(lineNo + ": " + e.getMessage());
+                 continue;
+             }
+-            if (!memberCache.computeIfAbsent(order.memberId(), mapper::memberExists)) {
++            Boolean exists = memberCache.get(order.memberId());
++            if (exists == null) {
++                exists = mapper.memberExists(order.memberId());
++                memberCache.put(order.memberId(), exists);
++            }
++            if (!exists) {
+                 errors.add(lineNo + ": member_id の会員が存在しません（" + order.memberId() + "）");
+                 continue;
+             }

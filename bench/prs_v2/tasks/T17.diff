@@ -1,0 +1,57 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberService.java b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+index 2912e45..25c2db5 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberService.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberService.java
+@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
+ 
+ /** 会員の業務ロジック. */
+ @Service
++@Transactional(readOnly = true)
+ public class MemberService {
+ 
+     private final MemberMapper mapper;
+@@ -18,14 +19,12 @@ public class MemberService {
+         this.mapper = mapper;
+     }
+ 
+-    @Transactional(readOnly = true)
+     public Member get(long id) {
+         // ID は文字列で渡す。数値のまま渡すと MessageFormat が「1,234」と桁区切りを入れる
+         return mapper.findById(id)
+                 .orElseThrow(() -> new NotFoundException(MessageIds.MEMBER_NOT_FOUND, String.valueOf(id)));
+     }
+ 
+-    @Transactional
+     public Member register(String name, String email) {
+         String normalized = email.trim().toLowerCase(Locale.ROOT);
+         // 事前の確認は「よくある重複」を早く返すため。同時に登録されたときの最終的な判定は DB の一意制約に任せる
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java b/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+index 6107ddd..0989533 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+@@ -20,6 +20,7 @@ import software.amazon.awssdk.services.s3.S3ClientBuilder;
+ @Configuration
+ public class S3Config {
+ 
++    /** アプリ全体で 1 つのクライアントを使い回す（スレッドセーフ）. */
+     @Bean
+     public S3Client s3Client(
+             @Value("${app.s3.region:ap-northeast-1}") String region,
+diff --git a/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java b/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+index cc50065..e67f559 100644
+--- a/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
++++ b/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+@@ -17,6 +17,13 @@ class BatchJobGuardTest {
+         assertThat(guard.getExitCode()).isZero();
+     }
+ 
++    @Test
++    void requestedJobIdMayHaveSurroundingSpaces() {
++        BatchJobGuard guard = new BatchJobGuard(" JOB0001 ", List.of(job0001));
++        guard.run(new DefaultApplicationArguments());
++        assertThat(guard.getExitCode()).isZero();
++    }
++
+     @Test
+     void errorWhenJobIdIsWrongOrMissing() {
+         // ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない

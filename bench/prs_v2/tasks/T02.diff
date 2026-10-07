@@ -1,0 +1,41 @@
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java b/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+index 3cd09e9..0d574e8 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/DefaultFileFetcher.java
+@@ -17,6 +17,8 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+ @Component
+ public class DefaultFileFetcher implements FileFetcher {
+ 
++    private static final String S3_PREFIX = "s3://";
++
+     private final S3Client s3;
+ 
+     public DefaultFileFetcher(S3Client s3) {
+@@ -25,10 +27,10 @@ public class DefaultFileFetcher implements FileFetcher {
+ 
+     @Override
+     public List<String> readLines(String location) throws IOException {
+-        if (!location.startsWith("s3://")) {
++        if (!location.startsWith(S3_PREFIX)) {
+             return Files.readAllLines(Path.of(location), StandardCharsets.UTF_8);
+         }
+-        String rest = location.substring("s3://".length());
++        String rest = location.substring(S3_PREFIX.length());
+         int slash = rest.indexOf('/');
+         if (slash <= 0 || slash == rest.length() - 1) {
+             throw new IllegalArgumentException("s3://バケット/キー の形式で指定してください: " + location);
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java b/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+index 1702e40..9639375 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+@@ -6,5 +6,10 @@ import java.util.List;
+ /** 入力ファイルを行の並びとして読む（s3:// とローカルパスを同じ形で扱う）. */
+ public interface FileFetcher {
+ 
++    /**
++     * 行の並びを返す（改行は含まない）.
++     *
++     * @param location s3://バケット/キー、またはローカルのファイルのパス
++     */
+     List<String> readLines(String location) throws IOException;
+ }

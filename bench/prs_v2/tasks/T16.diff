@@ -1,0 +1,48 @@
+diff --git a/README.md b/README.md
+index 38f8fc3..3d03088 100644
+--- a/README.md
++++ b/README.md
+@@ -1,7 +1,7 @@
+ # dev-environment
+ 
+ Java（Spring Boot + MyBatis）開発の **ローカル開発環境** と **クラウド開発環境（AWS + Terraform）** の雛形・手順書です。
+-「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います。
++「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います（片方だけでも使えます）。
+ 
+ > 特定の企業・案件の構成の写しではなく、一般的な構成で作り直したものです。実案件では値と命名を自分たちの設計に合わせてください。
+ 
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+index 39c74db..ca63110 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+@@ -12,6 +12,7 @@ public class MemberRecord {
+         this.email = email;
+     }
+ 
++    /** 登録前は null（登録すると MyBatis が採番した値を入れる）. */
+     public Long getId() {
+         return id;
+     }
+diff --git a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+index bed2128..d413347 100644
+--- a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
++++ b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+@@ -24,6 +24,9 @@ public class OrderImportService {
+     /** orders.order_no・orders.product_code の桁数（local/db/init/01_schema.sql の VARCHAR(20)）. */
+     static final int CODE_MAX_LENGTH = 20;
+ 
++    /** 数量の上限. */
++    static final int QUANTITY_MAX = 999;
++
+     private final OrderMapper mapper;
+ 
+     public OrderImportService(OrderMapper mapper) {
+@@ -74,7 +77,7 @@ public class OrderImportService {
+         long memberId = parseLong(cols[1], "member_id");
+         String product = code(cols[2], "product_code");
+         long quantity = parseLong(cols[3], "quantity");
+-        if (quantity < 1 || quantity > 999) {
++        if (quantity < 1 || quantity >= QUANTITY_MAX) {
+             throw new IllegalArgumentException("quantity は 1〜999 です（" + quantity + "）");
+         }
+         return new Order(orderNo, memberId, product, (int) quantity);

@@ -1,0 +1,41 @@
+diff --git a/sample-app/build.gradle b/sample-app/build.gradle
+index 6774f30..55d84a1 100644
+--- a/sample-app/build.gradle
++++ b/sample-app/build.gradle
+@@ -8,7 +8,7 @@ plugins {
+ }
+ 
+ group = 'com.example'
+-version = '0.1.0'
++version = '0.1.1'
+ 
+ // 本番・CI は Java 17。ローカルが 21 でも 17 向けにコンパイルする（21 固有の API を使わせない）
+ tasks.withType(JavaCompile).configureEach {
+diff --git a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+index bed2128..562e9d3 100644
+--- a/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
++++ b/sample-app/src/main/java/com/example/sample/order/OrderImportService.java
+@@ -44,7 +44,7 @@ public class OrderImportService {
+             if (line.isBlank()) {
+                 continue;
+             }
+-            int lineNo = i + 1;
++            int lineNo = i;
+             Order order;
+             try {
+                 order = parse(line);
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java b/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+index 1702e40..9639375 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+@@ -6,5 +6,10 @@ import java.util.List;
+ /** 入力ファイルを行の並びとして読む（s3:// とローカルパスを同じ形で扱う）. */
+ public interface FileFetcher {
+ 
++    /**
++     * 行の並びを返す（改行は含まない）.
++     *
++     * @param location s3://バケット/キー、またはローカルのファイルのパス
++     */
+     List<String> readLines(String location) throws IOException;
+ }

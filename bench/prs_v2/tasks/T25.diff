@@ -1,0 +1,34 @@
+diff --git a/sample-app/src/main/java/com/example/sample/order/ImportResult.java b/sample-app/src/main/java/com/example/sample/order/ImportResult.java
+index e8ae829..b7b4af2 100644
+--- a/sample-app/src/main/java/com/example/sample/order/ImportResult.java
++++ b/sample-app/src/main/java/com/example/sample/order/ImportResult.java
+@@ -11,6 +11,11 @@ import java.util.List;
+  */
+ public record ImportResult(int imported, int duplicated, List<String> errors) {
+ 
++    /** 空行を除いて読んだ行の数. */
++    public int processed() {
++        return imported + duplicated + errors.size();
++    }
++
+     public boolean hasErrors() {
+         return !errors.isEmpty();
+     }
+diff --git a/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java b/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+index cc50065..e67f559 100644
+--- a/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
++++ b/sample-app/src/test/java/com/example/sample/batch/BatchJobGuardTest.java
+@@ -17,6 +17,13 @@ class BatchJobGuardTest {
+         assertThat(guard.getExitCode()).isZero();
+     }
+ 
++    @Test
++    void requestedJobIdMayHaveSurroundingSpaces() {
++        BatchJobGuard guard = new BatchJobGuard(" JOB0001 ", List.of(job0001));
++        guard.run(new DefaultApplicationArguments());
++        assertThat(guard.getExitCode()).isZero();
++    }
++
+     @Test
+     void errorWhenJobIdIsWrongOrMissing() {
+         // ジョブ ID が誤っていると @ConditionalOnProperty でジョブの Bean 自体が作られない

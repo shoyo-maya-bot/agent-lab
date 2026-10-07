@@ -1,0 +1,44 @@
+diff --git a/README.md b/README.md
+index 38f8fc3..3d03088 100644
+--- a/README.md
++++ b/README.md
+@@ -1,7 +1,7 @@
+ # dev-environment
+ 
+ Java（Spring Boot + MyBatis）開発の **ローカル開発環境** と **クラウド開発環境（AWS + Terraform）** の雛形・手順書です。
+-「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います。
++「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います（片方だけでも使えます）。
+ 
+ > 特定の企業・案件の構成の写しではなく、一般的な構成で作り直したものです。実案件では値と命名を自分たちの設計に合わせてください。
+ 
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+index 0921e80..974aacf 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+@@ -53,11 +53,11 @@ public class OrderImportJob implements BatchJob, ApplicationRunner, ExitCodeGene
+         }
+         log.info("{} JOB0001 開始 input={}", MessageIds.IMPORT_STARTED, input.get(0));
+         try {
+-            ImportResult r = service.importLines(fetcher.readLines(input.get(0)));
+-            r.errors().forEach(e -> log.warn("{} {}", MessageIds.IMPORT_LINE_SKIPPED, e));
++            ImportResult result = service.importLines(fetcher.readLines(input.get(0)));
++            result.errors().forEach(e -> log.warn("{} {}", MessageIds.IMPORT_LINE_SKIPPED, e));
+             log.info("{} JOB0001 終了 imported={} duplicated={} errors={}",
+-                    MessageIds.IMPORT_FINISHED, r.imported(), r.duplicated(), r.errors().size());
+-            exitCode = r.hasErrors() ? WARN : OK;
++                    MessageIds.IMPORT_FINISHED, result.imported(), result.duplicated(), result.errors().size());
++            exitCode = result.hasErrors() ? WARN : OK;
+         } catch (Exception e) {
+             log.error("{} JOB0001 異常終了", MessageIds.BATCH_FAILED, e);
+             exitCode = ERROR;
+diff --git a/sample-app/src/main/resources/messages.properties b/sample-app/src/main/resources/messages.properties
+index d05e961..b30bc4e 100644
+--- a/sample-app/src/main/resources/messages.properties
++++ b/sample-app/src/main/resources/messages.properties
+@@ -1,5 +1,5 @@
+ APPE0001=入力内容に誤りがあります。
+-APPE0002=会員が見つかりません（会員ID: {0}）。
++APPE0002=指定された会員は見つかりません（会員ID: {1}）。
+ APPE0003=このメールアドレスは既に登録されています（{0}）。
+ APPE0004=リクエストを受け付けられません。
+ APPE0005=バッチの起動引数に誤りがあります。

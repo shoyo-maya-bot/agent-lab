@@ -1,0 +1,43 @@
+diff --git a/sample-app/src/main/java/com/example/sample/batch/BatchJob.java b/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+index d3ef10d..b361634 100644
+--- a/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
++++ b/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+@@ -10,5 +10,6 @@ public interface BatchJob {
+     /** 終了コード: 異常終了. */
+     int ERROR = 8;
+ 
++    /** ジョブ ID（例: JOB0001）. 起動引数 app.batch.job と突き合わせる. */
+     String jobId();
+ }
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberController.java b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+index 4e3202a..4219b1b 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberController.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+@@ -26,7 +26,7 @@ public class MemberController {
+ 
+     /** 登録の入力. */
+     public record RegisterRequest(
+-            @NotBlank @Size(max = 50) String name, @NotBlank @Email @Size(max = 254) String email) {}
++            @NotBlank @Size(max = 100) String name, @NotBlank @Email @Size(max = 254) String email) {}
+ 
+     @GetMapping("/{id}")
+     public Member get(@PathVariable("id") long id) {
+diff --git a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+index f400e9b..7f25a64 100644
+--- a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+@@ -89,6 +89,14 @@ class OrderImportServiceTest {
+         assertThatThrownBy(() -> OrderImportService.parse(line)).hasMessage(message);
+     }
+ 
++    @Test
++    void blankLinesAreIgnored() {
++        ImportResult r = service.importLines(List.of(OrderImportService.HEADER, "", "A001,1,P-01,1", "   "));
++
++        assertThat(r.imported()).isEqualTo(1);
++        assertThat(r.errors()).isEmpty();
++    }
++
+     @Test
+     void parseAcceptsExactlyTwentyChars() {
+         String twenty = "B".repeat(20);

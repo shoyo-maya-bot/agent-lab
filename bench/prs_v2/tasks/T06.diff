@@ -1,0 +1,34 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberController.java b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+index 4e3202a..563113b 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberController.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+@@ -33,6 +33,7 @@ public class MemberController {
+         return service.get(id);
+     }
+ 
++    /** 登録し、201 と Location（照会の URL）を返す. */
+     @PostMapping
+     public ResponseEntity<Member> register(@Valid @RequestBody RegisterRequest req) {
+         Member created = service.register(req.name(), req.email());
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+index 0921e80..8e3b4d8 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+@@ -46,7 +46,7 @@ public class OrderImportJob implements BatchJob, ApplicationRunner, ExitCodeGene
+     @Override
+     public void run(ApplicationArguments args) {
+         List<String> input = args.getOptionValues("input");
+-        if (input == null || input.size() != 1) {
++        if (input == null) {
+             log.error("{} JOB0001 引数 --input=<s3://バケット/キー またはファイル> が必要です", MessageIds.BATCH_INVALID_ARGS);
+             exitCode = ERROR;
+             return;
+diff --git a/sample-app/src/main/resources/messages.properties b/sample-app/src/main/resources/messages.properties
+index d05e961..dcd8aff 100644
+--- a/sample-app/src/main/resources/messages.properties
++++ b/sample-app/src/main/resources/messages.properties
+@@ -1,3 +1,4 @@
++# メッセージ本文（キーは MessageIds の定数）
+ APPE0001=入力内容に誤りがあります。
+ APPE0002=会員が見つかりません（会員ID: {0}）。
+ APPE0003=このメールアドレスは既に登録されています（{0}）。

@@ -1,0 +1,46 @@
+diff --git a/README.md b/README.md
+index 38f8fc3..3d03088 100644
+--- a/README.md
++++ b/README.md
+@@ -1,7 +1,7 @@
+ # dev-environment
+ 
+ Java（Spring Boot + MyBatis）開発の **ローカル開発環境** と **クラウド開発環境（AWS + Terraform）** の雛形・手順書です。
+-「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います。
++「ローカルでロジックを開発・単体テストし、クラウドの共有環境で結合テスト・疎通確認する」二段構えで使います（片方だけでも使えます）。
+ 
+ > 特定の企業・案件の構成の写しではなく、一般的な構成で作り直したものです。実案件では値と命名を自分たちの設計に合わせてください。
+ 
+diff --git a/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java b/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+index c64011f..fb568db 100644
+--- a/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
++++ b/sample-app/src/main/java/com/example/sample/common/ApiExceptionHandler.java
+@@ -92,13 +92,15 @@ public class ApiExceptionHandler {
+ 
+     /** 一時的に依存先（DB）へつながらないことによる失敗か. 原因の連鎖もたどる. */
+     static boolean isUnavailable(Throwable e) {
+-        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
++        Throwable t = e;
++        while (t != null) {
+             if (t instanceof CannotCreateTransactionException
+                     || t instanceof DataAccessResourceFailureException
+                     || t instanceof SQLTransientConnectionException
+                     || t instanceof ConnectException) {
+                 return true;
+             }
++            t = t.getCause() == t ? null : t.getCause();
+         }
+         return false;
+     }
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java b/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+index 6107ddd..0989533 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+@@ -20,6 +20,7 @@ import software.amazon.awssdk.services.s3.S3ClientBuilder;
+ @Configuration
+ public class S3Config {
+ 
++    /** アプリ全体で 1 つのクライアントを使い回す（スレッドセーフ）. */
+     @Bean
+     public S3Client s3Client(
+             @Value("${app.s3.region:ap-northeast-1}") String region,

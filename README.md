@@ -11,6 +11,7 @@ AI エージェントに **どこまで任せられるか** を実験するリ�
 課題には dev-environment の sample-app と架空の設計書だけを使い、実案件のデータは使いません。
 
 方針と実験計画は [docs/DESIGN.md](docs/DESIGN.md) を参照してください。
+PR レビューの実験のやり直し（答えの漏れを防いだ課題・人による目隠しの採点・費用の見積もり）は [docs/EXPERIMENT_V2.md](docs/EXPERIMENT_V2.md) です（準備だけで、まだ流していません）。
 
 ## 今あるもの
 
@@ -23,7 +24,9 @@ AI エージェントに **どこまで任せられるか** を実験するリ�
 | [auto-review/](auto-review/) | **PR の自動レビュー**。危なさで振り分け、ふだんは Sonnet 1 回・必要なときだけ Opus が検証（[考え方と費用](auto-review/README.md)） |
 | [bench/prs/](bench/prs/) | PR 単位の課題 16 件（弱いところを 1 つ戻した PR 8 件 + 問題の無い PR 3 件 + 危なそうに見えるが正しい「おとり」5 件） |
 | [bench/replay/](bench/replay/) | CI 用の **手書きの合成の返答**（実際のモデルの出力ではない）。モデルを呼ばずに auto-review の配線の退行を見る |
-| [runner/pr_bench.py](runner/pr_bench.py) | PR の課題を構成ごと（Haiku・Sonnet・Opus・auto）に流して比べる |
+| [bench/prs_v2/](bench/prs_v2/) | **PR の課題 v2**（33 件: 不具合 17・問題なし 8・おとり 8）。コメントとテストを消さず、関係のない変更を混ぜ、答えの漏れを検査して作る（[make_prs_v2.py](bench/prs_v2/make_prs_v2.py)・[leak_check.py](bench/prs_v2/leak_check.py)） |
+| [runner/pr_bench.py](runner/pr_bench.py) | PR の課題を構成ごと（Haiku・Sonnet・Opus・auto）に流して比べる。`--bench bench/prs_v2` で v2、`--estimate-only` で費用の見積もりだけ（モデルは呼ばない） |
+| [runner/blind_sheet.py](runner/blind_sheet.py)・[blind_score.py](runner/blind_score.py) | 目隠しの採点。モデル・構成を伏せて順番を混ぜた採点表と鍵を作り、人の採点を鍵と合わせて検出率・誤った MUST・費用を信頼区間付きで出す |
 | [runner/mcp-e2e/](runner/mcp-e2e/) | エージェントに MCP ツールだけで点検させる実地検証（`run.sh`） |
 | [examples/](examples/) | VS Code・Claude Code への MCP の設定例、auto-review の GitHub Actions と Copilot のプロンプト |
 | [results/](results/) | 実験の結果。[モデルの大きさによる違い](results/2026-10-04-model-compare/README.md)、[MCP の実地検証](results/2026-10-04-mcp-e2e/README.md)、[PR 単位のレビューと自動の振り分け](results/2026-10-04-auto-review/README.md)、[3 回ずつ流したばらつきと誤った MUST の却下](results/2026-10-04-auto-review-repeat/README.md) |

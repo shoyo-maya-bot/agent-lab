@@ -1,0 +1,50 @@
+diff --git a/sample-app/src/main/java/com/example/sample/batch/BatchJob.java b/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+index d3ef10d..b361634 100644
+--- a/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
++++ b/sample-app/src/main/java/com/example/sample/batch/BatchJob.java
+@@ -10,5 +10,6 @@ public interface BatchJob {
+     /** 終了コード: 異常終了. */
+     int ERROR = 8;
+ 
++    /** ジョブ ID（例: JOB0001）. 起動引数 app.batch.job と突き合わせる. */
+     String jobId();
+ }
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+index 0921e80..974aacf 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/OrderImportJob.java
+@@ -53,11 +53,11 @@ public class OrderImportJob implements BatchJob, ApplicationRunner, ExitCodeGene
+         }
+         log.info("{} JOB0001 開始 input={}", MessageIds.IMPORT_STARTED, input.get(0));
+         try {
+-            ImportResult r = service.importLines(fetcher.readLines(input.get(0)));
+-            r.errors().forEach(e -> log.warn("{} {}", MessageIds.IMPORT_LINE_SKIPPED, e));
++            ImportResult result = service.importLines(fetcher.readLines(input.get(0)));
++            result.errors().forEach(e -> log.warn("{} {}", MessageIds.IMPORT_LINE_SKIPPED, e));
+             log.info("{} JOB0001 終了 imported={} duplicated={} errors={}",
+-                    MessageIds.IMPORT_FINISHED, r.imported(), r.duplicated(), r.errors().size());
+-            exitCode = r.hasErrors() ? WARN : OK;
++                    MessageIds.IMPORT_FINISHED, result.imported(), result.duplicated(), result.errors().size());
++            exitCode = result.hasErrors() ? WARN : OK;
+         } catch (Exception e) {
+             log.error("{} JOB0001 異常終了", MessageIds.BATCH_FAILED, e);
+             exitCode = ERROR;
+diff --git a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+index f400e9b..7f25a64 100644
+--- a/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
++++ b/sample-app/src/test/java/com/example/sample/order/OrderImportServiceTest.java
+@@ -89,6 +89,14 @@ class OrderImportServiceTest {
+         assertThatThrownBy(() -> OrderImportService.parse(line)).hasMessage(message);
+     }
+ 
++    @Test
++    void blankLinesAreIgnored() {
++        ImportResult r = service.importLines(List.of(OrderImportService.HEADER, "", "A001,1,P-01,1", "   "));
++
++        assertThat(r.imported()).isEqualTo(1);
++        assertThat(r.errors()).isEmpty();
++    }
++
+     @Test
+     void parseAcceptsExactlyTwentyChars() {
+         String twenty = "B".repeat(20);

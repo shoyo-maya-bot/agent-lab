@@ -1,0 +1,29 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberController.java b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+index 4e3202a..ad133e3 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberController.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+@@ -29,7 +29,7 @@ public class MemberController {
+             @NotBlank @Size(max = 50) String name, @NotBlank @Email @Size(max = 254) String email) {}
+ 
+     @GetMapping("/{id}")
+-    public Member get(@PathVariable("id") long id) {
++    public Member get(@PathVariable("id") int id) {
+         return service.get(id);
+     }
+ 
+diff --git a/sample-app/src/main/java/com/example/sample/order/ImportResult.java b/sample-app/src/main/java/com/example/sample/order/ImportResult.java
+index e8ae829..b7b4af2 100644
+--- a/sample-app/src/main/java/com/example/sample/order/ImportResult.java
++++ b/sample-app/src/main/java/com/example/sample/order/ImportResult.java
+@@ -11,6 +11,11 @@ import java.util.List;
+  */
+ public record ImportResult(int imported, int duplicated, List<String> errors) {
+ 
++    /** 空行を除いて読んだ行の数. */
++    public int processed() {
++        return imported + duplicated + errors.size();
++    }
++
+     public boolean hasErrors() {
+         return !errors.isEmpty();
+     }

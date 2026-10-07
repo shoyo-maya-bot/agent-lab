@@ -1,0 +1,44 @@
+diff --git a/sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java b/sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+index 4f8e52e..ad856ef 100644
+--- a/sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
++++ b/sample-app/src/main/java/com/example/sample/batch/BatchJobGuard.java
+@@ -43,9 +43,9 @@ public class BatchJobGuard implements ApplicationRunner, ExitCodeGenerator {
+     public void run(ApplicationArguments args) {
+         boolean found = jobs.stream().anyMatch(j -> j.jobId().equals(requested));
+         if (!found) {
+-            log.error("{} ジョブ ID が不正です app.batch.job={}",
++            log.warn("{} ジョブ ID が不正です app.batch.job={}",
+                     MessageIds.BATCH_UNKNOWN_JOB, requested.isEmpty() ? "(未指定)" : requested);
+-            exitCode = BatchJob.ERROR;
++            exitCode = BatchJob.WARN;
+         }
+     }
+ 
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberMapper.java b/sample-app/src/main/java/com/example/sample/member/MemberMapper.java
+index dd6cc1b..f8b01f3 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberMapper.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberMapper.java
+@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Mapper;
+ @Mapper
+ public interface MemberMapper {
+ 
++    /** 無ければ空. */
+     Optional<Member> findById(long id);
+ 
+     boolean existsByEmail(String email);
+diff --git a/sample-app/src/main/java/com/example/sample/order/ImportResult.java b/sample-app/src/main/java/com/example/sample/order/ImportResult.java
+index e8ae829..b7b4af2 100644
+--- a/sample-app/src/main/java/com/example/sample/order/ImportResult.java
++++ b/sample-app/src/main/java/com/example/sample/order/ImportResult.java
+@@ -11,6 +11,11 @@ import java.util.List;
+  */
+ public record ImportResult(int imported, int duplicated, List<String> errors) {
+ 
++    /** 空行を除いて読んだ行の数. */
++    public int processed() {
++        return imported + duplicated + errors.size();
++    }
++
+     public boolean hasErrors() {
+         return !errors.isEmpty();
+     }

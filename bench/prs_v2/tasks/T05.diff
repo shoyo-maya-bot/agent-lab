@@ -1,0 +1,43 @@
+diff --git a/local/README.md b/local/README.md
+index 67661ca..e69377c 100644
+--- a/local/README.md
++++ b/local/README.md
+@@ -3,7 +3,7 @@
+ 個人 PC で **ロジックの開発と単体テスト** を行う環境です。DB と S3 はコンテナのエミュレータで代替し、
+ ローカルからクラウドには接続しません。結合テスト・疎通確認はクラウドの開発環境（[../cloud/](../cloud/README.md)）で行います。
+ 
+-所要時間の目安: 初回 2〜3 時間（ダウンロード時間を含む）。各手順の「確認」が通ってから次へ進んでください。
++所要時間の目安: 初回 2〜3 時間（ダウンロード時間を含む。回線が遅いとさらにかかります）。各手順の「確認」が通ってから次へ進んでください。
+ 
+ ## 0. 全体像
+ 
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java b/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+index 6107ddd..0989533 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+@@ -20,6 +20,7 @@ import software.amazon.awssdk.services.s3.S3ClientBuilder;
+ @Configuration
+ public class S3Config {
+ 
++    /** アプリ全体で 1 つのクライアントを使い回す（スレッドセーフ）. */
+     @Bean
+     public S3Client s3Client(
+             @Value("${app.s3.region:ap-northeast-1}") String region,
+diff --git a/sample-app/src/main/resources/mapper/OrderMapper.xml b/sample-app/src/main/resources/mapper/OrderMapper.xml
+index 9c1ab3f..a892bb1 100644
+--- a/sample-app/src/main/resources/mapper/OrderMapper.xml
++++ b/sample-app/src/main/resources/mapper/OrderMapper.xml
+@@ -4,8 +4,11 @@
+ 
+   <!-- 注文番号が既にあれば何もしない（再実行しても重複しない） -->
+   <insert id="insertIfAbsent">
+-    INSERT INTO orders (order_no, member_id, product_code, quantity)
+-    VALUES (#{orderNo}, #{memberId}, #{productCode}, #{quantity})
++    INSERT INTO orders (
++      order_no, member_id, product_code, quantity
++    ) VALUES (
++      #{orderNo}, #{productCode}, #{memberId}, #{quantity}
++    )
+     ON CONFLICT (order_no) DO NOTHING
+   </insert>
+ 

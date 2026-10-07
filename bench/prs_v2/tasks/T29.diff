@@ -1,0 +1,36 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberController.java b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+index 4e3202a..563113b 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberController.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberController.java
+@@ -33,6 +33,7 @@ public class MemberController {
+         return service.get(id);
+     }
+ 
++    /** 登録し、201 と Location（照会の URL）を返す. */
+     @PostMapping
+     public ResponseEntity<Member> register(@Valid @RequestBody RegisterRequest req) {
+         Member created = service.register(req.name(), req.email());
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberMapper.java b/sample-app/src/main/java/com/example/sample/member/MemberMapper.java
+index dd6cc1b..f8b01f3 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberMapper.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberMapper.java
+@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Mapper;
+ @Mapper
+ public interface MemberMapper {
+ 
++    /** 無ければ空. */
+     Optional<Member> findById(long id);
+ 
+     boolean existsByEmail(String email);
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+index 39c74db..ca63110 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+@@ -12,6 +12,7 @@ public class MemberRecord {
+         this.email = email;
+     }
+ 
++    /** 登録前は null（登録すると MyBatis が採番した値を入れる）. */
+     public Long getId() {
+         return id;
+     }

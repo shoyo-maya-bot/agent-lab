@@ -1,0 +1,30 @@
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java b/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+index 6107ddd..c066674 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/S3Config.java
+@@ -20,20 +20,21 @@ import software.amazon.awssdk.services.s3.S3ClientBuilder;
+ @Configuration
+ public class S3Config {
+ 
++    /** アプリ全体で 1 つのクライアントを使い回す（スレッドセーフ）. */
+     @Bean
+     public S3Client s3Client(
+             @Value("${app.s3.region:ap-northeast-1}") String region,
+             @Value("${app.s3.endpoint:}") String endpoint,
+             @Value("${app.s3.access-key:test}") String accessKey,
+             @Value("${app.s3.secret-key:test}") String secretKey) {
+-        S3ClientBuilder b = S3Client.builder().region(Region.of(region));
++        S3ClientBuilder builder = S3Client.builder().region(Region.of(region));
+         if (endpoint.isBlank()) {
+-            b.credentialsProvider(DefaultCredentialsProvider.builder().build());
++            builder.credentialsProvider(DefaultCredentialsProvider.builder().build());
+         } else {
+-            b.endpointOverride(URI.create(endpoint))
++            builder.endpointOverride(URI.create(endpoint))
+                     .forcePathStyle(true)
+                     .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
+         }
+-        return b.build();
++        return builder.build();
+     }
+ }

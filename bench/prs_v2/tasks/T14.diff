@@ -1,0 +1,40 @@
+diff --git a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+index 39c74db..ca63110 100644
+--- a/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
++++ b/sample-app/src/main/java/com/example/sample/member/MemberRecord.java
+@@ -12,6 +12,7 @@ public class MemberRecord {
+         this.email = email;
+     }
+ 
++    /** 登録前は null（登録すると MyBatis が採番した値を入れる）. */
+     public Long getId() {
+         return id;
+     }
+diff --git a/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java b/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+index 1702e40..9639375 100644
+--- a/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
++++ b/sample-app/src/main/java/com/example/sample/order/batch/FileFetcher.java
+@@ -6,5 +6,10 @@ import java.util.List;
+ /** 入力ファイルを行の並びとして読む（s3:// とローカルパスを同じ形で扱う）. */
+ public interface FileFetcher {
+ 
++    /**
++     * 行の並びを返す（改行は含まない）.
++     *
++     * @param location s3://バケット/キー、またはローカルのファイルのパス
++     */
+     List<String> readLines(String location) throws IOException;
+ }
+diff --git a/sample-app/src/main/resources/mapper/OrderMapper.xml b/sample-app/src/main/resources/mapper/OrderMapper.xml
+index 9c1ab3f..2f66d6a 100644
+--- a/sample-app/src/main/resources/mapper/OrderMapper.xml
++++ b/sample-app/src/main/resources/mapper/OrderMapper.xml
+@@ -6,7 +6,7 @@
+   <insert id="insertIfAbsent">
+     INSERT INTO orders (order_no, member_id, product_code, quantity)
+     VALUES (#{orderNo}, #{memberId}, #{productCode}, #{quantity})
+-    ON CONFLICT (order_no) DO NOTHING
++    ON CONFLICT ON CONSTRAINT orders_pkey DO NOTHING
+   </insert>
+ 
+   <select id="memberExists" resultType="boolean">

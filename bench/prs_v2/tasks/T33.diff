@@ -1,0 +1,26 @@
+diff --git a/local/README.md b/local/README.md
+index 67661ca..e69377c 100644
+--- a/local/README.md
++++ b/local/README.md
+@@ -3,7 +3,7 @@
+ 個人 PC で **ロジックの開発と単体テスト** を行う環境です。DB と S3 はコンテナのエミュレータで代替し、
+ ローカルからクラウドには接続しません。結合テスト・疎通確認はクラウドの開発環境（[../cloud/](../cloud/README.md)）で行います。
+ 
+-所要時間の目安: 初回 2〜3 時間（ダウンロード時間を含む）。各手順の「確認」が通ってから次へ進んでください。
++所要時間の目安: 初回 2〜3 時間（ダウンロード時間を含む。回線が遅いとさらにかかります）。各手順の「確認」が通ってから次へ進んでください。
+ 
+ ## 0. 全体像
+ 
+diff --git a/sample-app/build.gradle b/sample-app/build.gradle
+index 6774f30..0fdc3e9 100644
+--- a/sample-app/build.gradle
++++ b/sample-app/build.gradle
+@@ -12,7 +12,7 @@ version = '0.1.0'
+ 
+ // 本番・CI は Java 17。ローカルが 21 でも 17 向けにコンパイルする（21 固有の API を使わせない）
+ tasks.withType(JavaCompile).configureEach {
+-    options.release = 17
++    options.release = 21
+     options.encoding = 'UTF-8'
+     options.compilerArgs += ['-parameters']
+ }
