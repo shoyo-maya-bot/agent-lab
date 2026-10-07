@@ -49,6 +49,7 @@ _FINDING_ITEM = {
     "properties": {
         "severity": {"type": "string", "description": "MUST / WANT / NITS / Q"},
         "file": {"type": "string"},
+        "location": {"type": "string", "description": "file が無いとき（設計書の章・シートなど）"},
         "line": {"type": ["integer", "string", "null"]},
         "title": {"type": "string"},
         "detail": {"type": "string"},
