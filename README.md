@@ -49,7 +49,7 @@ CI は Linux（Python 3.12）と Windows（Python 3.12）で単体テストを�
   `UnreadableOutput`・`norm_severity`（重要度の読み替えの表は `SEVERITY_ALIASES` の 1 か所）. 非公開の `_json_blocks` は無くした
 - **auto-review: トークンの見積もり**（`auto_review.tokens.estimate_tokens`）: 日本語など ASCII 以外は 1 文字 1 トークンで数える（これまでの「3 文字で 1 トークン」は日本語で 2〜3 倍甘かった）. 予算の確認が厳しくなり、deep の範囲が絞られやすくなる
 - **auto-review: 差分の読み取り**: 空白を含むパス・git の引用符付きのパス（日本語）を正しく読み、hunk の行数に沿って `--- `・`+++ ` で始まる変更の行を捨てない
-- **mcp-server**: `DEVTOOLS_MCP_*` を JSON の配列でも書ける. Windows では文字列の `\` を消さない. `.ENV`・`.Git` など大文字小文字の違いも秘密情報の場所として扱う
+- **mcp-server**: `DEVTOOLS_MCP_*` を JSON の配列でも書ける. Windows では文字列の `\` を消さない. `.ENV`・`.Git` など大文字小文字の違いも秘密情報の場所として扱う. CLI には `PYTHONUTF8=1`・`PYTHONIOENCODING=utf-8` を渡して UTF-8 で出力させる（Windows で日本語の出力が落ちていた）
 
 ## セキュリティ・ライセンス
 
