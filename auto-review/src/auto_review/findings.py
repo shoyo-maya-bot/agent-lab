@@ -221,14 +221,25 @@ def _same_file(a: str, b: str) -> bool:
     return bool(a) and a.rsplit("/", 1)[-1] == b.rsplit("/", 1)[-1]
 
 
+TITLE_SIMILARITY = 0.35  # 題名の 2 文字ずつの組の重なり（Jaccard）. これ以上で「同じ問題」とみなす
+
+
+def title_similarity(a: str, b: str) -> float:
+    x, y = _bigrams(a), _bigrams(b)
+    return len(x & y) / max(1, len(x | y))
+
+
 def similar(a: Finding, b: Finding) -> bool:
-    """同じ問題を指しているか（ファイルが同じで、行が近いか題名が似ている）."""
+    """同じ問題を指しているか.
+
+    ファイルが同じで、題名が似ていることを必ず求める（行が近いだけでは同じとみなさない.
+    5 行以内にある別の問題を吸収して「一致」「MUST」に上げてしまうため）. 両方に行があれば、行が近いことも求める.
+    """
     if not _same_file(a.file, b.file):
         return False
-    if a.line and b.line:
-        return abs(a.line - b.line) <= 5
-    x, y = _bigrams(a.title), _bigrams(b.title)
-    return len(x & y) / max(1, len(x | y)) >= 0.35
+    if a.line and b.line and abs(a.line - b.line) > 5:
+        return False
+    return title_similarity(a.title, b.title) >= TITLE_SIMILARITY
 
 
 def apply_verdicts(findings: list[Finding], verdicts: dict[str, dict], model: str) -> None:
@@ -251,15 +262,40 @@ def apply_verdicts(findings: list[Finding], verdicts: dict[str, dict], model: st
             f.status = "uncertain"
 
 
+def _keep_extra(same: Finding, e: Finding) -> None:
+    """合流させた指摘（e）の題名・説明・根拠・行を、合流先（same）の説明に残す（同じ内容なら足さない）."""
+    parts = []
+    if e.title and e.title != same.title:
+        parts.append(e.title)
+    if e.detail and e.detail != same.detail and e.detail not in same.detail:
+        parts.append(e.detail)
+    if e.line and e.line != same.line:
+        parts.append(f"{e.line} 行目")
+    if e.evidence and e.evidence != same.evidence:
+        parts.append(f"根拠: {e.evidence}")
+    if not parts:
+        return
+    by = "・".join(e.models) or e.id
+    note = f"（{by} の指摘: " + " — ".join(parts) + "）"
+    same.detail = f"{same.detail} {note}".strip() if same.detail else note
+
+
 def merge(base: list[Finding], extra: list[Finding]) -> list[Finding]:
-    """extra のうち base と同じ問題は base に合流させ（モデルの一致）、新しいものだけ足す."""
+    """extra のうち base と同じ問題は base に合流させ（モデルの一致）、新しいものだけ足す.
+
+    同じ問題とみなすのは similar() が真のとき（ファイル・題名が似ている、行があれば近い）だけ.
+    合流させても extra（上位モデル）の題名・説明・根拠は合流先の説明に残す.
+    """
     out = list(base)
     for e in extra:
-        same = next((b for b in out if similar(b, e)), None)
+        # 却下された指摘には合流させない（上位モデルが新しく出した指摘を、却下の陰に隠さない）
+        same = next((b for b in out if b.status != "rejected" and similar(b, e)), None)
         if same:
             for m in e.models:
                 if m not in same.models:
                     same.models.append(m)
+            # 合流しても後から来た（上位モデルの）指摘の中身は捨てない. 題名・説明・根拠が違えば説明に書き足す
+            _keep_extra(same, e)
             # 検証の判定（認める・決められない・却下）が付いたものは、合流で上書きしない
             if same.status == "unverified":
                 same.status = "confirmed"
