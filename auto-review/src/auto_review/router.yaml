@@ -46,8 +46,12 @@ skip:
     - "**/.github/instructions/**"
 
 # 予算. 見積もりが超えるなら deep の範囲を危ないファイルだけに絞り、それでも超えるなら deep を飛ばして理由を書く
+#   per_pr_usd       : 1 回の実行あたりの上限（キーの名前は互換のため据え置き. PR 全体の上限ではない）
+#   per_pr_total_usd : 同じ PR の実行の累計の上限. 前回のコメントの隠しマーカー（--prior-comment で渡す）の額 + 今回の額で判定する.
+#                      --prior-comment を渡さなければ、これまでの額は 0 として扱う（1 回の実行には per_pr_usd のほうが効く）
 budget:
   per_pr_usd: 1.00
+  per_pr_total_usd: 3.00
   context_max_tokens: 60000      # 変更ファイルの全文を入れる上限（危ない順に入れる）
   output_tokens: {standard: 4000, deep: 6000, verify: 3000}
   chars_per_token: 3.0           # 見積もり用. ASCII（英数字・記号）の何文字で 1 トークンか. 日本語など ASCII 以外は 1 文字 1 トークンで数える（tokens.py）

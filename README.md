@@ -42,6 +42,11 @@ CI は Linux（Python 3.12）と Windows（Python 3.12）で単体テストを�
 
 ## 変更点
 
+- **auto-review: PR の累計の予算・設定の誤りの終了コード・コメントの無害化**（2026-10-09）.
+  `budget.per_pr_usd` は「1 回の実行あたり」と説明を直し（動きは変えない）、同じ PR の累計の上限 `budget.per_pr_total_usd`（既定 $3）を足した.
+  累計はコメントの隠しマーカーに残し、`run --prior-comment` で読む（JSON に `spent_before_usd`・`pr_total_usd`）. 例の workflow は前回のコメントを渡し、
+  コメントは `github-actions[bot]` が書いたものだけを置き換える. 壊れた `router.yaml` は終了コード 2、想定外のエラーは 3（これまでトレースバックで 1）.
+  コメントのメンション（`@user`・`@org/team`）・Markdown のリンクと画像を無害化. 差分は U+2028 などで行を分けない
 - **auto-review: 予算をすべての呼び出しに効かせる**（2026-10-08）. これまで予算（`budget.per_pr_usd`）は deep 段にしか効かなかった.
   一次（standard）と `--only` も呼ぶ前に見積もり、超えるなら全文を減らし、それでも超えるなら呼ばない（`--yes` なら終了コード 3、JSON の `over_budget: true`）.
   見積もりは伏せ字（Masker）をかけた後の文字列で数える. 変更ファイルは読む前にサイズで上限を見る. 例の workflow は `${{ }}` を run: に埋め込まない（env 経由）
