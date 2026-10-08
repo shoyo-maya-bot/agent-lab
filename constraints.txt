@@ -35,7 +35,7 @@ rpds-py==2026.9.1
 ruff==0.16.10
 sse-starlette==3.5.0
 starlette==1.7.0
-tomli==2.4.1 ; python_full_version <= '3.11'
+tomli==2.5.0 ; python_full_version <= '3.11'
 truststore==0.10.4 ; sys_platform != 'emscripten'
 typing-extensions==4.16.0
 typing-inspection==0.4.4

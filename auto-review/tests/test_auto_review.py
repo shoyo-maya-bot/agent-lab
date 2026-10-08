@@ -281,13 +281,18 @@ def test_must_is_verified_by_deep_model_and_rejections_are_hidden():
 
 
 def test_budget_skips_deep_when_too_expensive():
+    # 一次（standard）の見積もりは予算に入るが、deep は入らない予算: standard だけ呼んで deep を省く
     cfg = json.loads(json.dumps(CFG))
-    cfg["budget"]["per_pr_usd"] = 0.0001
-    fb = FakeBackend([_std([])])
     changes = parse_diff(JAVA_SERVICE + DELETED_TEST)
-    r = Reviewer(cfg, fb).auto(JAVA_SERVICE, changes, plan(changes, cfg))
+    p = plan(changes, cfg)
+    assert p.tier == "deep"
+    probe = Reviewer(cfg, None, dry_run=True).single("standard", JAVA_SERVICE, changes, p)
+    cfg["budget"]["per_pr_usd"] = probe.cost_usd + 0.011  # standard の見積もり + 実額（FakeBackend は $0.01）の分だけ
+    fb = FakeBackend([_std([])])
+    r = Reviewer(cfg, fb).auto(JAVA_SERVICE, changes, p)
     assert len(fb.models) == 1
-    assert any("予算" in n for n in r.notes)
+    assert any("deep モデルの検証を省きました" in n for n in r.notes)
+    assert not r.over_budget
 
 
 def test_parse_verdicts():
@@ -624,3 +629,151 @@ def test_plain_docs_are_still_skipped(path: str):
 def test_glob_match_ignores_case():
     assert glob_match("App/Security/Login.java", "**/security/**")
     assert glob_match("src/MemberMAPPER.XML", "**/*Mapper.xml")
+
+
+# ---- 第 3 回: 予算を一次・--only にも効かせる / 見積もりは伏せ字の後 / 読む前にサイズを見る / workflow
+
+
+def _cfg_budget(usd: float) -> dict:
+    cfg = json.loads(json.dumps(CFG))
+    cfg["budget"]["per_pr_usd"] = usd
+    return cfg
+
+
+def test_budget_blocks_standard_call_when_estimate_exceeds():
+    cfg = _cfg_budget(0.0)
+    fb = FakeBackend([_std([])])
+    changes = parse_diff(JAVA_SERVICE)
+    r = Reviewer(cfg, fb).auto(JAVA_SERVICE, changes, plan(changes, cfg, labels=["review:standard"]))
+    assert fb.models == []  # 一次も呼ばない
+    assert r.over_budget and r.calls == [] and r.findings == []
+    assert any("予算" in n and "モデルを呼ばず" in n for n in r.notes)
+    assert "AI レビューをしていません" in to_markdown(r) and "指摘はありません" not in to_markdown(r)
+
+
+def test_budget_blocks_only_call_too():
+    cfg = _cfg_budget(0.0)
+    fb = FakeBackend([_std([])])
+    changes = parse_diff(JAVA_SERVICE)
+    r = Reviewer(cfg, fb).single("deep", JAVA_SERVICE, changes, plan(changes, cfg))
+    assert fb.models == [] and r.over_budget
+
+
+def test_budget_falls_back_to_diff_only_before_giving_up(tmp_path: Path):
+    repo = tmp_path / "repo"
+    f = repo / "app/src/main/java/x/MemberService.java"
+    f.parent.mkdir(parents=True)
+    f.write_text("class MemberService {}\n" + "// 説明\n" * 4000, encoding="utf-8")
+    changes = parse_diff(JAVA_SERVICE)
+    p = plan(changes, CFG, labels=["review:standard"])
+    diff_only = Reviewer(CFG, None, dry_run=True).single("standard", JAVA_SERVICE, changes, p).cost_usd
+    with_file = Reviewer(CFG, None, repo=repo, dry_run=True).single("standard", JAVA_SERVICE, changes, p).cost_usd
+    assert with_file > diff_only
+    cfg = _cfg_budget((diff_only + with_file) / 2)
+    fb = FakeBackend([_std([])])
+    r = Reviewer(cfg, fb, repo=repo).auto(JAVA_SERVICE, changes, plan(changes, cfg, labels=["review:standard"]))
+    assert len(fb.models) == 1 and not r.over_budget
+    assert "<file" not in fb.users[0]  # 全文は渡していない
+    assert any("差分だけ" in n for n in r.notes)
+
+
+def test_cli_over_budget_with_yes_returns_3(tmp_path: Path, monkeypatch, capsys):
+    import yaml
+
+    cfg = _cfg_budget(0.0)
+    c = tmp_path / "router.yaml"
+    c.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    d = tmp_path / "pr.diff"
+    d.write_text(JAVA_SERVICE, encoding="utf-8")
+    fb = FakeBackend([_std([])])
+    monkeypatch.setattr(cli, "get_backend", lambda name: fb)
+    assert cli.main(["run", str(d), "--config", str(c), "--yes", "--labels", "review:standard", "-f", "json"]) == 3
+    assert fb.models == []
+    out = json.loads(capsys.readouterr().out)
+    assert out["over_budget"] is True and out["calls"] == []
+    # 見積もりだけ（--yes なし）なら 0（呼ばないのは当然なので誤りにしない）
+    assert cli.main(["run", str(d), "--config", str(c), "--labels", "review:standard"]) == 0
+
+
+def test_estimate_counts_masked_text():
+    from devtools_common.llm import Masker
+
+    email = "a" * 3000 + "@example.invalid"
+    diff = JAVA_SERVICE.replace("lock();", f"lock(); // {email}")
+    changes = parse_diff(diff)
+    p = plan(changes, CFG, labels=["review:standard"])
+    masked = Reviewer(CFG, None, dry_run=True, masker=Masker()).single("standard", diff, changes, p)
+    raw = Reviewer(CFG, None, dry_run=True, masker=None).single("standard", diff, changes, p)
+    assert raw.calls[0].input_tokens - masked.calls[0].input_tokens >= 900  # 3000 文字 ÷ 3 ≒ 1000 トークン分
+    # 予算の判定も伏せ字の後で: 伏せ字の後なら入る予算で、呼ぶ
+    cfg = _cfg_budget((masked.cost_usd + raw.cost_usd) / 2)
+    fb = FakeBackend([_std([])])
+    fb.masker = Masker()  # 呼び出し先と同じ伏せ字が見積もりにも使われる
+    r = Reviewer(cfg, fb).auto(diff, changes, plan(changes, cfg, labels=["review:standard"]))
+    assert len(fb.models) == 1 and not r.over_budget
+    fb2 = FakeBackend([_std([])])
+    fb2.masker = None  # 伏せ字なし（AUTO_REVIEW_MASK_PII=0 相当）なら、同じ予算を超える
+    r2 = Reviewer(cfg, fb2).auto(diff, changes, plan(changes, cfg, labels=["review:standard"]))
+    assert fb2.models == [] and r2.over_budget
+
+
+def test_default_masker_follows_backend_or_env(monkeypatch):
+    from devtools_common.llm import Masker
+
+    monkeypatch.setenv("AUTO_REVIEW_MASK_PII", "1")
+    assert isinstance(Reviewer(CFG, None, dry_run=True).masker, Masker)
+    monkeypatch.setenv("AUTO_REVIEW_MASK_PII", "0")
+    assert Reviewer(CFG, None, dry_run=True).masker is None
+
+
+def test_context_checks_file_size_before_reading(tmp_path: Path, monkeypatch):
+    from auto_review.review import build_context
+
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    big = repo / "src" / "Big.java"
+    big.write_text("x" * 200_000, encoding="utf-8")
+    small = repo / "src" / "Small.java"
+    small.write_text("class Small {}", encoding="utf-8")
+    diff = "".join(
+        f"diff --git a/src/{n} b/src/{n}\n--- a/src/{n}\n+++ b/src/{n}\n@@ -1 +1 @@\n-x\n+y\n" for n in ("Big.java", "Small.java")
+    )
+    read: list[str] = []
+    orig = Path.read_text
+
+    def spy(self, *a, **kw):
+        read.append(self.name)
+        return orig(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "read_text", spy)
+    notes: list[str] = []
+    ctx = build_context(diff, parse_diff(diff), repo, CFG, None, 5000, notes)
+    assert "Big.java" not in read  # 上限に入らないことがサイズで分かるので、読まない
+    assert "Small.java" in read and 'path="src/Small.java"' in ctx
+    assert notes and "src/Big.java" in notes[0]
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _workflow_runs(path: Path) -> list[str]:
+    import yaml
+
+    wf = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return [s["run"] for job in wf["jobs"].values() for s in job.get("steps", []) if "run" in s]
+
+
+def test_example_workflow_does_not_embed_expressions_in_run():
+    # `${{ github.base_ref }}` などを run: に直接埋め込むと、値がシェルのスクリプトとして解釈される（env 経由で渡す）
+    runs = _workflow_runs(ROOT / "examples" / "auto-review.workflow.yml")
+    assert runs
+    for r in runs:
+        assert "${{" not in r, r
+
+
+def test_ci_jobs_have_timeouts():
+    import yaml
+
+    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    for name, job in wf["jobs"].items():
+        assert isinstance(job.get("timeout-minutes"), int), name

@@ -7,6 +7,7 @@
     auto-review run pr.diff --repo . --yes --only standard    # 比較実験: 1 つのモデルだけ
 
 終了コード: 0 MUST なし / 1 MUST あり（却下されたものを除く）/ 2 入力の誤り / 3 実行時エラー
+（モデルを呼べない・出力を読めない・--yes なのに予算 budget.per_pr_usd を超える見込みで呼ばなかった）
 """
 
 from __future__ import annotations
@@ -107,6 +108,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.out_json:
         args.out_json.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=1) if args.format == "json" else md)
+    if result.over_budget and args.yes:  # レビューを頼まれたのにしていない. 「指摘 0 件」（終了コード 0）と区別する
+        print("予算を超える見込みのため、モデルを呼びませんでした（router.yaml の budget.per_pr_usd）", file=sys.stderr)
+        return 3
     return 1 if result.open_must else 0
 
 

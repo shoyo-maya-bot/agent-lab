@@ -48,6 +48,8 @@ def to_markdown(r: Result, max_rows: int = 20) -> str:
             lines.append(f"| {STATUS_LABEL[f.status]} | {f.severity} | `{_cell(f.location)}` | {body} | {models} |")
         if len(shown) > max_rows:
             lines.append(f"\n（ほか {len(shown) - max_rows} 件はレポートの JSON を参照）")
+    elif r.over_budget:  # 予算超過で呼ばなかった（「指摘なし」と書かない）
+        lines.append("予算を超える見込みのため、AI レビューをしていません。")
     elif p.tier != "skip":
         lines.append("指摘はありません。")
     if rejected:
@@ -72,6 +74,7 @@ def to_report(r: Result) -> dict:
         "calls": [c.to_dict() for c in r.calls],
         "cost_usd": r.cost_usd,
         "notes": r.notes,
+        "over_budget": r.over_budget,
         "summary": {
             "findings": len(r.findings),
             "shown": sum(1 for f in r.findings if f.status != "rejected"),
