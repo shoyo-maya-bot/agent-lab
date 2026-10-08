@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -20,8 +21,113 @@ _TEST_ANNOTATION = re.compile(r"^\s*@(Test|ParameterizedTest|RepeatedTest)\b|^\s
 DEFAULT_CONFIG = Path(__file__).resolve().parent / "router.yaml"
 
 
+class ConfigError(ValueError):
+    """router.yaml の誤り（YAML として読めない・必要なキーが無い・型が違う）. cli は終了コード 2（入力の誤り）にする."""
+
+
 def load_config(path: Path | None = None) -> dict:
-    return yaml.safe_load((path or DEFAULT_CONFIG).read_text(encoding="utf-8"))
+    """router.yaml を読み、形を確かめる. ファイルを読めなければ OSError、中身の誤りは ConfigError."""
+    src = path or DEFAULT_CONFIG
+    try:
+        cfg = yaml.safe_load(src.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        raise ConfigError(f"{src}: YAML として読めません: {e}") from e
+    except UnicodeDecodeError as e:
+        raise ConfigError(f"{src}: UTF-8 として読めません: {e}") from e
+    try:
+        validate_config(cfg)
+    except ConfigError as e:
+        raise ConfigError(f"{src}: {e}") from e
+    return cfg
+
+
+def _is_num(v: object) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _is_int(v: object) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _need(cond: bool, where: str, what: str) -> None:
+    if not cond:
+        raise ConfigError(f"{where} は{what}にしてください")
+
+
+def _str_list(v: object, where: str) -> None:
+    _need(isinstance(v, list) and all(isinstance(x, str) for x in v), where, "文字列の配列")
+
+
+def validate_config(cfg: object) -> None:
+    """振り分け・予算で使うキーと型を確かめる（壊れた設定をトレースバックや「MUST あり」と取り違えないように）."""
+    _need(isinstance(cfg, dict), "設定の全体", "マッピング（キー: 値）")
+    assert isinstance(cfg, dict)
+    models = cfg.get("models")
+    _need(isinstance(models, dict), "models", "マッピング")
+    for key in ("standard", "deep"):
+        _need(key in models, f"models.{key}", "必ず書く項目")
+    for key, m in models.items():
+        _need(
+            isinstance(m, dict) and isinstance(m.get("id"), str) and m["id"].strip() != "", f"models.{key}", "id（文字列）を持つマッピング"
+        )
+        for k in ("input_per_mtok", "output_per_mtok"):
+            if k in m:
+                _need(_is_num(m[k]) and m[k] >= 0, f"models.{key}.{k}", "0 以上の数")
+    budget = cfg.get("budget")
+    _need(isinstance(budget, dict), "budget", "マッピング")
+    _need(_is_num(budget.get("per_pr_usd")) and budget["per_pr_usd"] >= 0, "budget.per_pr_usd", "0 以上の有限の数")
+    total = budget.get("per_pr_total_usd")
+    _need(total is None or (_is_num(total) and total >= 0), "budget.per_pr_total_usd", "0 以上の有限の数（または書かない）")
+    _need(_is_int(budget.get("context_max_tokens")) and budget["context_max_tokens"] > 0, "budget.context_max_tokens", "1 以上の整数")
+    out = budget.get("output_tokens")
+    _need(isinstance(out, dict), "budget.output_tokens", "マッピング（standard・deep・verify）")
+    for k in ("standard", "deep", "verify"):
+        _need(_is_int(out.get(k)) and out[k] > 0, f"budget.output_tokens.{k}", "1 以上の整数")
+    if "chars_per_token" in budget:
+        _need(_is_num(budget["chars_per_token"]) and budget["chars_per_token"] > 0, "budget.chars_per_token", "0 より大きい数")
+    esc = cfg.get("escalation")
+    _need(isinstance(esc, dict), "escalation", "マッピング")
+    _need(_is_num(esc.get("deep_score")), "escalation.deep_score", "数")
+    if "verify_max_findings" in esc:
+        _need(_is_int(esc["verify_max_findings"]) and esc["verify_max_findings"] >= 0, "escalation.verify_max_findings", "0 以上の整数")
+    labels = cfg.get("labels", {})
+    _need(isinstance(labels, dict) and all(isinstance(v, str) for v in labels.values()), "labels", "文字列の値を持つマッピング")
+    skip = cfg.get("skip", {})
+    _need(isinstance(skip, dict), "skip", "マッピング")
+    for k in ("authors", "only_paths", "never_skip_paths"):
+        if k in skip:
+            _str_list(skip[k], f"skip.{k}")
+    risk = cfg.get("risk", {})
+    _need(isinstance(risk, dict), "risk", "マッピング")
+    paths = risk.get("paths", [])
+    _need(isinstance(paths, list), "risk.paths", "配列")
+    for i, rule in enumerate(paths):
+        where = f"risk.paths[{i}]"
+        _need(isinstance(rule, dict) and isinstance(rule.get("glob"), str), where, "glob（文字列）を持つマッピング")
+        _need(_is_num(rule.get("weight")), f"{where}.weight", "数")
+        _need(isinstance(rule.get("reason", ""), str), f"{where}.reason", "文字列")
+    patterns = risk.get("patterns", [])
+    _need(isinstance(patterns, list), "risk.patterns", "配列")
+    for i, rule in enumerate(patterns):
+        where = f"risk.patterns[{i}]"
+        _need(isinstance(rule, dict) and isinstance(rule.get("regex"), str), where, "regex（文字列）を持つマッピング")
+        _need(_is_num(rule.get("weight")), f"{where}.weight", "数")
+        _need(isinstance(rule.get("reason", ""), str), f"{where}.reason", "文字列")
+        _need(isinstance(rule.get("files", ""), str), f"{where}.files", "文字列（glob）")
+        try:
+            re.compile(rule["regex"])
+        except re.error as e:
+            raise ConfigError(f"{where}.regex を正規表現として読めません: {e}") from e
+    size = risk.get("size", {})
+    _need(isinstance(size, dict), "risk.size", "マッピング")
+    for k, steps in size.items():
+        _need(
+            isinstance(steps, list) and all(isinstance(x, list) and len(x) == 2 and all(_is_num(y) for y in x) for x in steps),
+            f"risk.size.{k}",
+            "[しきい値, 点数] の配列",
+        )
+    if "deleted_tests_weight" in risk:
+        _need(_is_num(risk["deleted_tests_weight"]), "risk.deleted_tests_weight", "数")
 
 
 @lru_cache(maxsize=256)
