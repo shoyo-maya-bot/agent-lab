@@ -16,8 +16,20 @@ from pathlib import Path
 
 from .backends import BackendError, Reply, price
 from .diff import FileChange
-from .findings import SEVERITY_ORDER, Finding, apply_verdicts, merge, ordered, parse_findings, parse_verdicts
+from .findings import (
+    FINDINGS_SCHEMA,
+    SEVERITY_ORDER,
+    VERDICTS_SCHEMA,
+    Finding,
+    UnreadableOutput,
+    apply_verdicts,
+    merge,
+    ordered,
+    parse_findings,
+    parse_verification,
+)
 from .router import Plan
+from .tokens import DEFAULT_CHARS_PER_TOKEN, estimate_tokens
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 
@@ -52,8 +64,9 @@ class Result:
         return sum(1 for f in self.findings if f.severity == "MUST" and f.status != "rejected")
 
 
-def _tokens(chars: int, cfg: dict) -> int:
-    return int(chars / cfg["budget"].get("chars_per_token", 3.0)) + 1
+def _tokens(text: str, cfg: dict) -> int:
+    """見積もり用のトークン数. 日本語など ASCII 以外は 1 文字 1 トークンで数える（tokens.estimate_tokens）."""
+    return estimate_tokens(text, cfg["budget"].get("chars_per_token", DEFAULT_CHARS_PER_TOKEN))
 
 
 MAX_DIFF_CHARS = 400_000  # 差分そのものの上限. 超えた分は省く（大きな PR で予算の確認が効かなくなるのを防ぐ）
@@ -100,7 +113,7 @@ def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, 
         note = f"（差分が長いため先頭の {MAX_DIFF_CHARS:,} 文字だけを渡す）\n"
         diff_text = diff_text[:MAX_DIFF_CHARS]
     parts = ["## 差分（データ）\n\n" + note + _untrusted("diff", diff_text.strip())]
-    used = _tokens(len(parts[0]), cfg)
+    used = _tokens(parts[0], cfg)
     if repo is None:
         return parts[0]
     order = list(dict.fromkeys((focus or []) + [c.path for c in changes]))
@@ -116,7 +129,7 @@ def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, 
         text = p.read_text(encoding="utf-8", errors="replace")
         safe_path = re.sub(r'["<>]', "", path)
         block = f"## ファイル: {safe_path}（変更後の全文。データ）\n\n" + _untrusted("file", text, f'path="{safe_path}"')
-        t = _tokens(len(block), cfg)
+        t = _tokens(block, cfg)
         if used + t > max_tokens:
             skipped.append(path)
             continue
@@ -125,10 +138,6 @@ def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, 
     if skipped:
         parts.append("（上限のため全文を省いたファイル: " + ", ".join(skipped) + "。差分だけで判断する）\n")
     return "\n".join(parts)
-
-
-class UnreadableOutput(RuntimeError):
-    """モデルの出力から JSON を読めなかった（指摘 0 件と区別する）."""
 
 
 def _prompt(name: str, max_findings: int) -> str:
@@ -156,29 +165,37 @@ class Reviewer:
 
     # ---- 呼び出し（dry-run なら見積もりだけ）
     def _call(self, step: str, model_key: str, system: str, user: str, result: Result) -> str:
+        """モデルを呼び、生の出力を返す. 呼び出し先が構造化出力に対応していれば（accepts_schema）、
+        スキーマを渡してツールの形で返させる. どちらの場合も、読む側（findings.load_output）でスキーマを検証する."""
         model = self.cfg["models"][model_key]
         out_key = "verify" if step == "verify" else ("deep" if step == "deep" else "standard")
         max_out = self.cfg["budget"]["output_tokens"][out_key]
         if self.dry_run:
-            inp = _tokens(len(system) + len(user), self.cfg)
+            inp = _tokens(system + user, self.cfg)
             result.calls.append(Call(step, model["id"], inp, max_out, round(price(model, inp, max_out), 4), 0.0, estimated=True))
             return ""
-        reply: Reply = self.backend.call(model, system, user, max_out, role=step)
+        kw = (
+            {"schema": VERDICTS_SCHEMA if step in ("verify", "deep") else FINDINGS_SCHEMA}
+            if getattr(self.backend, "accepts_schema", False)
+            else {}
+        )
+        reply: Reply = self.backend.call(model, system, user, max_out, role=step, **kw)
         result.calls.append(
             Call(step, model["id"], reply.input_tokens, reply.output_tokens, round(reply.cost_usd, 4), round(reply.seconds, 1))
         )
         return reply.text
 
-    def _estimate(self, model_key: str, chars: int, out_key: str) -> float:
+    def _estimate(self, model_key: str, text: str, out_key: str) -> float:
         model = self.cfg["models"][model_key]
-        return price(model, _tokens(chars, self.cfg), self.cfg["budget"]["output_tokens"][out_key])
+        return price(model, _tokens(text, self.cfg), self.cfg["budget"]["output_tokens"][out_key])
 
     # ---- 1 つのモデルだけで（比較実験用）
     def single(self, model_key: str, diff_text: str, changes: list[FileChange], plan: Plan) -> Result:
         result = Result(plan)
         ctx = build_context(diff_text, changes, self.repo, self.cfg, plan.risky_files, self.cfg["budget"]["context_max_tokens"])
         text = self._call("single", model_key, _prompt("review", self.max_findings), ctx, result)
-        result.findings = ordered(parse_findings(text, self.cfg["models"][model_key]["id"], "s"))
+        if not self.dry_run:  # 読めない・スキーマに合わない出力は UnreadableOutput（指摘 0 件にしない）
+            result.findings = ordered(parse_findings(text, self.cfg["models"][model_key]["id"], "s"))
         return result
 
     # ---- 自動（振り分けに沿って）
@@ -191,9 +208,8 @@ class Reviewer:
         ctx = build_context(diff_text, changes, self.repo, self.cfg, plan.risky_files, budget["context_max_tokens"])
         std_model = self.cfg["models"]["standard"]["id"]
         text = self._call("standard", "standard", _prompt("review", self.max_findings), ctx, result)
-        std = parse_findings(text, std_model, "s")
-        if not self.dry_run and not std and "findings" not in text:
-            raise UnreadableOutput("standard モデルの出力を読めませんでした（JSON がありません）")
+        # 読めない・壊れた JSON・スキーマに合わない出力は UnreadableOutput（cli は終了コード 3）. 黙って 0 件にしない
+        std = [] if self.dry_run else parse_findings(text, std_model, "s")
 
         esc = self.cfg["escalation"]
         musts = [f for f in std if f.severity == "MUST"]
@@ -221,10 +237,10 @@ class Reviewer:
 
         spent = result.cost_usd
         out_key = "deep" if step == "deep" else "verify"
-        if spent + self._estimate("deep", len(system) + len(user), out_key) > budget["per_pr_usd"]:
+        if spent + self._estimate("deep", system + user, out_key) > budget["per_pr_usd"]:
             narrow = build_context(diff_text, changes, self.repo, self.cfg, focus[:3], budget["context_max_tokens"] // 3)
             user = narrow + "\n" + _focus_block(focus[:3]) + "\n" + _findings_block(targets)
-            if spent + self._estimate("deep", len(system) + len(user), out_key) > budget["per_pr_usd"]:
+            if spent + self._estimate("deep", system + user, out_key) > budget["per_pr_usd"]:
                 result.notes.append(f"予算 ${budget['per_pr_usd']:.2f} を超える見込みのため、deep モデルの検証を省きました")
                 result.findings = ordered(std)
                 return result
@@ -236,8 +252,17 @@ class Reviewer:
             result.notes.append(f"deep モデルの呼び出しに失敗したため、standard の結果だけを出します（{e}）")
             result.findings = ordered(std)
             return result
+        if self.dry_run:
+            result.findings = ordered(std)
+            return result
         deep_model = self.cfg["models"]["deep"]["id"]
-        apply_verdicts(std, parse_verdicts(text), deep_model)
-        new = parse_findings(text, deep_model, "d")
+        try:
+            verdicts, new = parse_verification(text, deep_model, "d")
+        except UnreadableOutput as e:
+            # 検証役の出力が読めないときは、検証なしの standard の結果を出し、その旨を必ず残す（黙って「検証済み」にしない）
+            result.notes.append(f"deep モデルの出力を読めなかったため、standard の結果だけを出します（{e}）")
+            result.findings = ordered(std)
+            return result
+        apply_verdicts(std, verdicts, deep_model)
         result.findings = ordered(merge(std, new))
         return result

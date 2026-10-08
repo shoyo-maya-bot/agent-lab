@@ -314,7 +314,7 @@ class EstimatingReviewer(Reviewer):
         model = self.cfg["models"][model_key]
         out_key = "verify" if step == "verify" else ("deep" if step == "deep" else "standard")
         max_out = self.cfg["budget"]["output_tokens"][out_key]
-        inp = _tokens(len(system) + len(user), self.cfg)
+        inp = _tokens(system + user, self.cfg)
         out = max_out if self.upper else min(max_out, int(self.outputs.get((step, _family(model["id"])), max_out)))
         result.calls.append(Call(step, model["id"], inp, out, round(price(model, inp, out), 6), 0.0, estimated=True))
         if step in ("standard", "single"):
@@ -409,7 +409,8 @@ def estimate(
         f"- 合計の見込み **${total:.2f}**、上限 ${total_upper:.2f}。単価は devtools_common.llm.PRICES（auto-review の price）",
         f"- 出力トークンと、auto で検証に回る割合（{p_must:.0%}）の出どころ: {src}",
         f"- auto の振り分け: {', '.join(f'{k} {v} 件' for k, v in sorted(tiers.items())) or '-'}",
-        "- 入力は文字数 ÷ chars_per_token（router.yaml）。プロンプトのキャッシュは使わない前提（使えば入力はもっと安い）。再試行の分は含まない",
+        "- 入力は ASCII の文字数 ÷ chars_per_token（router.yaml）+ ASCII 以外の文字数（1 文字 1 トークン）。"
+        "プロンプトのキャッシュは使わない前提（使えば入力はもっと安い）。再試行の分は含まない",
     ]
     return "\n".join(md) + "\n", per
 

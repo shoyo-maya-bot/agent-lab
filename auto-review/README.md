@@ -19,7 +19,7 @@ PR の差分を **危なさで振り分け**、ふだんは中位のモデル（
 | 「複数のモデルの指摘を足して見せる」は、人の確認を増やすだけ | 3 モデルの和は 45 件、Opus だけは 19 件で、検出は同じ（[全体レビュー](../results/2026-10-04-model-compare/README.md)） | 1 回だけの結果 |
 | 小さいモデル（Haiku）はリポジトリ全体のレビューに向かない | Haiku 1/8、Sonnet 6/8、Opus 6.5/8（同上） | 1 回だけの結果 |
 | Opus は推測に基づく誤った MUST を出しにくい | 正しい変更の「おとり」15 回で、Opus 0 件・Sonnet 4 件（[2 回目](../results/2026-10-04-auto-review-repeat/README.md)） | おとり 1 件（D01）に偏った結果 |
-| 費用は 1 PR 数セント（Sonnet 約 $0.02、Opus 約 $0.04、auto は実測 $0.05） | 同上。`claude -p` での合計額（キャッシュ・思考のトークンを含む） | API で直接測ると変わる |
+| 費用は 1 PR 数セント（Sonnet 約 $0.02、Opus 約 $0.04、auto は実測 $0.05） | 同上。`claude -p` での合計額（キャッシュ・思考のトークンを含む） | 答えの漏れた課題での値。API で直接測ると変わる。構成の間の費用・精度の比べ方は **未検証**（[v2](../docs/EXPERIMENT_V2.md) で確かめる） |
 | 2 つ目のモデルは「指摘を足す役」より「認める・却下する役」が筋が良い | auto はおとりで Sonnet が出した誤った MUST 4 件を、却下 2・要確認 2 にした | 件数が少ない |
 
 ### まだ言えないこと
@@ -28,9 +28,11 @@ PR の差分を **危なさで振り分け**、ふだんは中位のモデル（
 - **auto が Opus だけより安いか**: 実測では auto（$0.048）が Opus だけ（$0.044）より高かった。MUST が出る PR が少なければ安くなる見込みだが、本物の PR の割合はまだ測っていない
 - **auto が Opus だけと同じ精度か**: 正解以外の MUST は Sonnet 4・Opus 4・auto 3 で、差は出ていない
 
-### 実務での使い方（今の判断）
+### 実務での使い方（今の判断。未検証）
 
-| 状況 | おすすめ |
+費用・精度の比べ方は答えの漏れた課題での結果なので、**v2（[docs/EXPERIMENT_V2.md](../docs/EXPERIMENT_V2.md)）を流すまで未検証** です。
+
+| 状況 | おすすめ（未検証） |
 |---|---|
 | まず入れる | **Opus 1 回**。比べた中で誤った MUST が一番少なく、1 PR $0.04 前後 |
 | PR が多く費用を削りたい | Sonnet 1 回。誤った MUST が混じる前提で、根拠を人が確かめる |
@@ -75,7 +77,8 @@ auto-review run pr.diff --repo . --yes --out-md comment.md     # 実行（ANTHRO
 auto-review run pr.diff --repo . --yes --backend claude-cli    # Claude Code の claude -p で試す
 ```
 
-- 終了コード: 0 MUST なし / 1 MUST あり（却下されたものを除く）/ 2 入力の誤り / 3 実行時エラー
+- 終了コード: 0 MUST なし / 1 MUST あり（却下されたものを除く）/ 2 入力の誤り / 3 実行時エラー（モデルの出力を読めない・スキーマに合わないときも 3）
+- 見積もりのトークン数は、ASCII を `chars_per_token`（既定 3）文字で 1、日本語など ASCII 以外を 1 文字で 1 と数える（`auto_review.tokens.estimate_tokens`）
 - `ANTHROPIC_BASE_URL` で、社内の中継や閉域の窓口に向けられる（Messages API と同じ形の窓口であること）
 - API の呼び出しは [devtools-common](https://github.com/shoyo-maya-bot/devtools-common) の `devtools_common.llm.LLMClient` を使う（依存はコミット SHA で固定）。
   混雑（429・529 など）は `retry-after` に従って再試行し、出力が `max_tokens` で切れたら「結果を読めません」で終了コード 3（途中までの結果は使わない）
@@ -136,7 +139,8 @@ python runner/pr_bench.py --diff-only out/replay --configs auto --cases P01,P05,
   メールアドレスの検査そのものをレビューしたいときなどは、環境変数 `AUTO_REVIEW_MASK_PII=0` で止められる。
   記録した返答を返す `ReplayBackend`（CI）は外部に送らないので伏せない
 - モデルの出力は、PR のコメントに載せる前に HTML・画像・全員へのメンションを無害化する
-- 出力が上限で切れた・JSON を読めないときは終了コード 3（「指摘 0 件」と見分ける）
+- モデルの出力はスキーマ（`auto_review.findings.FINDINGS_SCHEMA`・`VERDICTS_SCHEMA`）で検証する. anthropic では道具を強制する構造化出力で受け取る.
+  出力が上限で切れた・JSON が壊れている・スキーマに合わないときは終了コード 3（「指摘 0 件」と見分ける）. 検証役の出力が読めないときは、standard の結果を「検証なし」として注記付きで出す
 - GitHub Actions の例は、checkout に認証情報を残さず、auto-review をコミット SHA で固定し、フォークからの PR では動かさない
 
 ## 限界

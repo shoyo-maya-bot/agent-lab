@@ -8,6 +8,8 @@
 - 外部に送るのは `--yes` を付けたときだけ。付けなければ見積もりだけ（cli.py）
 - 外部に送る前に、差分・プロンプトの中のメールアドレスと電話番号を `devtools_common.llm.Masker` で伏せる
   （anthropic・claude-cli の両方。環境変数 AUTO_REVIEW_MASK_PII=0 で止められる）
+- anthropic は構造化出力を使う（`accepts_schema`）: 決まったスキーマを入力にした道具を 1 つだけ渡して必ず使わせ、
+  その入力を JSON の文字列として返す。道具を使わなかった返答は UnreadableOutput（読む側でもスキーマを検証する）
 - 費用は共通の料金表（`devtools_common.llm.price_for`）で計算する。表に無いモデルだけ router.yaml の単価を使う
 """
 
@@ -23,6 +25,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from devtools_common.llm import LLMClient, LLMError, Masker, MaxTokensError, price_for
+
+from .findings import UnreadableOutput
+
+# 構造化出力で使う道具の名前（モデルに必ずこの道具を使わせる）
+RESULT_TOOL = "submit_review"
 
 
 @dataclass
@@ -63,6 +70,7 @@ def default_masker() -> Masker | None:
 
 class AnthropicBackend:
     name = "anthropic"
+    accepts_schema = True  # Reviewer はスキーマを渡す（道具の強制で構造化出力にする）
 
     def __init__(
         self,
@@ -99,19 +107,33 @@ class AnthropicBackend:
             self._clients[model_id] = self._factory(model_id)
         return self._clients[model_id]
 
-    def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "") -> Reply:
+    def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "", schema: dict | None = None) -> Reply:
         t0 = time.monotonic()
+        kw: dict = {}
+        if schema is not None:
+            tool = {
+                "name": RESULT_TOOL,
+                "description": "レビューの結果を、この道具の入力として返す。スキーマに厳密に従う。",
+                "input_schema": schema,
+            }
+            kw = {"tools": [tool], "tool_choice": {"type": "tool", "name": RESULT_TOOL}}
         try:
-            comp = self._client(model["id"]).complete(user, system=system, max_tokens=max_tokens)
+            comp = self._client(model["id"]).complete(user, system=system, max_tokens=max_tokens, **kw)
         except MaxTokensError as e:
             raise OutputTruncated(f"出力が上限で切れました（max_tokens={max_tokens}）. 結果は使えません") from e
         except LLMError as e:
             raise BackendError(f"API エラー: {e}") from e
+        text = comp.text
+        if schema is not None:
+            used = [b for b in comp.content if b.get("type") == "tool_use" and b.get("name") == RESULT_TOOL]
+            if not used:
+                raise UnreadableOutput(f"モデルが結果の道具（{RESULT_TOOL}）を使いませんでした（stop_reason={comp.stop_reason}）")
+            text = json.dumps(used[0].get("input"), ensure_ascii=False)
         u = comp.usage
         inp = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
         out = u.output_tokens
         cost = comp.cost_usd if comp.cost_usd is not None else price(model, inp, out)
-        return Reply(comp.text, inp, out, cost, time.monotonic() - t0)
+        return Reply(text, inp, out, cost, time.monotonic() - t0)
 
 
 class ClaudeCliBackend:
