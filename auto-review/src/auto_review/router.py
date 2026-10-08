@@ -26,7 +26,10 @@ def load_config(path: Path | None = None) -> dict:
 
 @lru_cache(maxsize=256)
 def _glob_re(glob: str) -> re.Pattern[str]:
-    """`**` を含む glob を正規表現に（** は 0 個以上のディレクトリ、* は / を含まない）."""
+    """`**` を含む glob を正規表現に（** は 0 個以上のディレクトリ、* は / を含まない）.
+
+    大文字小文字は区別しない（`AGENTS.MD`・`Docs/` なども同じ規則に当てる. Windows・macOS では同じファイルのため）.
+    """
     out, i = "", 0
     while i < len(glob):
         c = glob[i]
@@ -40,7 +43,7 @@ def _glob_re(glob: str) -> re.Pattern[str]:
             continue
         out += "[^/]*" if c == "*" else "[^/]" if c == "?" else re.escape(c)
         i += 1
-    return re.compile(f"^{out}$")
+    return re.compile(f"^{out}$", re.IGNORECASE)
 
 
 def glob_match(path: str, glob: str) -> bool:
@@ -137,7 +140,8 @@ def plan(changes: list[FileChange], cfg: dict, labels: list[str] | None = None, 
     if not changes:
         return Plan("skip", 0, ["変更なし"], {}, forced_by="変更なし")
     only = skip.get("only_paths", [])
-    if all(any(glob_match(c.path, g) for g in only) for c in changes):
+    never = skip.get("never_skip_paths", [])
+    if all(any(glob_match(c.path, g) for g in only) and not any(glob_match(c.path, g) for g in never) for c in changes):
         return Plan("skip", score, reasons, per_file, forced_by="文書・ロックファイルだけの変更")
     if lab.get("deep") in labels:
         return Plan("deep", score, reasons, per_file, forced_by=f"ラベル {lab['deep']}")

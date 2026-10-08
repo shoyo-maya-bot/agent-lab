@@ -26,9 +26,24 @@ labels:
   standard: "review:standard"  # deep に上げない（費用を抑えたいとき）
   skip: "review:skip"
 
+# パスの照合は大文字小文字を区別しない（Windows・macOS では README.MD と README.md が同じファイルのため）
 skip:
   authors: ["dependabot[bot]", "renovate[bot]"]
   only_paths: ["**/*.md", "docs/**", "LICENSE", "**/*.lock", "**/package-lock.json", ".github/ISSUE_TEMPLATE/**"]
+  # .md でも、AI への指示（プロンプト・エージェントの規則）は動作を変えるので skip しない（only_paths より優先）
+  never_skip_paths:
+    - "**/AGENTS.md"
+    - "**/CLAUDE.md"
+    - "**/GEMINI.md"
+    - "**/SKILL.md"
+    - "**/*.prompt.md"
+    - "**/*.instructions.md"
+    - "**/*.chatmode.md"
+    - "**/*.agent.md"
+    - "**/copilot-instructions.md"
+    - "**/prompts/**"
+    - "**/.claude/**"
+    - "**/.github/instructions/**"
 
 # 予算. 見積もりが超えるなら deep の範囲を危ないファイルだけに絞り、それでも超えるなら deep を飛ばして理由を書く
 budget:
