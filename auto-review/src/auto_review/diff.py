@@ -30,8 +30,17 @@ class FileChange:
 
     @property
     def is_test(self) -> bool:
+        """テストのファイルか. Java のファイル名の末尾（`Test.java`・`Tests.java`・`IT.java`）は大文字小文字を区別して見る
+        （`Contest.java`・`Latest.java` はテストではない）. `src/test/` などのフォルダは従来どおり大文字小文字を区別しない."""
         p = self.path.lower()
-        return "/test/" in p or "/tests/" in p or p.endswith(("test.java", "_test.py", ".feature")) or "/test_" in p
+        name = self.path.rsplit("/", 1)[-1]
+        return (
+            "/test/" in p
+            or "/tests/" in p
+            or "/test_" in p
+            or name.endswith(("Test.java", "Tests.java", "IT.java"))
+            or p.endswith(("_test.py", ".feature"))
+        )
 
 
 def unquote_git_path(p: str) -> str:
