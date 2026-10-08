@@ -63,12 +63,12 @@ flowchart LR
   - 点数の例: SQL の Mapper +3、Service +2、例外ハンドラ +2、`@Transactional` の変更 +2、テストを消した・減らした +3、変更が 400 行以上 +2
 - **予算**: 1 PR あたりの上限（既定 $1）を見積もりで確かめ、超えそうなら Opus の範囲を危ないファイル 3 つに絞る。それでも超えるなら Opus を飛ばして理由をコメントに書く。月の上限は API 側（ワークスペースの上限、Copilot なら組織・利用者ごとの予算）で掛ける
 - **ラベル**: `review:deep`（必ず Opus まで）、`review:standard`（Opus に上げない）、`review:skip`（省く）
-- **追加の push** では前回からの差分だけを見る（同じ箇所に何度も費用をかけない）
+- **追加の push** でも、いつも PR 全体の差分（`origin/<base>...HEAD`）を見て、PR のコメント 1 つを置き換える（前回の指摘が消えないように。費用は 1 PR 数セント）
 
 ## 使い方
 
 ```bash
-pip install -e auto-review                    # このリポジトリを clone した場合
+pip install -c constraints.txt -e auto-review   # このリポジトリを clone した場合（constraints.txt で依存の版をそろえる）
 
 git diff origin/main...HEAD > pr.diff
 auto-review plan pr.diff                      # 振り分けだけ（モデルは呼ばない）
@@ -78,6 +78,9 @@ auto-review run pr.diff --repo . --yes --backend claude-cli    # Claude Code の
 ```
 
 - 終了コード: 0 MUST なし / 1 MUST あり（却下されたものを除く）/ 2 入力の誤り / 3 実行時エラー（モデルの出力を読めない・スキーマに合わないときも 3）
+  - 入力は `git diff` の形式（`diff --git` の行がある）. `diff -u` などで作った差分は、0 件で通さず入力の誤り（2）にする
+- 差分が長くて先頭だけを渡したとき、上限のためファイルの全文を省いたときは、出力の notes（コメントの末尾）にその旨を書く
+- 文書（`*.md`・`docs/**`）だけの変更は省くが、`AGENTS.md`・`CLAUDE.md`・`*.prompt.md`・`prompts/**` など AI への指示は省かない（`router.yaml` の `skip.never_skip_paths`）. パスの照合は大文字小文字を区別しない
 - 見積もりのトークン数は、ASCII を `chars_per_token`（既定 3）文字で 1、日本語など ASCII 以外を 1 文字で 1 と数える（`auto_review.tokens.estimate_tokens`）
 - `ANTHROPIC_BASE_URL` で、社内の中継や閉域の窓口に向けられる（Messages API と同じ形の窓口であること）
 - API の呼び出しは [devtools-common](https://github.com/shoyo-maya-bot/devtools-common) の `devtools_common.llm.LLMClient` を使う（依存はコミット SHA で固定）。

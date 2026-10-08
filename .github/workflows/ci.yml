@@ -38,8 +38,14 @@ jobs:
           --cases P01,P05,P06,P08,N01,N02,N03,D01
           --replay bench/replay/auto-synthetic.jsonl --check bench/replay/thresholds.yaml
       - name: PR の課題が作り直せる（差分が cases.yaml と一致）
+        env:
+          # dev-environment はコミット SHA で固定する（main が動いても結果が変わらないように. 上げるときはここを変える）
+          DEV_ENV_SHA: f497a2c875793e4bbacba0252c043bc34a852e02
         run: |
           git clone -q https://github.com/shoyo-maya-bot/dev-environment.git ../dev-environment
+          git -C ../dev-environment checkout -q --detach "$DEV_ENV_SHA"
+          # 課題の元（cases.yaml の base_commit）が固定した SHA の履歴にあること
+          git -C ../dev-environment merge-base --is-ancestor "$(python -c 'import yaml; print(yaml.safe_load(open("bench/prs/cases.yaml", encoding="utf-8"))["base_commit"])')" HEAD
           python bench/prs/make_prs.py ../dev-environment
           git diff --exit-code bench/prs
       - name: auto-review の見積もり（モデルは呼ばない）
