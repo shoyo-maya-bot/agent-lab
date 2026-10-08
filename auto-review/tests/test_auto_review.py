@@ -185,6 +185,52 @@ def test_merge_joins_same_problem_and_marks_agreement():
     assert out[0].models == ["sonnet", "opus"] and out[0].status == "confirmed" and out[0].severity == "MUST"
 
 
+def test_merge_does_not_absorb_nearby_different_problem():
+    """5 行以内でも題名が違う指摘は別の問題. 吸収して「一致」「MUST」に上げない（後退の再現）."""
+    a = Finding("NITS", "MemberService.java", "変数名が分かりにくい", line=30, models=["sonnet"], id="s1")
+    b = Finding("MUST", "MemberService.java", "一意制約が無く重複登録が通る", line=32, models=["opus"], id="d1")
+    out = merge([a], [b])
+    assert len(out) == 2
+    assert (out[0].status, out[0].severity, out[0].models) == ("unverified", "NITS", ["sonnet"])
+    assert (out[1].title, out[1].severity, out[1].models) == ("一意制約が無く重複登録が通る", "MUST", ["opus"])
+
+
+def test_merge_keeps_upper_model_text_when_joined():
+    """同じ問題として合流させても、上位モデルの題名・説明・根拠は捨てない."""
+    a = Finding("WANT", "MemberService.java", "同時登録で 500 になる", line=30, models=["sonnet"], id="s1")
+    b = Finding(
+        "MUST",
+        "MemberService.java",
+        "同時登録で 500 になる（一意制約違反）",
+        detail="例外を握りつぶしている",
+        line=31,
+        evidence="catch (Exception e)",
+        models=["opus"],
+        id="d1",
+    )
+    out = merge([a], [b])
+    assert len(out) == 1
+    f = out[0]
+    assert f.status == "confirmed" and f.severity == "MUST" and f.models == ["sonnet", "opus"]
+    assert "一意制約違反" in f.detail and "例外を握りつぶしている" in f.detail and "catch (Exception e)" in f.detail
+
+
+def test_merge_does_not_hide_new_finding_behind_rejected():
+    a = Finding("MUST", "MemberService.java", "同時登録で 500 になる", line=30, models=["sonnet"], id="s1", status="rejected")
+    b = Finding("MUST", "MemberService.java", "同時登録で 500 になる", line=30, models=["opus"], id="d1")
+    out = merge([a], [b])
+    assert [(f.id, f.status) for f in out] == [("s1", "rejected"), ("d1", "unverified")]
+
+
+def test_similar_requires_title_even_without_lines():
+    from auto_review.findings import similar
+
+    a = Finding("WANT", "A.java", "ログに個人情報が出る", models=["x"])
+    b = Finding("WANT", "A.java", "トランザクションが二重", models=["y"])
+    assert not similar(a, b)
+    assert similar(a, Finding("WANT", "src/A.java", "ログに個人情報が出ている", models=["y"]))
+
+
 class FakeBackend:
     """呼ばれた順に用意した返答を返す."""
 
@@ -489,3 +535,92 @@ def test_context_budget_uses_japanese_aware_estimate(tmp_path: Path):
     diff = "diff --git a/docs/a.md b/docs/a.md\n--- a/docs/a.md\n+++ b/docs/a.md\n@@ -1 +1 @@\n-x\n+y\n"
     ctx = build_context(diff, parse_diff(diff), repo, CFG, None, 5000)  # ÷3 なら約 2000 トークンで収まってしまう
     assert '<file path="docs/a.md">' not in ctx and "上限のため全文を省いた" in ctx
+
+
+# ---- 第 2 回修正: 入力の誤り・切り詰めの明記・.md の skip・大文字小文字
+
+
+def test_cli_diff_u_format_is_input_error(tmp_path: Path, capsys):
+    """`diff -u` 形式（`diff --git` 行が無い）は 0 件で skip・終了コード 0 にせず、入力の誤り（2）にする."""
+    d = tmp_path / "u.diff"
+    d.write_text("--- a/x.py\t2026-10-08\n+++ b/x.py\t2026-10-08\n@@ -1 +1 @@\n-a\n+b\n", encoding="utf-8")
+    for cmd in ("plan", "run"):
+        assert cli.main([cmd, str(d)]) == 2
+        assert "diff --git" in capsys.readouterr().err
+
+
+def test_cli_unreadable_git_diff_is_input_error(tmp_path: Path):
+    from auto_review.cli import _input_error
+
+    assert _input_error("diff --git \n", []) is not None
+    assert _input_error("", []) is None  # 本当に変更が無い（空）は誤りにしない
+    assert cli.main(["plan", str(tmp_path / "missing.diff")]) == 2
+
+
+def test_cli_empty_diff_is_still_skip(tmp_path: Path):
+    d = tmp_path / "empty.diff"
+    d.write_text("", encoding="utf-8")
+    assert cli.main(["plan", str(d)]) == 0
+
+
+def test_truncated_diff_is_noted_in_output(monkeypatch):
+    import auto_review.review as R
+
+    monkeypatch.setattr(R, "MAX_DIFF_CHARS", 50)
+    fb = FakeBackend([_std([])])
+    changes = parse_diff(JAVA_SERVICE)
+    r = Reviewer(CFG, fb).auto(JAVA_SERVICE, changes, plan(changes, CFG, labels=["review:standard"]))
+    assert any("先頭の 50 文字" in n and "レビューしていません" in n for n in r.notes)
+    assert "先頭の 50 文字" in to_markdown(r)
+
+
+def test_skipped_full_files_are_noted_in_output(tmp_path: Path):
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "docs" / "a.md").write_text("仕様" * 3000, encoding="utf-8")
+    diff = "diff --git a/docs/a.md b/docs/a.md\n--- a/docs/a.md\n+++ b/docs/a.md\n@@ -1 +1 @@\n-x\n+y\n"
+    from auto_review.review import build_context
+
+    notes: list[str] = []
+    build_context(diff, parse_diff(diff), repo, CFG, None, 5000, notes)
+    assert notes and "docs/a.md" in notes[0] and "差分だけ" in notes[0]
+
+
+def test_no_truncation_note_when_everything_fits():
+    fb = FakeBackend([_std([])])
+    changes = parse_diff(JAVA_SERVICE)
+    r = Reviewer(CFG, fb).auto(JAVA_SERVICE, changes, plan(changes, CFG, labels=["review:standard"]))
+    assert not any("文字だけ" in n or "全文を渡さず" in n for n in r.notes)
+
+
+def _md_diff(path: str) -> str:
+    return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1 @@\n-old\n+new\n"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "AGENTS.md",
+        "sub/AGENTS.md",
+        "CLAUDE.md",
+        ".github/prompts/review.prompt.md",
+        "src/auto_review/prompts/review.md",
+        ".github/copilot-instructions.md",
+        "agents.MD",  # 大文字小文字の違い
+        "Prompts/Review.MD",
+    ],
+)
+def test_prompt_and_agent_md_are_not_skipped(path: str):
+    changes = parse_diff(_md_diff(path))
+    assert plan(changes, CFG).tier != "skip"
+
+
+@pytest.mark.parametrize("path", ["README.md", "docs/guide.md", "README.MD", "Docs/Guide.md", "LICENSE"])
+def test_plain_docs_are_still_skipped(path: str):
+    changes = parse_diff(_md_diff(path))
+    assert plan(changes, CFG).tier == "skip"
+
+
+def test_glob_match_ignores_case():
+    assert glob_match("App/Security/Login.java", "**/security/**")
+    assert glob_match("src/MemberMAPPER.XML", "**/*Mapper.xml")

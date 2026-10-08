@@ -15,7 +15,13 @@ tools: ['runCommands', 'search', 'changes']
    auto-review plan .auto-review.diff
    ```
 
-   `auto-review` が無ければ `pip install "auto-review @ git+https://github.com/shoyo-maya-bot/agent-lab.git@main#subdirectory=auto-review"`。
+   `auto-review` が無ければ、agent-lab のコミット SHA で固定し、同じ SHA の `constraints.txt` で依存の版をそろえて入れる:
+
+   ```bash
+   REF=<agent-lab のコミット SHA>
+   curl -fsSL -o .auto-review-constraints.txt "https://raw.githubusercontent.com/shoyo-maya-bot/agent-lab/${REF}/constraints.txt"
+   pip install -c .auto-review-constraints.txt "auto-review @ git+https://github.com/shoyo-maya-bot/agent-lab.git@${REF}#subdirectory=auto-review"
+   ```
 
 2. tier が `skip` なら「AI レビューは不要（理由）」とだけ答えて終わる
 3. 差分（`.auto-review.diff`）と、変更されたファイルを読み、次の観点でレビューする

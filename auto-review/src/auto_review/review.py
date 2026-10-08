@@ -106,11 +106,33 @@ def _safe_file(repo: Path, path: str) -> Path | None:
     return rp
 
 
-def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, cfg: dict, focus: list[str] | None, max_tokens: int) -> str:
-    """差分の全体と、変更ファイルの全文（focus → 危ない順、上限まで）. どちらも信用しないデータとして区切る."""
+def _add_note(notes: list[str] | None, msg: str) -> None:
+    if notes is not None and msg not in notes:
+        notes.append(msg)
+
+
+def build_context(
+    diff_text: str,
+    changes: list[FileChange],
+    repo: Path | None,
+    cfg: dict,
+    focus: list[str] | None,
+    max_tokens: int,
+    notes: list[str] | None = None,
+) -> str:
+    """差分の全体と、変更ファイルの全文（focus → 危ない順、上限まで）. どちらも信用しないデータとして区切る.
+
+    差分を切り詰めたとき・ファイルの全文を省いたときは、notes（出力の notes）にもその旨を書く
+    （モデルが見ていない部分があることを、結果を読む人が分かるように）.
+    """
     note = ""
     if len(diff_text) > MAX_DIFF_CHARS:
         note = f"（差分が長いため先頭の {MAX_DIFF_CHARS:,} 文字だけを渡す）\n"
+        _add_note(
+            notes,
+            f"差分が長いため、先頭の {MAX_DIFF_CHARS:,} 文字（全 {len(diff_text):,} 文字）だけをモデルに渡しました。"
+            "残りはレビューしていません",
+        )
         diff_text = diff_text[:MAX_DIFF_CHARS]
     parts = ["## 差分（データ）\n\n" + note + _untrusted("diff", diff_text.strip())]
     used = _tokens(parts[0], cfg)
@@ -137,6 +159,7 @@ def build_context(diff_text: str, changes: list[FileChange], repo: Path | None, 
         used += t
     if skipped:
         parts.append("（上限のため全文を省いたファイル: " + ", ".join(skipped) + "。差分だけで判断する）\n")
+        _add_note(notes, "上限のため、次のファイルは全文を渡さず差分だけでレビューしました: " + ", ".join(skipped))
     return "\n".join(parts)
 
 
@@ -192,7 +215,9 @@ class Reviewer:
     # ---- 1 つのモデルだけで（比較実験用）
     def single(self, model_key: str, diff_text: str, changes: list[FileChange], plan: Plan) -> Result:
         result = Result(plan)
-        ctx = build_context(diff_text, changes, self.repo, self.cfg, plan.risky_files, self.cfg["budget"]["context_max_tokens"])
+        ctx = build_context(
+            diff_text, changes, self.repo, self.cfg, plan.risky_files, self.cfg["budget"]["context_max_tokens"], result.notes
+        )
         text = self._call("single", model_key, _prompt("review", self.max_findings), ctx, result)
         if not self.dry_run:  # 読めない・スキーマに合わない出力は UnreadableOutput（指摘 0 件にしない）
             result.findings = ordered(parse_findings(text, self.cfg["models"][model_key]["id"], "s"))
@@ -205,7 +230,7 @@ class Reviewer:
             result.notes.append(f"AI レビューは省略しました（{plan.forced_by or '対象なし'}）")
             return result
         budget = self.cfg["budget"]
-        ctx = build_context(diff_text, changes, self.repo, self.cfg, plan.risky_files, budget["context_max_tokens"])
+        ctx = build_context(diff_text, changes, self.repo, self.cfg, plan.risky_files, budget["context_max_tokens"], result.notes)
         std_model = self.cfg["models"]["standard"]["id"]
         text = self._call("standard", "standard", _prompt("review", self.max_findings), ctx, result)
         # 読めない・壊れた JSON・スキーマに合わない出力は UnreadableOutput（cli は終了コード 3）. 黙って 0 件にしない
@@ -231,20 +256,25 @@ class Reviewer:
         max_new = self.max_findings if step == "deep" else 3
         system = _prompt("deep", max_new)
         deep_ctx = (
-            ctx if step == "deep" else build_context(diff_text, changes, self.repo, self.cfg, focus, budget["context_max_tokens"] // 2)
+            ctx
+            if step == "deep"
+            else build_context(diff_text, changes, self.repo, self.cfg, focus, budget["context_max_tokens"] // 2, result.notes)
         )
         user = deep_ctx + "\n" + _focus_block(focus) + "\n" + _findings_block(targets)
 
         spent = result.cost_usd
         out_key = "deep" if step == "deep" else "verify"
         if spent + self._estimate("deep", system + user, out_key) > budget["per_pr_usd"]:
-            narrow = build_context(diff_text, changes, self.repo, self.cfg, focus[:3], budget["context_max_tokens"] // 3)
+            narrow_notes: list[str] = []  # 絞った文脈を実際に使うときだけ notes に移す
+            narrow = build_context(diff_text, changes, self.repo, self.cfg, focus[:3], budget["context_max_tokens"] // 3, narrow_notes)
             user = narrow + "\n" + _focus_block(focus[:3]) + "\n" + _findings_block(targets)
             if spent + self._estimate("deep", system + user, out_key) > budget["per_pr_usd"]:
                 result.notes.append(f"予算 ${budget['per_pr_usd']:.2f} を超える見込みのため、deep モデルの検証を省きました")
                 result.findings = ordered(std)
                 return result
             result.notes.append("予算のため、deep モデルの範囲を危ないファイル 3 つに絞りました")
+            for n in narrow_notes:
+                _add_note(result.notes, n)
 
         try:
             text = self._call(step, "deep", system, user, result)
