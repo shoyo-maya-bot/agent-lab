@@ -57,6 +57,7 @@ class Plan:
     reasons: list[str] = field(default_factory=list)
     file_scores: dict[str, int] = field(default_factory=dict)
     forced_by: str | None = None  # ラベル・作成者で決まったとき
+    escalate: bool = True  # False なら standard の MUST があっても deep モデルに上げない（`review:standard` ラベル）
 
     @property
     def risky_files(self) -> list[str]:
@@ -141,11 +142,13 @@ def plan(changes: list[FileChange], cfg: dict, labels: list[str] | None = None, 
         return Plan("skip", 0, ["変更なし"], {}, forced_by="変更なし")
     only = skip.get("only_paths", [])
     never = skip.get("never_skip_paths", [])
-    if all(any(glob_match(c.path, g) for g in only) and not any(glob_match(c.path, g) for g in never) for c in changes):
+    docs_only = all(any(glob_match(c.path, g) for g in only) and not any(glob_match(c.path, g) for g in never) for c in changes)
+    # 文書だけの変更でも、秘密情報らしき値などファイルの危険度の点数があれば skip しない（変更の大きさの点数は除く）
+    if docs_only and not any(s > 0 for s in per_file.values()):
         return Plan("skip", score, reasons, per_file, forced_by="文書・ロックファイルだけの変更")
     if lab.get("deep") in labels:
         return Plan("deep", score, reasons, per_file, forced_by=f"ラベル {lab['deep']}")
     if lab.get("standard") in labels:
-        return Plan("standard", score, reasons, per_file, forced_by=f"ラベル {lab['standard']}")
+        return Plan("standard", score, reasons, per_file, forced_by=f"ラベル {lab['standard']}", escalate=False)
     tier = "deep" if score >= cfg["escalation"]["deep_score"] else "standard"
     return Plan(tier, score, reasons, per_file)

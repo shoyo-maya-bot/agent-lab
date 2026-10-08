@@ -313,6 +313,11 @@ class Reviewer:
         musts = [f for f in std if f.severity == "MUST"]
         if plan.tier == "deep":
             step, targets, focus = "deep", std, plan.risky_files
+        elif not plan.escalate:  # `review:standard` ラベル: MUST があっても deep モデル（上位モデル）に上げない
+            if musts:
+                result.notes.append(f"ラベルで standard に固定されているため、MUST {len(musts)} 件を deep モデルで検証していません")
+            result.findings = ordered(std)
+            return result
         elif esc.get("verify_must") and musts:
             step, targets = "verify", musts
             focus = list(dict.fromkeys(f.file for f in musts))
@@ -353,6 +358,11 @@ class Reviewer:
             text = self._call(step, "deep", system, user, result)
         except BackendError as e:
             result.notes.append(f"deep モデルの呼び出しに失敗したため、standard の結果だけを出します（{e}）")
+            result.findings = ordered(std)
+            return result
+        except UnreadableOutput as e:
+            # 呼び出し先が結果を読める形で返さなかった（構造化出力の道具を使わなかった等）. standard の結果を注記付きで出す
+            result.notes.append(f"deep モデルの出力を読めなかったため、standard の結果だけを出します（{e}）")
             result.findings = ordered(std)
             return result
         if self.dry_run:

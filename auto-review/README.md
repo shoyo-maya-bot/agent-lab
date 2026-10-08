@@ -84,6 +84,7 @@ auto-review run pr.diff --repo . --yes --backend claude-cli    # Claude Code の
   - 入力は `git diff` の形式（`diff --git` の行がある）. `diff -u` などで作った差分は、0 件で通さず入力の誤り（2）にする
 - 差分が長くて先頭だけを渡したとき、上限のためファイルの全文を省いたときは、出力の notes（コメントの末尾）にその旨を書く
 - 文書（`*.md`・`docs/**`）だけの変更は省くが、`AGENTS.md`・`CLAUDE.md`・`*.prompt.md`・`prompts/**` など AI への指示は省かない（`router.yaml` の `skip.never_skip_paths`）. パスの照合は大文字小文字を区別しない
+  - 文書だけの変更でも、秘密情報らしき値（`password=` など）のように危なさの点数が付いたファイルがあれば省かない
 - 見積もりのトークン数は、ASCII を `chars_per_token`（既定 3）文字で 1、日本語など ASCII 以外を 1 文字で 1 と数える（`auto_review.tokens.estimate_tokens`）
 - `ANTHROPIC_BASE_URL` で、社内の中継や閉域の窓口に向けられる（Messages API と同じ形の窓口であること）
 - API の呼び出しは [devtools-common](https://github.com/shoyo-maya-bot/devtools-common) の `devtools_common.llm.LLMClient` を使う（依存はコミット SHA で固定）。
