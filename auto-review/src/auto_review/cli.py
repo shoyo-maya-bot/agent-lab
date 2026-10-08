@@ -31,6 +31,21 @@ def _labels(s: str | None) -> list[str]:
     return [x.strip() for x in (s or "").split(",") if x.strip()]
 
 
+def _input_error(diff_text: str, changes: list) -> str | None:
+    """中身があるのに 1 ファイルも読めない差分は入力の誤り（黙って「変更なし」で skip・終了コード 0 にしない）.
+
+    空の差分（本当に変更が無い）は誤りにしない.
+    """
+    if changes or not diff_text.strip():
+        return None
+    if not any(line.startswith("diff --git ") for line in diff_text.splitlines()):
+        return (
+            "git の差分（`diff --git` で始まる行）がありません。`diff -u` などの形式には対応していません。"
+            "`git diff origin/main...HEAD > pr.diff` のように git diff で作ってください"
+        )
+    return "差分からファイルの変更を 1 件も読めません（形式を確かめてください）"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="auto-review", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -58,6 +73,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"入力を読めません: {e}", file=sys.stderr)
         return 2
     changes = parse_diff(diff_text)
+    err = _input_error(diff_text, changes)
+    if err:
+        print(f"入力の誤り: {err}", file=sys.stderr)
+        return 2
     p = plan(changes, cfg, _labels(args.labels), args.author)
 
     if args.cmd == "plan":
