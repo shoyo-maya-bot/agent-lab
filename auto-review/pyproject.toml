@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 dependencies = [
   "pyyaml>=6",
   # LLM の呼び出し（再試行・料金表・伏せ字）. タグは付け替えられるのでコミット SHA で固定する
-  "devtools-common @ git+https://github.com/shoyo-maya-bot/devtools-common.git@28bab4c4bfcf2eba9278a6c7a7ef2d660d983233",
+  "devtools-common @ git+https://github.com/shoyo-maya-bot/devtools-common.git@2e25f8a11717ab387c7c2174d2a06b1a5eb37713",
 ]
 
 [project.optional-dependencies]
