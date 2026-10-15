@@ -7,7 +7,11 @@
        - standard が MUST を出した → deep モデルが「MUST の検証」だけ（範囲を絞るので安い）
     3. 見積もりが予算を超えるなら、deep の範囲を危ないファイルに絞る。それでも超えるなら deep を飛ばして理由を残す
 
-予算（budget.per_pr_usd）は、一次（standard）・`--only` の 1 回の呼び出しにも効く: 呼ぶ前に見積もり、超えるなら
+予算は 2 つ:
+    - budget.per_pr_usd: **1 回の実行あたり**の上限（キーの名前は互換のため据え置き）
+    - budget.per_pr_total_usd: **同じ PR の実行の累計**の上限. これまでに使った額（spent_before. PR の前回のコメントの
+      隠しマーカーから cli が読む）と今回の額の和で判定する. 書かなければ累計では判定しない
+どちらも一次（standard）・`--only` の 1 回の呼び出しにも効く: 呼ぶ前に見積もり、超えるなら
 変更ファイルの全文を減らし（全文 → 3 分の 1 → 差分だけ）、それでも超えるなら呼ばずに理由を残す（Result.over_budget）。
 見積もりは、外部に送るときと同じ伏せ字（devtools_common.llm.Masker）をかけた後の文字列で数える。
 """
@@ -60,10 +64,17 @@ class Result:
     notes: list[str] = field(default_factory=list)
     # 一次（standard）・--only の呼び出しが予算を超える見込みで、モデルを呼ばなかった（指摘 0 件とは違う）
     over_budget: bool = False
+    # 同じ PR のこれまでの実行で使った額（USD. 前回のコメントの隠しマーカーから）
+    spent_before: float = 0.0
 
     @property
     def cost_usd(self) -> float:
         return round(sum(c.cost_usd for c in self.calls), 4)
+
+    @property
+    def pr_total_usd(self) -> float:
+        """同じ PR の累計（これまで + 今回実際に使った額）. 見積もりだけの呼び出し（dry-run）は数えない."""
+        return round(self.spent_before + sum(c.cost_usd for c in self.calls if not c.estimated), 4)
 
     @property
     def open_must(self) -> int:
@@ -206,6 +217,7 @@ class Reviewer:
         dry_run: bool = False,
         max_findings: int = 15,
         masker=_UNSET,
+        spent_before: float = 0.0,
     ):
         """masker: 見積もりの前にかける伏せ字. 省略時は呼び出し先の masker（無ければ既定の Masker. 環境変数で止められる）."""
         self.cfg = cfg
@@ -213,6 +225,7 @@ class Reviewer:
         self.repo = repo
         self.dry_run = dry_run
         self.max_findings = max_findings
+        self.spent_before = max(0.0, float(spent_before))
         if masker is _UNSET:
             masker = backend.masker if hasattr(backend, "masker") else default_masker()
         self.masker = masker
@@ -222,6 +235,25 @@ class Reviewer:
         if self.masker is not None:
             system, user = self.masker.text(system), self.masker.text(user)
         return _tokens(system + user, self.cfg)
+
+    def _new_result(self, plan: Plan) -> Result:
+        return Result(plan, spent_before=self.spent_before)
+
+    def _remaining(self, spent_now: float) -> tuple[float, str]:
+        """今回の実行で、あといくら使えるか（USD）と、効いている上限の説明.
+
+        1 回の実行あたり（per_pr_usd）と、PR の累計（per_pr_total_usd. これまでの額を含む）の小さい方.
+        """
+        budget = self.cfg["budget"]
+        per_run = float(budget["per_pr_usd"])
+        left, why = per_run - spent_now, f"1 回の実行あたりの予算 ${per_run:.2f}"
+        total = budget.get("per_pr_total_usd")
+        if total is not None:
+            total_left = float(total) - self.spent_before - spent_now
+            if total_left < left:
+                left = total_left
+                why = f"PR の累計の予算 ${float(total):.2f}（これまでに ${self.spent_before:.2f} 使用）"
+        return left, why
 
     # ---- 呼び出し（dry-run なら見積もりだけ）
     def _call(self, step: str, model_key: str, system: str, user: str, result: Result) -> str:
@@ -254,7 +286,7 @@ class Reviewer:
     ) -> str | None:
         """一次（standard）・--only の呼び出しの文脈. 見積もりが予算を超えるなら全文を減らし、それでも超えるなら None."""
         budget = self.cfg["budget"]
-        limit = budget["per_pr_usd"]
+        limit, why_limit = self._remaining(0.0)
         full = budget["context_max_tokens"]
         tries: list[tuple[Path | None, int, str]] = [(self.repo, full, "")]
         if self.repo is not None:
@@ -275,14 +307,12 @@ class Reviewer:
                 return ctx
         model = self.cfg["models"][model_key]["id"]
         result.over_budget = True
-        result.notes.append(
-            f"予算 ${limit:.2f} を超える見込み（{model} の見積もり ${est:.2f}）のため、モデルを呼ばず、レビューしていません"
-        )
+        result.notes.append(f"{why_limit} を超える見込み（{model} の見積もり ${est:.2f}）のため、モデルを呼ばず、レビューしていません")
         return None
 
     # ---- 1 つのモデルだけで（比較実験用）
     def single(self, model_key: str, diff_text: str, changes: list[FileChange], plan: Plan) -> Result:
-        result = Result(plan)
+        result = self._new_result(plan)
         system = _prompt("review", self.max_findings)
         out_key = "deep" if model_key == "deep" else "standard"
         ctx = self._primary_context(model_key, out_key, system, diff_text, changes, plan, result)
@@ -295,7 +325,7 @@ class Reviewer:
 
     # ---- 自動（振り分けに沿って）
     def auto(self, diff_text: str, changes: list[FileChange], plan: Plan) -> Result:
-        result = Result(plan)
+        result = self._new_result(plan)
         if plan.tier == "skip":
             result.notes.append(f"AI レビューは省略しました（{plan.forced_by or '対象なし'}）")
             return result
@@ -342,12 +372,13 @@ class Reviewer:
 
         spent = result.cost_usd
         out_key = "deep" if step == "deep" else "verify"
-        if spent + self._estimate("deep", system, user, out_key) > budget["per_pr_usd"]:
+        left, why_limit = self._remaining(spent)
+        if self._estimate("deep", system, user, out_key) > left:
             narrow_notes: list[str] = []  # 絞った文脈を実際に使うときだけ notes に移す
             narrow = build_context(diff_text, changes, self.repo, self.cfg, focus[:3], budget["context_max_tokens"] // 3, narrow_notes)
             user = narrow + "\n" + _focus_block(focus[:3]) + "\n" + _findings_block(targets)
-            if spent + self._estimate("deep", system, user, out_key) > budget["per_pr_usd"]:
-                result.notes.append(f"予算 ${budget['per_pr_usd']:.2f} を超える見込みのため、deep モデルの検証を省きました")
+            if self._estimate("deep", system, user, out_key) > left:
+                result.notes.append(f"{why_limit} を超える見込みのため、deep モデルの検証を省きました")
                 result.findings = ordered(std)
                 return result
             result.notes.append("予算のため、deep モデルの範囲を危ないファイル 3 つに絞りました")

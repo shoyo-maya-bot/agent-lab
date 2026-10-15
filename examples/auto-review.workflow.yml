@@ -3,14 +3,17 @@
 # 必要なもの:
 #   - リポジトリの Secrets に ANTHROPIC_API_KEY（無ければ「見積もりだけ」のコメントになる）
 #   - 社内の中継・閉域の窓口に向けるときは Variables に ANTHROPIC_BASE_URL
-#   - 費用の上限は 2 段で: router.yaml の budget.per_pr_usd（1 PR）と、API 側のワークスペースの月の上限
+#   - 費用の上限は 3 段で: router.yaml の budget.per_pr_usd（1 回の実行あたり）、budget.per_pr_total_usd（同じ PR の実行の累計.
+#     前回のコメントの隠しマーカーに残した額を --prior-comment で渡して判定する）と、API 側のワークスペースの月の上限
+#     （push のたびに PR 全体を見直すので、per_pr_usd だけでは PR あたりの額は決まらない）
 #
 # actions はタグではなくコミット SHA で固定する（タグは付け替えられるため. Dependabot の github-actions で上げる）.
 # pull_request で動かす（pull_request_target は使わない）. フォークからの PR では Secrets が渡らず、コメントも書けないので動かさない.
 # PR の中身（差分・ファイル）は信用しないデータとして扱う: 認証情報を checkout に残さない、シンボリックリンクは読まない（auto-review 側）、
 # LLM の出力は無害化してからコメントにする.
 # ${{ }} の式は run: に直接埋め込まず、手順の env: で渡してシェル変数として使う（ブランチ名などでコマンドを注入させない）.
-# 終了コード 3 は「モデルを呼べない・出力を読めない・予算 budget.per_pr_usd を超える見込みで呼ばなかった」.
+# 終了コード 2 は「入力・設定（router.yaml）の誤り」、3 は「モデルを呼べない・出力を読めない・予算（1 回の実行あたり・PR の累計）を
+# 超える見込みで呼ばなかった・想定外のエラー」.
 name: auto-review
 
 on:
@@ -56,9 +59,19 @@ jobs:
           # 式（${{ }}）は run: に直接埋め込まず env で渡す（値がスクリプトとして解釈されないように）
           BASE_REF: ${{ github.base_ref }}
         run: |
-          # いつも PR 全体の差分を見る（追加の push のたびに前の指摘が消えないように. 費用は 1 PR 数セント）
+          # いつも PR 全体の差分を見る（追加の push のたびに前の指摘が消えないように. 費用は 1 回数セント. 累計は per_pr_total_usd で抑える）
           git diff "origin/${BASE_REF}...HEAD" > pr.diff
           wc -l pr.diff
+      - name: 前回のコメントを読む（PR の累計の費用の記録. github-actions[bot] が書いたものだけ）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- auto-review -->")) | .body' \
+            > prev-comment.md
+          wc -c prev-comment.md
       - name: レビュー
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -69,9 +82,9 @@ jobs:
           YES=""
           [ -n "$ANTHROPIC_API_KEY" ] && YES="--yes"
           # 終了コード 1（MUST あり）でもジョブは失敗にしない. AI の指摘は下書きで、採否は人が決める.
-          # 3（モデルを呼べない・出力を読めない）は失敗にする（「指摘 0 件」と見分けるため）
+          # 2（設定の誤り）・3（モデルを呼べない・出力を読めない・予算超過）は失敗にする（「指摘 0 件」と見分けるため）
           set +e
-          auto-review run pr.diff --repo . --labels "$LABELS" --author "$AUTHOR" $YES \
+          auto-review run pr.diff --repo . --labels "$LABELS" --author "$AUTHOR" $YES --prior-comment prev-comment.md \
             --out-md comment.md --out-json auto-review.json -f json > /dev/null
           code=$?
           set -e
@@ -83,7 +96,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-                 --jq '.[] | select(.body | startswith("<!-- auto-review -->")) | .id' | tail -1)
+                 --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- auto-review -->")) | .id' | tail -1)
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md > /dev/null
           else

@@ -133,7 +133,13 @@ def parse_diff(text: str) -> list[FileChange]:
     cur: FileChange | None = None
     old_left = new_left = 0  # 今の hunk で残っている行数（古い側・新しい側）
     new_line = 0
-    for raw in text.splitlines():
+    # 行は "\n" だけで分ける（末尾の "\r" は除く）. str.splitlines() は U+2028・U+0085・\x0c なども行の区切りにするため、
+    # それらを含む行で hunk の行数がずれ、後ろの追加行を落としてしまう
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    for raw in lines:
+        raw = raw[:-1] if raw.endswith("\r") else raw
         if cur is not None and (old_left > 0 or new_left > 0):
             tag = raw[:1]
             if tag == "+" and new_left > 0:
