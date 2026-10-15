@@ -39,7 +39,10 @@ class UnreadableOutput(RuntimeError):
     """モデルの出力を読めなかった（JSON が無い・壊れている・スキーマに合わない）. 指摘 0 件とは区別する.
 
     cli は「結果を読めません」で終了コード 3 にする.
+    reply: 呼び出し先で読めなかったとき、その呼び出しの使用量と費用（backends.Reply. 課金はされている）. 無ければ None.
     """
+
+    reply = None
 
 
 # 指摘 1 件の形. severity は別名（CRITICAL など）を受けるため文字列で受け、読み替えは norm_severity で行う

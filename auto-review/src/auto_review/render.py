@@ -74,7 +74,9 @@ def to_markdown(r: Result, max_rows: int = 20) -> str:
     lines.append("")
     shown = [f for f in r.findings if f.status != "rejected"]
     rejected = [f for f in r.findings if f.status == "rejected"]
-    if shown:
+    if r.error:  # 途中で失敗した（課金された費用の記録のために書く）. 「指摘なし」と書かない
+        lines.append(f"AI レビューを最後までできませんでした（{_cell(r.error)}）。指摘は出していません。")
+    elif shown:
         lines += ["| 状態 | 重要度 | 箇所 | 指摘 | モデル |", "|---|---|---|---|---|"]
         for f in shown[:max_rows]:
             body = f"**{_cell(f.title)}** {_cell(f.detail)}"
@@ -113,6 +115,7 @@ def to_report(r: Result) -> dict:
         "cost_usd": r.cost_usd,
         "notes": r.notes,
         "over_budget": r.over_budget,
+        "error": r.error,
         "spent_before_usd": round(r.spent_before, 4),
         "pr_total_usd": r.pr_total_usd,
         "summary": {

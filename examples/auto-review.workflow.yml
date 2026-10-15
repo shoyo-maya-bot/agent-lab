@@ -73,6 +73,7 @@ jobs:
             > prev-comment.md
           wc -c prev-comment.md
       - name: レビュー
+        id: review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
@@ -82,14 +83,23 @@ jobs:
           YES=""
           [ -n "$ANTHROPIC_API_KEY" ] && YES="--yes"
           # 終了コード 1（MUST あり）でもジョブは失敗にしない. AI の指摘は下書きで、採否は人が決める.
-          # 2（設定の誤り）・3（モデルを呼べない・出力を読めない・予算超過）は失敗にする（「指摘 0 件」と見分けるため）
+          # 2（設定の誤り）・3（モデルを呼べない・出力を読めない・予算超過）は失敗にする（「指摘 0 件」と見分けるため）.
+          # ただし 3 でも課金された後の失敗（出力が切れた・読めない）は、費用を PR の累計に残すためにコメントを書いてから失敗させる
           set +e
           auto-review run pr.diff --repo . --labels "$LABELS" --author "$AUTHOR" $YES --prior-comment prev-comment.md \
             --out-md comment.md --out-json auto-review.json -f json > /dev/null
           code=$?
           set -e
-          [ "$code" -le 1 ] || exit "$code"
+          post=false
+          if [ "$code" -le 1 ]; then
+            post=true
+          elif [ -f comment.md ] && jq -e '.pr_total_usd > .spent_before_usd' auto-review.json > /dev/null 2>&1; then
+            post=true
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "post=$post" >> "$GITHUB_OUTPUT"
       - name: コメントを書く（前回のコメントがあれば置き換える）
+        if: steps.review.outputs.post == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -103,6 +113,13 @@ jobs:
             gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@comment.md > /dev/null
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.review.outputs.post == 'true'
         with:
           name: auto-review
           path: auto-review.json
+      - name: 終了コードどおりに失敗させる（2・3）
+        env:
+          CODE: ${{ steps.review.outputs.code }}
+        run: |
+          code="${CODE:-3}"
+          [ "$code" -le 1 ] || exit "$code"
