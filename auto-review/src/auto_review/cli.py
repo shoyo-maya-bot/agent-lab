@@ -10,6 +10,9 @@
 
 終了コード: 0 MUST なし / 1 MUST あり（却下されたものを除く）/ 2 入力・設定の誤り（router.yaml が読めない・形が違う）/
 3 実行時エラー（モデルを呼べない・出力を読めない・--yes なのに予算を超える見込みで呼ばなかった・想定外のエラー）
+
+課金された呼び出しの後で失敗した（出力を読めない・切れた等）ときも、--out-md / --out-json には
+「レビューできなかった」旨と費用の記録（隠しマーカーの PR の累計）を書く（終了コードは 3 のまま）。
 """
 
 from __future__ import annotations
@@ -124,25 +127,19 @@ def _main(args: argparse.Namespace) -> int:
             _out("\n".join([f"tier={p.tier} score={p.score} forced_by={p.forced_by or '-'}"] + [f"  {r}" for r in p.reasons]))
         return 0
 
+    reviewer: Reviewer | None = None
     try:
         backend = get_backend(args.backend) if args.yes else None
         reviewer = Reviewer(cfg, backend, repo=args.repo, dry_run=not args.yes, max_findings=args.max_findings, spent_before=spent_before)
         result = reviewer.single(args.only, diff_text, changes, p) if args.only else reviewer.auto(diff_text, changes, p)
     except OutputTruncated as e:  # 途中で切れた出力は「指摘 0 件」と区別する
-        print(f"結果を読めません: {e}", file=sys.stderr)
-        return 3
+        return _failed(args, reviewer, f"結果を読めません: {e}")
     except BackendError as e:
-        print(f"モデルを呼べません: {e}", file=sys.stderr)
-        return 3
+        return _failed(args, reviewer, f"モデルを呼べません: {e}")
     except UnreadableOutput as e:
-        print(f"結果を読めません: {e}", file=sys.stderr)
-        return 3
-    md, report = to_markdown(result), to_report(result)
-    if args.out_md:
-        args.out_md.write_text(md, encoding="utf-8")
-    if args.out_json:
-        args.out_json.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
-    _out(json.dumps(report, ensure_ascii=False, indent=1) if args.format == "json" else md)
+        return _failed(args, reviewer, f"結果を読めません: {e}")
+    _write(args, result)
+    _out(json.dumps(to_report(result), ensure_ascii=False, indent=1) if args.format == "json" else to_markdown(result))
     if result.over_budget and args.yes:  # レビューを頼まれたのにしていない. 「指摘 0 件」（終了コード 0）と区別する
         print(
             "予算を超える見込みのため、モデルを呼びませんでした"
@@ -151,6 +148,31 @@ def _main(args: argparse.Namespace) -> int:
         )
         return 3
     return 1 if result.open_must else 0
+
+
+def _write(args: argparse.Namespace, result) -> None:
+    if args.out_md:
+        args.out_md.write_text(to_markdown(result), encoding="utf-8")
+    if args.out_json:
+        args.out_json.write_text(json.dumps(to_report(result), ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _failed(args: argparse.Namespace, reviewer: Reviewer | None, msg: str) -> int:
+    """途中で失敗した. 課金された呼び出しがあれば、その費用を --out-md / --out-json に記録してから終了コード 3.
+
+    書かないと、次の実行が --prior-comment で読む PR の累計に今回の費用が入らず、budget.per_pr_total_usd が効かない.
+    """
+    print(msg, file=sys.stderr)
+    result = getattr(reviewer, "result", None)
+    if result is not None and any(not c.estimated for c in result.calls):
+        result.error = msg
+        result.findings = []
+        _write(args, result)
+        print(
+            f"今回の費用 ${result.cost_usd:.4f} を記録しました（PR の累計 ${result.pr_total_usd:.4f}）",
+            file=sys.stderr,
+        )
+    return 3
 
 
 if __name__ == "__main__":

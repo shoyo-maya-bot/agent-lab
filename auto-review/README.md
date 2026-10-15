@@ -66,8 +66,9 @@ flowchart LR
   - `budget.per_pr_total_usd`（既定 $3）: **同じ PR の実行の累計**の上限。コメントの末尾に隠しマーカー（`<!-- auto-review-spent-usd: 0.1234 -->`）で
     これまでの額を残し、次の実行に `--prior-comment <前回のコメント本文>` で渡すと「これまで + 今回の見積もり」で判定する。
     渡さなければこれまでの額は 0 とみなす（例の workflow は渡す）。キーを書かなければ累計では判定しない
-  - 累計の記録は「コメントを書けた実行」の分だけ。途中で取り消された実行（`cancel-in-progress`）や、結果を読めず終了コード 3 になった実行の費用は
-    記録に入らないので、最終の上限は API 側の月の上限で掛ける
+  - 課金された後に失敗した実行（出力が `max_tokens` で切れた・結果を読めない）も、`--out-md` / `--out-json` に「レビューできなかった」旨と
+    費用の記録を書く（終了コードは 3 のまま。例の workflow はそのコメントを書いてからジョブを失敗させる）。
+    途中で取り消された実行（`cancel-in-progress`）の費用は記録に入らないので、最終の上限は API 側の月の上限で掛ける
   一次（standard）と `--only` は、超えそうなら変更ファイルの全文を減らし（全文 → 3 分の 1 → 差分だけ）、それでも超えるなら呼ばずに理由を書く（`--yes` なら終了コード 3。「指摘 0 件」と区別する）。
   deep は、超えそうなら Opus の範囲を危ないファイル 3 つに絞る。それでも超えるなら Opus を飛ばして理由をコメントに書く。
   変更ファイルの全文は、読む前にファイルのサイズで上限（`context_max_tokens`）に入るかを見て、入らないものは読まない。月の上限は API 側（ワークスペースの上限、Copilot なら組織・利用者ごとの予算）で掛ける
@@ -103,7 +104,7 @@ auto-review run pr.diff --repo . --yes --prior-comment prev.md # 前回のコメ
 - API の呼び出しは [devtools-common](https://github.com/shoyo-maya-bot/devtools-common) の `devtools_common.llm.LLMClient` を使う（依存はコミット SHA で固定）。
   混雑（429・529 など）は `retry-after` に従って再試行し、出力が `max_tokens` で切れたら「結果を読めません」で終了コード 3（途中までの結果は使わない）
 - 費用は共通の料金表（`devtools_common.llm.price_for`）で計算する。表に無いモデル ID のときだけ `router.yaml` の単価を使う
-- 外部に送る前に、差分・ファイルの中身のメールアドレスと電話番号を伏せ字（`＊＊＊`）にする（下の「安全のための作り」）
+- 外部に送る前に、差分・ファイルの中身のメールアドレス・電話番号と API キー・トークンらしい文字列を伏せ字（`＊＊＊`）にする（下の「安全のための作り」）
 - AI の指摘は下書きです。CI を失敗させる使い方はせず、採否は人が決めます
 
 ### GitHub Actions で自動化する
@@ -155,7 +156,8 @@ python runner/pr_bench.py --diff-only out/replay --configs auto --cases P01,P05,
 - プロンプトの例に bench の答え（ファイル名・題名）が混じらないことをテストで確かめる（[tests/test_prompt_leak.py](tests/test_prompt_leak.py)）
 - シンボリックリンクやリポジトリの外を指すファイルは読まない
 - **個人情報の伏せ字**: `anthropic` と `claude-cli` の呼び出し先は、送る前にプロンプト（差分・ファイルの中身を含む）のメールアドレスと日本の電話番号
-  （全角・区切りなし・`+81` を含む）を `devtools_common.llm.Masker` で `＊＊＊` に置き換える。
+  （全角・区切りなし・`+81` を含む）、API キー・トークンらしい文字列（`sk-ant-…`・`sk-…`・`AKIA…`・`ghp_…`・`github_pat_…`・`xoxb-…` など）を
+  `devtools_common.llm.Masker` で `＊＊＊` に置き換える。
   メールアドレスの検査そのものをレビューしたいときなどは、環境変数 `AUTO_REVIEW_MASK_PII=0` で止められる。
   記録した返答を返す `ReplayBackend`（CI）は外部に送らないので伏せない
 - モデルの出力は、PR のコメントに載せる前に HTML・画像・全員へのメンションを無害化する

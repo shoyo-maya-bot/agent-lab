@@ -6,7 +6,8 @@
 - claude-cli: Claude Code の `claude -p` を道具なしで呼ぶ（ローカルで試すとき）
 - ReplayBackend: 記録しておいた生の返答を返すだけ（モデルは呼ばない. CI で配線の退行を見るため）
 - 外部に送るのは `--yes` を付けたときだけ。付けなければ見積もりだけ（cli.py）
-- 外部に送る前に、差分・プロンプトの中のメールアドレスと電話番号を `devtools_common.llm.Masker` で伏せる
+- 外部に送る前に、差分・プロンプトの中のメールアドレス・電話番号と、API キー・トークンらしい文字列
+  （sk-ant-…・sk-…・AKIA…・ghp_…・github_pat_…・xox?-… など. devtools-common の既定）を `devtools_common.llm.Masker` で伏せる
   （anthropic・claude-cli の両方。環境変数 AUTO_REVIEW_MASK_PII=0 で止められる）
 - anthropic は構造化出力を使う（`accepts_schema`）: 決まったスキーマを入力にした道具を 1 つだけ渡して必ず使わせ、
   その入力を JSON の文字列として返す。道具を使わなかった返答は UnreadableOutput（読む側でもスキーマを検証する）
@@ -46,7 +47,14 @@ class BackendError(RuntimeError):
 
 
 class OutputTruncated(BackendError):
-    """出力が max_tokens で途中で切れた. 途中までの JSON は使わない（cli は「結果を読めません」で終了コード 3）."""
+    """出力が max_tokens で途中で切れた. 途中までの JSON は使わない（cli は「結果を読めません」で終了コード 3）.
+
+    reply: 切れた呼び出しの使用量と費用（課金はされている）. 分かれば Reviewer が費用の記録に入れる.
+    """
+
+    def __init__(self, message: str, reply: Reply | None = None):
+        super().__init__(message)
+        self.reply = reply
 
 
 def price(model: dict, input_tokens: int, output_tokens: int) -> float:
@@ -60,12 +68,21 @@ def price(model: dict, input_tokens: int, output_tokens: int) -> float:
 
 
 def mask_enabled() -> bool:
-    """外部に送る前に個人情報（メールアドレス・電話番号）を伏せるか. 既定は伏せる."""
+    """外部に送る前に個人情報（メールアドレス・電話番号）と秘密情報らしい文字列を伏せるか. 既定は伏せる."""
     return os.environ.get("AUTO_REVIEW_MASK_PII", "1").strip().lower() not in ("0", "false", "no", "off")
 
 
 def default_masker() -> Masker | None:
-    return Masker() if mask_enabled() else None
+    """既定の伏せ字. メール・電話に加え、API キー・トークンらしい文字列も伏せる（secrets=True）."""
+    return Masker(secrets=True) if mask_enabled() else None
+
+
+def _reply_of(comp, model: dict, seconds: float) -> Reply:
+    u = comp.usage
+    inp = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
+    out = u.output_tokens
+    cost = comp.cost_usd if comp.cost_usd is not None else price(model, inp, out)
+    return Reply(comp.text, inp, out, cost, seconds)
 
 
 class AnthropicBackend:
@@ -120,20 +137,20 @@ class AnthropicBackend:
         try:
             comp = self._client(model["id"]).complete(user, system=system, max_tokens=max_tokens, **kw)
         except MaxTokensError as e:
-            raise OutputTruncated(f"出力が上限で切れました（max_tokens={max_tokens}）. 結果は使えません") from e
+            partial = getattr(e, "completion", None)  # 課金はされている. 費用を記録に残せるように渡す
+            spent = _reply_of(partial, model, time.monotonic() - t0) if partial is not None else None
+            raise OutputTruncated(f"出力が上限で切れました（max_tokens={max_tokens}）. 結果は使えません", spent) from e
         except LLMError as e:
             raise BackendError(f"API エラー: {e}") from e
-        text = comp.text
+        reply = _reply_of(comp, model, time.monotonic() - t0)
         if schema is not None:
             used = [b for b in comp.content if b.get("type") == "tool_use" and b.get("name") == RESULT_TOOL]
             if not used:
-                raise UnreadableOutput(f"モデルが結果の道具（{RESULT_TOOL}）を使いませんでした（stop_reason={comp.stop_reason}）")
-            text = json.dumps(used[0].get("input"), ensure_ascii=False)
-        u = comp.usage
-        inp = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
-        out = u.output_tokens
-        cost = comp.cost_usd if comp.cost_usd is not None else price(model, inp, out)
-        return Reply(text, inp, out, cost, time.monotonic() - t0)
+                err = UnreadableOutput(f"モデルが結果の道具（{RESULT_TOOL}）を使いませんでした（stop_reason={comp.stop_reason}）")
+                err.reply = reply  # 課金はされている
+                raise err
+            reply.text = json.dumps(used[0].get("input"), ensure_ascii=False)
+        return reply
 
 
 class ClaudeCliBackend:
