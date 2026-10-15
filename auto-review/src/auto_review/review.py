@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .backends import BackendError, Reply, default_masker, price
+from .backends import BackendError, OutputTruncated, Reply, default_masker, price
 from .diff import FileChange
 from .findings import (
     FINDINGS_SCHEMA,
@@ -66,6 +66,8 @@ class Result:
     over_budget: bool = False
     # 同じ PR のこれまでの実行で使った額（USD. 前回のコメントの隠しマーカーから）
     spent_before: float = 0.0
+    # 途中で失敗した（出力を読めない・切れた等）. cli が費用の記録だけのコメントを書くときに入れる
+    error: str = ""
 
     @property
     def cost_usd(self) -> float:
@@ -237,7 +239,9 @@ class Reviewer:
         return _tokens(system + user, self.cfg)
 
     def _new_result(self, plan: Plan) -> Result:
-        return Result(plan, spent_before=self.spent_before)
+        # 途中で例外になっても、それまでに使った額を cli が記録できるように持っておく
+        self.result = Result(plan, spent_before=self.spent_before)
+        return self.result
 
     def _remaining(self, spent_now: float) -> tuple[float, str]:
         """今回の実行で、あといくら使えるか（USD）と、効いている上限の説明.
@@ -271,7 +275,16 @@ class Reviewer:
             if getattr(self.backend, "accepts_schema", False)
             else {}
         )
-        reply: Reply = self.backend.call(model, system, user, max_out, role=step, **kw)
+        try:
+            reply: Reply = self.backend.call(model, system, user, max_out, role=step, **kw)
+        except (OutputTruncated, UnreadableOutput) as e:
+            # 出力は使えないが課金はされている. 分かる費用は記録に入れる（PR の累計の予算から漏らさない）
+            spent = getattr(e, "reply", None)
+            if spent is not None:
+                result.calls.append(
+                    Call(step, model["id"], spent.input_tokens, spent.output_tokens, round(spent.cost_usd, 4), round(spent.seconds, 1))
+                )
+            raise
         result.calls.append(
             Call(step, model["id"], reply.input_tokens, reply.output_tokens, round(reply.cost_usd, 4), round(reply.seconds, 1))
         )
@@ -351,7 +364,6 @@ class Reviewer:
         elif esc.get("verify_must") and musts:
             step, targets = "verify", musts
             focus = list(dict.fromkeys(f.file for f in musts))
-            result.notes.append(f"standard の MUST {len(musts)} 件を deep モデルで検証しました")
         elif self.dry_run and esc.get("verify_must"):
             result.notes.append("standard が MUST を出したときだけ、deep モデルの検証が加わります（見積もりに含めていません）")
             result.findings = ordered(std)
@@ -408,5 +420,8 @@ class Reviewer:
             result.findings = ordered(std)
             return result
         apply_verdicts(std, verdicts, deep_model)
+        if step == "verify":  # 予算の確認・呼び出し・読み取りがすべて済んでから書く（省いた・失敗したときは書かない）
+            part = f"のうち {len(targets)} 件" if len(targets) < len(musts) else ""
+            result.notes.append(f"standard の MUST {len(musts)} 件{part}を deep モデルで検証しました")
         result.findings = ordered(merge(std, new))
         return result
