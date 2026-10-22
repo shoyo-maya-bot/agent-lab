@@ -4,7 +4,7 @@ AI エージェントに **どこまで任せられるか** を実験するリ�
 
 | 軸 | 何を試すか |
 |---|---|
-| MCP | 自作ツール（doc2md・design-diff・fieldcheck・qa・spec-trace）や GitHub をエージェントの道具としてつなぐ |
+| MCP | 自作ツール（doc2md・design-diff・fieldcheck・spec-trace）や GitHub をエージェントの道具としてつなぐ |
 | 自律度 | 提案だけ → PR まで → CI が通れば自動マージ、と任せる範囲を段階的に広げる（使い捨ての環境で） |
 | 相互レビュー | 別のモデル・別の役割のエージェントがレビューし合うと、見落としとノイズがどう変わるか |
 
@@ -42,6 +42,13 @@ CI は Linux（Python 3.12）と Windows（Python 3.12）で単体テストを�
 
 ## 変更点
 
+- **auto-review・mcp-server: 第 7 回の指摘とドキュメントのずれ**（2026-10-23）.
+  テストのファイルの判定を部分一致からフォルダ名・ファイル名にした（`test_support/security/…` が 0 点になっていた・ルートの `test_*.py` を見逃していた）.
+  テストにも当てる中身の規則は `router.yaml` の `in_tests: true` で明示（書いていない規則は従来どおり理由の「秘密」で判定）.
+  `AUTO_REVIEW_MASK_PII=0` でも秘密情報の伏せ字は止めない（止めるのは `AUTO_REVIEW_MASK_SECRETS=0`）. claude-cli にも `max_tokens` を渡す.
+  例の workflow は実行中の実行を取り消さない（課金の後の取り消しで PR の累計から漏れていた）.
+  mcp-server は `DEVTOOLS_MCP_TIMEOUT` の誤りで起動に失敗せず、同じ秒の 2 回目の呼び出しでも出力先を作れる.
+  README の MCP の道具に無い `qa` を消し、README と `router.yaml`・例の workflow・MCP の道具の一致をテストで確かめる
 - **auto-review: PR の累計の予算・設定の誤りの終了コード・コメントの無害化**（2026-10-09）.
   `budget.per_pr_usd` は「1 回の実行あたり」と説明を直し（動きは変えない）、同じ PR の累計の上限 `budget.per_pr_total_usd`（既定 $3）を足した.
   累計はコメントの隠しマーカーに残し、`run --prior-comment` で読む（JSON に `spent_before_usd`・`pr_total_usd`）. 例の workflow は前回のコメントを渡し、

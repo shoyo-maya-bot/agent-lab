@@ -24,9 +24,12 @@ permissions:
   contents: read
   pull-requests: write
 
+# 同じ PR の実行は 1 つずつ. 実行中のものは取り消さない（cancel-in-progress: false）.
+# 取り消すと、モデルを呼んで課金された後・コメントに費用を残す前に止まり、PR の累計（per_pr_total_usd）から漏れる.
+# 待っている実行は新しい push で置き換わるので、溜まるのは最大 1 つ（実行中 1 + 待ち 1）
 concurrency:
   group: auto-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   review:

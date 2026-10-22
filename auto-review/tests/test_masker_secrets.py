@@ -53,4 +53,26 @@ def test_secrets_in_diff_are_not_sent(monkeypatch):
 
 def test_masking_can_still_be_turned_off(monkeypatch):
     monkeypatch.setenv("AUTO_REVIEW_MASK_PII", "0")
+    monkeypatch.setenv("AUTO_REVIEW_MASK_SECRETS", "0")
     assert default_masker() is None
+
+
+@pytest.mark.parametrize("secret", SECRETS)
+def test_turning_off_pii_keeps_secret_masking(monkeypatch, secret):
+    # AUTO_REVIEW_MASK_PII=0 はメールアドレス・電話番号だけを止める（第 7 回の指摘: 秘密情報の伏せ字まで止まっていた）
+    monkeypatch.setenv("AUTO_REVIEW_MASK_PII", "0")
+    monkeypatch.delenv("AUTO_REVIEW_MASK_SECRETS", raising=False)
+    m = default_masker()
+    assert m is not None
+    out = m.text(f"mail taro@example.com tel 03-1234-5678 key {secret}")
+    assert secret not in out
+    assert "taro@example.com" in out and "03-1234-5678" in out
+    assert secret not in json.dumps(m.content([{"type": "text", "text": secret}]))
+
+
+def test_turning_off_secrets_keeps_pii_masking(monkeypatch):
+    monkeypatch.delenv("AUTO_REVIEW_MASK_PII", raising=False)
+    monkeypatch.setenv("AUTO_REVIEW_MASK_SECRETS", "0")
+    m = default_masker()
+    out = m.text(f"mail taro@example.com key {SECRETS[0]}")
+    assert "taro@example.com" not in out and SECRETS[0] in out
