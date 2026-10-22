@@ -8,7 +8,9 @@
 - 外部に送るのは `--yes` を付けたときだけ。付けなければ見積もりだけ（cli.py）
 - 外部に送る前に、差分・プロンプトの中のメールアドレス・電話番号と、API キー・トークンらしい文字列
   （sk-ant-…・sk-…・AKIA…・ghp_…・github_pat_…・xox?-… など. devtools-common の既定）を `devtools_common.llm.Masker` で伏せる
-  （anthropic・claude-cli の両方。環境変数 AUTO_REVIEW_MASK_PII=0 で止められる）
+  （anthropic・claude-cli の両方）。環境変数 AUTO_REVIEW_MASK_PII=0 で止まるのはメールアドレス・電話番号だけで、
+  秘密情報らしい文字列は伏せたまま（止めるには AUTO_REVIEW_MASK_SECRETS=0 も要る）
+- claude-cli にも出力の上限（max_tokens）を渡す（環境変数 CLAUDE_CODE_MAX_OUTPUT_TOKENS）
 - anthropic は構造化出力を使う（`accepts_schema`）: 決まったスキーマを入力にした道具を 1 つだけ渡して必ず使わせ、
   その入力を JSON の文字列として返す。道具を使わなかった返答は UnreadableOutput（読む側でもスキーマを検証する）
 - 費用は共通の料金表（`devtools_common.llm.price_for`）で計算する。表に無いモデルだけ router.yaml の単価を使う
@@ -25,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from devtools_common.llm import LLMClient, LLMError, Masker, MaxTokensError, price_for
+from devtools_common.llm import SECRET_RE, LLMClient, LLMError, Masker, MaxTokensError, price_for
 
 from .findings import UnreadableOutput
 
@@ -67,14 +69,48 @@ def price(model: dict, input_tokens: int, output_tokens: int) -> float:
     return (input_tokens * model["input_per_mtok"] + output_tokens * model["output_per_mtok"]) / 1_000_000
 
 
+def _env_on(name: str) -> bool:
+    return os.environ.get(name, "1").strip().lower() not in ("0", "false", "no", "off")
+
+
 def mask_enabled() -> bool:
-    """外部に送る前に個人情報（メールアドレス・電話番号）と秘密情報らしい文字列を伏せるか. 既定は伏せる."""
-    return os.environ.get("AUTO_REVIEW_MASK_PII", "1").strip().lower() not in ("0", "false", "no", "off")
+    """外部に送る前に個人情報（メールアドレス・電話番号）を伏せるか（AUTO_REVIEW_MASK_PII）. 既定は伏せる."""
+    return _env_on("AUTO_REVIEW_MASK_PII")
+
+
+def mask_secrets_enabled() -> bool:
+    """外部に送る前に API キー・トークンらしい文字列を伏せるか（AUTO_REVIEW_MASK_SECRETS）. 既定は伏せる.
+
+    AUTO_REVIEW_MASK_PII=0（メールアドレスの検査をレビューしたいとき等）でも、秘密情報は伏せたままにする.
+    """
+    return _env_on("AUTO_REVIEW_MASK_SECRETS")
+
+
+class SecretsOnlyMasker(Masker):
+    """秘密情報らしい文字列（`devtools_common.llm.SECRET_PATTERNS`）だけを伏せる. メールアドレス・電話番号は残す."""
+
+    def text(self, s: str) -> str:
+        if not s:
+            return s
+        for w in self._words:
+            s = s.replace(w, self.replacement)
+        s = SECRET_RE.sub(self.replacement, s)
+        for r in self._res:
+            s = r.sub(self.replacement, s)
+        return s
+
+    __call__ = text
 
 
 def default_masker() -> Masker | None:
-    """既定の伏せ字. メール・電話に加え、API キー・トークンらしい文字列も伏せる（secrets=True）."""
-    return Masker(secrets=True) if mask_enabled() else None
+    """既定の伏せ字. メール・電話に加え、API キー・トークンらしい文字列も伏せる（secrets=True）.
+
+    AUTO_REVIEW_MASK_PII=0 なら秘密情報だけ、AUTO_REVIEW_MASK_SECRETS=0 なら個人情報だけ、両方 0 なら伏せない.
+    """
+    pii, secrets = mask_enabled(), mask_secrets_enabled()
+    if pii:
+        return Masker(secrets=secrets)
+    return SecretsOnlyMasker() if secrets else None
 
 
 def _reply_of(comp, model: dict, seconds: float) -> Reply:
@@ -164,6 +200,8 @@ class ClaudeCliBackend:
     def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "") -> Reply:
         if self.masker:
             system, user = self.masker.text(system), self.masker.text(user)
+        # claude -p には出力の上限の引数が無いので、Claude Code の環境変数で渡す（anthropic と同じ上限にする）
+        env = {**os.environ, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(int(max_tokens))}
         cmd = [
             self.exe,
             "-p",
@@ -179,7 +217,7 @@ class ClaudeCliBackend:
         ]
         t0 = time.monotonic()
         try:
-            res = subprocess.run(cmd, input=user, capture_output=True, text=True, timeout=self.timeout, check=False)
+            res = subprocess.run(cmd, input=user, capture_output=True, text=True, timeout=self.timeout, check=False, env=env)
         except (OSError, subprocess.TimeoutExpired) as e:
             raise BackendError(f"claude -p を実行できません: {e}") from e
         try:
@@ -192,7 +230,10 @@ class ClaudeCliBackend:
         inp = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
         out = u.get("output_tokens", 0)
         cost = data.get("total_cost_usd")
-        return Reply(data.get("result", ""), inp, out, float(cost) if cost is not None else price(model, inp, out), time.monotonic() - t0)
+        reply = Reply(data.get("result", ""), inp, out, float(cost) if cost is not None else price(model, inp, out), time.monotonic() - t0)
+        if data.get("stop_reason") == "max_tokens":  # 出力が上限で切れた（課金はされている）
+            raise OutputTruncated(f"出力が上限で切れました（max_tokens={max_tokens}）. 結果は使えません", reply)
+        return reply
 
 
 class ReplayBackend:

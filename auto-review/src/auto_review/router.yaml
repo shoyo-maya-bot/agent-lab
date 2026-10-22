@@ -74,11 +74,12 @@ risk:
     - {glob: "**/pom.xml",                weight: 1, reason: 依存・ビルド}
     - {glob: "**/package.json",           weight: 1, reason: 依存・ビルド}
   # 追加・削除された行の中身（正規表現）. 1 ファイルで同じ規則は 1 回だけ数える
+  # テストのファイル（フォルダ名が test / tests、ファイル名が test_* / *_test.py / *Test.java 等）には in_tests: true の規則だけを当てる
   patterns:
     - {regex: "\\$\\{",                           files: "**/*.xml", weight: 4, reason: "SQL への文字列埋め込み（${}）"}
     - {regex: "@Transactional",                   weight: 2, reason: トランザクション境界の変更}
     - {regex: "synchronized|ReentrantLock|FOR UPDATE|ON CONFLICT", weight: 2, reason: 同時実行・排他}
-    - {regex: "(?i)(password|secret|api[_-]?key|token)\\s*[=:]", weight: 3, reason: 秘密情報らしき値}
+    - {regex: "(?i)(password|secret|api[_-]?key|token)\\s*[=:]", weight: 3, reason: 秘密情報らしき値, in_tests: true}
     - {regex: "System\\.exit|ExitCodeGenerator",  weight: 2, reason: 終了コード}
     - {regex: "catch \\((Exception|Throwable|RuntimeException) ", weight: 1, reason: 広い例外の捕捉}
     - {regex: "@ExceptionHandler|@(Rest)?ControllerAdvice", weight: 2, reason: 例外の扱いの変更}

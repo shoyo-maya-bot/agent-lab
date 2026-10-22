@@ -4,6 +4,8 @@ r"""CLI の呼び出しと、ファイルの置き場所の制限.
 - 引数に渡すパスは、作業フォルダ（DEVTOOLS_MCP_ROOT。既定はカレントディレクトリ）の中だけ
 - CLI が書き出すファイルは作業フォルダの .mcp-out/ の下だけ
 - 結果は CLI の JSON レポートをそのまま返す（終了コードの意味を添える）
+- CLI の実行の時間の上限は DEVTOOLS_MCP_TIMEOUT（秒。既定 300）. 数でない・0 以下・無限大の値は既定に戻して警告する
+  （起動に失敗させない）
 - コマンドの上書き（DEVTOOLS_MCP_*）は JSON の配列（`["C:\\py\\python.exe", "-m", "x"]`）でも書ける.
   文字列で書いた場合、Windows では `\` を消さない分け方（posix=False）をする
 """
@@ -11,10 +13,12 @@ r"""CLI の呼び出しと、ファイルの置き場所の制限.
 from __future__ import annotations
 
 import json
+import math
 import os
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,7 +37,30 @@ EXIT_MEANING = {
     2: "前提の誤り（引数・設定・入力の形式）。データではなく前提を確認する",
     3: "実行時エラー",
 }
-TIMEOUT = int(os.environ.get("DEVTOOLS_MCP_TIMEOUT", "300"))
+DEFAULT_TIMEOUT = 300.0
+
+
+def timeout_from_env(value: str | None) -> float:
+    """DEVTOOLS_MCP_TIMEOUT の値（秒）. 空・数でない・0 以下・nan・無限大は既定（300 秒）にして標準エラーに警告する.
+
+    import のときに int() で読むと、`5m` などの誤りでサーバーが起動しなくなる（エージェントからは理由が見えない）.
+    """
+    if value is None or not value.strip():
+        return DEFAULT_TIMEOUT
+    try:
+        seconds = float(value)
+    except ValueError:
+        seconds = math.nan
+    if not math.isfinite(seconds) or seconds <= 0:
+        print(
+            f"devtools-mcp: DEVTOOLS_MCP_TIMEOUT={value!r} は秒数（0 より大きい数）ではないので、既定の {DEFAULT_TIMEOUT:g} 秒を使います",
+            file=sys.stderr,
+        )
+        return DEFAULT_TIMEOUT
+    return seconds
+
+
+TIMEOUT = timeout_from_env(os.environ.get("DEVTOOLS_MCP_TIMEOUT"))
 STDERR_LIMIT = 4000
 
 
@@ -73,14 +100,21 @@ class Workspace:
         return p
 
     def out_dir(self, tool: str) -> Path:
-        d = self.root / ".mcp-out" / tool / time.strftime("%Y%m%d-%H%M%S")
-        n = 1
-        base = d
-        while d.exists():
-            n += 1
-            d = base.with_name(f"{base.name}-{n}")
-        d.mkdir(parents=True)
-        return d
+        """`.mcp-out/<tool>/<日時>`（同じ秒に作られていれば `-2`, `-3` …）を新しく作って返す.
+
+        「無ければ作る」を 1 回の mkdir（exist_ok=False）で行うので、同じ秒に 2 つの呼び出しが来ても
+        FileExistsError にならず、別のフォルダを使う（既存のフォルダに書き込まない）.
+        """
+        base = self.root / ".mcp-out" / tool / time.strftime("%Y%m%d-%H%M%S")
+        base.parent.mkdir(parents=True, exist_ok=True)
+        for n in range(1, 10_000):
+            d = base if n == 1 else base.with_name(f"{base.name}-{n}")
+            try:
+                d.mkdir()
+            except FileExistsError:
+                continue
+            return d
+        raise ToolError(f"出力先のフォルダを作れません（同じ時刻のフォルダが多すぎます）: {self.rel(base)}")
 
     def rel(self, p: Path) -> str:
         try:
@@ -151,7 +185,7 @@ def run(tool: str, args: list[str], ws: Workspace) -> dict[str, Any]:
             env=child_env(),
         )
     except subprocess.TimeoutExpired:
-        raise ToolError(f"{tool} が {TIMEOUT} 秒以内に終わりませんでした") from None
+        raise ToolError(f"{tool} が {TIMEOUT:g} 秒以内に終わりませんでした") from None
     report: Any = None
     if len(proc.stdout) > REPORT_LIMIT:
         return {
