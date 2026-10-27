@@ -114,6 +114,7 @@ def validate_config(cfg: object) -> None:
         _need(_is_num(rule.get("weight")), f"{where}.weight", "数")
         _need(isinstance(rule.get("reason", ""), str), f"{where}.reason", "文字列")
         _need(isinstance(rule.get("files", ""), str), f"{where}.files", "文字列（glob）")
+        _need(isinstance(rule.get("in_tests", False), bool), f"{where}.in_tests", "真偽値（true / false）")
         try:
             re.compile(rule["regex"])
         except re.error as e:
@@ -179,6 +180,17 @@ class Plan:
         }
 
 
+def pattern_applies_to_tests(rule: dict) -> bool:
+    """risk.patterns の規則をテストのファイルにも当てるか.
+
+    `in_tests: true` / `false` で決める. 書いていない規則は、互換のため理由（reason）に「秘密」を含むときだけ当てる
+    （これまでの動き. 新しく書く規則は in_tests を明示する）.
+    """
+    if "in_tests" in rule:
+        return bool(rule["in_tests"])
+    return "秘密" in str(rule.get("reason", ""))
+
+
 def _step(value: int, steps: list[list[int]]) -> int:
     add = 0
     for threshold, pts in steps:
@@ -203,10 +215,12 @@ def score_changes(changes: list[FileChange], cfg: dict) -> tuple[int, list[str],
                 s += w
                 what = "テストの削除" if ch.status == "deleted" else f"テストが {removed - added} 件減った"
                 reasons.append(f"+{w} {ch.path}: {what}")
-            # 秘密情報らしき値は、テストのファイルでも数える
+            # in_tests: true の規則（秘密情報らしき値など）は、テストのファイルでも数える
             body = "\n".join([t for _, t in ch.added] + ch.removed)
             for rule in risk.get("patterns", []):
-                if "秘密" in rule.get("reason", "") and re.search(rule["regex"], body):
+                if rule.get("files") and not glob_match(ch.path, rule["files"]):
+                    continue
+                if pattern_applies_to_tests(rule) and re.search(rule["regex"], body):
                     s += rule["weight"]
                     reasons.append(f"+{rule['weight']} {ch.path}: {rule['reason']}")
             per_file[ch.path] = s

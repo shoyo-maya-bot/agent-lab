@@ -61,3 +61,33 @@ def test_cli_writes_japanese_as_utf8(tmp_path: Path, monkeypatch):
     )
     r = runner.run("fieldcheck", [], runner.Workspace.from_env())
     assert r["exit_code"] == 0 and r["report"] == {"表": "申請一覧"}
+
+
+# -- 第 7 回: DEVTOOLS_MCP_TIMEOUT の誤りで起動に失敗しない、同じ秒の 2 回目でも出力先を作れる ----------------
+@pytest.mark.parametrize("value", ["5m", "", "0", "-3", "nan", "inf", "abc"])
+def test_bad_timeout_falls_back_to_default(value, capsys):
+    assert runner.timeout_from_env(value) == runner.DEFAULT_TIMEOUT
+    if value.strip():
+        assert "DEVTOOLS_MCP_TIMEOUT" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value, expected", [("60", 60.0), ("1.5", 1.5), (" 120 ", 120.0), (None, 300.0)])
+def test_good_timeout_is_used(value, expected):
+    assert runner.timeout_from_env(value) == expected
+
+
+def test_out_dir_in_the_same_second_gets_a_new_folder(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(runner.time, "strftime", lambda fmt: "20261023-080000")
+    ws = runner.Workspace(tmp_path)
+    dirs = [ws.out_dir("doc2md") for _ in range(3)]
+    assert [d.name for d in dirs] == ["20261023-080000", "20261023-080000-2", "20261023-080000-3"]
+    assert all(d.is_dir() for d in dirs)
+
+
+def test_out_dir_does_not_fail_when_another_call_creates_it_first(tmp_path: Path, monkeypatch):
+    # exists() と mkdir() の間に別の呼び出しが同じ名前を作っても FileExistsError にならない
+    monkeypatch.setattr(runner.time, "strftime", lambda fmt: "20261023-080000")
+    ws = runner.Workspace(tmp_path)
+    (tmp_path / ".mcp-out" / "doc2md" / "20261023-080000").mkdir(parents=True)
+    d = ws.out_dir("doc2md")
+    assert d.name == "20261023-080000-2"

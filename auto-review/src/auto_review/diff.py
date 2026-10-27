@@ -30,17 +30,33 @@ class FileChange:
 
     @property
     def is_test(self) -> bool:
-        """テストのファイルか. Java のファイル名の末尾（`Test.java`・`Tests.java`・`IT.java`）は大文字小文字を区別して見る
-        （`Contest.java`・`Latest.java` はテストではない）. `src/test/` などのフォルダは従来どおり大文字小文字を区別しない."""
-        p = self.path.lower()
-        name = self.path.rsplit("/", 1)[-1]
-        return (
-            "/test/" in p
-            or "/tests/" in p
-            or "/test_" in p
-            or name.endswith(("Test.java", "Tests.java", "IT.java"))
-            or p.endswith(("_test.py", ".feature"))
-        )
+        """テストのファイルか（`is_test_path` の規則）."""
+        return is_test_path(self.path)
+
+
+# テストのフォルダの名前（パスの区切りで分けたフォルダ名と完全に一致したときだけ. 大文字小文字は区別しない）
+TEST_DIRS = frozenset({"test", "tests"})
+# テストのファイル名の末尾. Java は大文字小文字を区別する（`Contest.java`・`Latest.java` はテストではない）
+TEST_JAVA_SUFFIXES = ("Test.java", "Tests.java", "IT.java")
+
+
+def is_test_path(path: str) -> bool:
+    """テストのファイルか. 部分一致ではなく、フォルダ名とファイル名で判定する.
+
+    - フォルダ名が `test` / `tests`（`src/test/java/…`・`tests/…`・`pkg/tests/…`）
+    - ファイル名が `test_*`（ルートの `test_x.py` も）・`*_test.py`・`*.feature`、Java の `*Test.java`・`*Tests.java`・`*IT.java`
+    `test_support/`・`testing/`・`contest/` のようにテストの語を含むだけのフォルダはテストとみなさない
+    （テストとみなすと危なさの点数が付かず、`test_support/security/…` の変更が 0 点になる）.
+    """
+    parts = path.replace("\\", "/").split("/")
+    name = parts[-1]
+    lname = name.lower()
+    return (
+        any(d.lower() in TEST_DIRS for d in parts[:-1])
+        or lname.startswith("test_")
+        or lname.endswith(("_test.py", ".feature"))
+        or name.endswith(TEST_JAVA_SUFFIXES)
+    )
 
 
 def unquote_git_path(p: str) -> str:

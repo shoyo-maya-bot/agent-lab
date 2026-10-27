@@ -722,7 +722,10 @@ def test_default_masker_follows_backend_or_env(monkeypatch):
 
     monkeypatch.setenv("AUTO_REVIEW_MASK_PII", "1")
     assert isinstance(Reviewer(CFG, None, dry_run=True).masker, Masker)
-    monkeypatch.setenv("AUTO_REVIEW_MASK_PII", "0")
+    monkeypatch.setenv("AUTO_REVIEW_MASK_PII", "0")  # 個人情報だけ止める. 秘密情報は伏せたまま（第 7 回）
+    m = Reviewer(CFG, None, dry_run=True).masker
+    assert isinstance(m, Masker) and m.text("a@example.com") == "a@example.com"
+    monkeypatch.setenv("AUTO_REVIEW_MASK_SECRETS", "0")
     assert Reviewer(CFG, None, dry_run=True).masker is None
 
 

@@ -61,6 +61,9 @@ flowchart LR
 
 - **振り分けはモデルを使わない**（[router.yaml](src/auto_review/router.yaml) の規則で点数を付ける）。費用がかからず、毎回同じ結果で、「なぜ Opus に回ったか」を説明できる
   - 点数の例: SQL の Mapper +3、Service +2、例外ハンドラ +2、`@Transactional` の変更 +2、テストを消した・減らした +3、変更が 400 行以上 +2
+  - テストのファイル（フォルダ名が `test` / `tests`、ファイル名が `test_*`・`*_test.py`・`*.feature`・`*Test.java`・`*Tests.java`・`*IT.java`）は、
+    パスの規則と中身の規則で点数を付けない（テストを消した・減らしたときだけ数える）。中身の規則のうち `in_tests: true` のもの（秘密情報らしき値）はテストにも当てる。
+    `test_support/` のようにテストの語を含むだけのフォルダはテストとみなさない
 - **予算**: 2 つの上限を、**すべての呼び出しの前に** 見積もりで確かめる（見積もりは外部に送るときと同じ伏せ字をかけた後の文字列で数える）。
   - `budget.per_pr_usd`（既定 $1）: **1 回の実行あたり**の上限（キーの名前は互換のため据え置き。PR 全体の上限ではない）
   - `budget.per_pr_total_usd`（既定 $3）: **同じ PR の実行の累計**の上限。コメントの末尾に隠しマーカー（`<!-- auto-review-spent-usd: 0.1234 -->`）で
@@ -68,7 +71,8 @@ flowchart LR
     渡さなければこれまでの額は 0 とみなす（例の workflow は渡す）。キーを書かなければ累計では判定しない
   - 課金された後に失敗した実行（出力が `max_tokens` で切れた・結果を読めない）も、`--out-md` / `--out-json` に「レビューできなかった」旨と
     費用の記録を書く（終了コードは 3 のまま。例の workflow はそのコメントを書いてからジョブを失敗させる）。
-    途中で取り消された実行（`cancel-in-progress`）の費用は記録に入らないので、最終の上限は API 側の月の上限で掛ける
+    例の workflow は実行中の実行を取り消さない（`cancel-in-progress: false`）。取り消すと課金の後・記録の前に止まり、累計から漏れるため。
+    ジョブの時間切れ（`timeout-minutes`）や手での取り消しで止まった実行の費用は記録に入らないので、最終の上限は API 側の月の上限で掛ける
   一次（standard）と `--only` は、超えそうなら変更ファイルの全文を減らし（全文 → 3 分の 1 → 差分だけ）、それでも超えるなら呼ばずに理由を書く（`--yes` なら終了コード 3。「指摘 0 件」と区別する）。
   deep は、超えそうなら Opus の範囲を危ないファイル 3 つに絞る。それでも超えるなら Opus を飛ばして理由をコメントに書く。
   変更ファイルの全文は、読む前にファイルのサイズで上限（`context_max_tokens`）に入るかを見て、入らないものは読まない。月の上限は API 側（ワークスペースの上限、Copilot なら組織・利用者ごとの予算）で掛ける
@@ -84,7 +88,7 @@ git diff origin/main...HEAD > pr.diff
 auto-review plan pr.diff                      # 振り分けだけ（モデルは呼ばない）
 auto-review run pr.diff --repo .              # 見積もりだけ（外部に何も送らない）
 auto-review run pr.diff --repo . --yes --out-md comment.md     # 実行（ANTHROPIC_API_KEY が必要）
-auto-review run pr.diff --repo . --yes --backend claude-cli    # Claude Code の claude -p で試す
+auto-review run pr.diff --repo . --yes --backend claude-cli    # Claude Code の claude -p で試す（出力の上限は CLAUDE_CODE_MAX_OUTPUT_TOKENS で渡す）
 auto-review run pr.diff --repo . --yes --prior-comment prev.md # 前回のコメントの累計額を読み、PR の累計の予算も見る
 ```
 
@@ -158,7 +162,8 @@ python runner/pr_bench.py --diff-only out/replay --configs auto --cases P01,P05,
 - **個人情報の伏せ字**: `anthropic` と `claude-cli` の呼び出し先は、送る前にプロンプト（差分・ファイルの中身を含む）のメールアドレスと日本の電話番号
   （全角・区切りなし・`+81` を含む）、API キー・トークンらしい文字列（`sk-ant-…`・`sk-…`・`AKIA…`・`ghp_…`・`github_pat_…`・`xoxb-…` など）を
   `devtools_common.llm.Masker` で `＊＊＊` に置き換える。
-  メールアドレスの検査そのものをレビューしたいときなどは、環境変数 `AUTO_REVIEW_MASK_PII=0` で止められる。
+  メールアドレスの検査そのものをレビューしたいときなどは、環境変数 `AUTO_REVIEW_MASK_PII=0` でメールアドレス・電話番号の伏せ字を止められる
+  （API キー・トークンらしい文字列は伏せたまま。それも止めるときは `AUTO_REVIEW_MASK_SECRETS=0`）。
   記録した返答を返す `ReplayBackend`（CI）は外部に送らないので伏せない
 - モデルの出力は、PR のコメントに載せる前に HTML・画像・全員へのメンションを無害化する
 - モデルの出力はスキーマ（`auto_review.findings.FINDINGS_SCHEMA`・`VERDICTS_SCHEMA`）で検証する. anthropic では道具を強制する構造化出力で受け取る.

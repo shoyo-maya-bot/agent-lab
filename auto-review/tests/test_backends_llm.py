@@ -124,6 +124,7 @@ def test_emails_and_phones_in_diff_are_masked_before_sending(monkeypatch):
 
 def test_masking_can_be_turned_off(monkeypatch):
     monkeypatch.setenv("AUTO_REVIEW_MASK_PII", "0")
+    monkeypatch.setenv("AUTO_REVIEW_MASK_SECRETS", "0")
     assert backends.default_masker() is None
     be, fakes = _backend([_ok("x")])
     be.call(SONNET, "s", DIFF, 100)
