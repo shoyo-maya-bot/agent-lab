@@ -15,7 +15,7 @@ AI エージェントにどこまで任せられるかを試す実験用のリ�
 ## テストの流し方
 
 ```bash
-pip install -e "mcp-server[dev]" -e "auto-review[dev]" pyyaml
+pip install -c constraints.txt -e "mcp-server[dev]" -e "auto-review[dev]" pyyaml   # CI と同じ版（constraints.txt は deps-lock が作る）
 ruff check . && ruff format --check .
 pytest -q mcp-server/tests runner/tests auto-review/tests
 # 記録した返答での回帰（モデルは呼ばない）

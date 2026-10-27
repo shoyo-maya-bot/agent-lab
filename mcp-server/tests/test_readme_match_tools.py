@@ -38,3 +38,11 @@ def test_timeout_default_is_documented():
 
 def test_exit_meanings_cover_the_common_exit_codes():
     assert set(runner.EXIT_MEANING) == {0, 1, 2, 3}
+
+
+def test_runner_docstring_says_workspace_is_required():
+    """後退: runner.py の説明が「既定はカレントディレクトリ」だったが、実際は DEVTOOLS_MCP_ROOT が必須."""
+    doc = runner.__doc__ or ""
+    assert "カレント" not in doc
+    assert "DEVTOOLS_MCP_ROOT" in doc and "必須" in doc
+    assert "`DEVTOOLS_MCP_ROOT`。必須" in MCP_README

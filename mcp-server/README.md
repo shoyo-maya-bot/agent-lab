@@ -5,7 +5,7 @@ devtools の CLI を、AI エージェント（VS Code の Copilot・Claude な�
 | ツール | 中身 |
 |---|---|
 | `tools_status` | 使える CLI と作業フォルダ |
-| `doc2md_convert` | Office / PDF / draw.io → Markdown（出力は `.mcp-out/doc2md/`） |
+| `doc2md_convert` | Office / PDF / draw.io → Markdown（出力は `.mcp-out/doc2md/`）。`recursive: true` でサブフォルダも。隠しフォルダ（`.git`・前回までの出力の `.mcp-out`・`.venv` など名前が `.` で始まるもの）は探さない |
 | `design_diff_excel` / `design_diff_spec` | 設計書の新旧差分 / API 定義書と OpenAPI の整合 |
 | `fieldcheck_validate` | 表の項目間検証 |
 | `spec_trace_check` | 要件と実装・テストの対応表の検査 |

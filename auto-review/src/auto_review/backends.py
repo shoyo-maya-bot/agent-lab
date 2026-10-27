@@ -2,7 +2,10 @@
 
 - anthropic : devtools-common の `devtools_common.llm.LLMClient` で Messages API を呼ぶ
   （ANTHROPIC_API_KEY。ANTHROPIC_BASE_URL で社内の中継・閉域の窓口に向けられる）。
-  429 / 5xx（529 を含む）は `retry-after` に従って再試行し、出力が max_tokens で切れたら OutputTruncated
+  429 / 5xx（529 を含む）は `retry-after` に従って再試行し、出力が max_tokens で切れたら OutputTruncated。
+  接続の切断・時間切れで送り直したとき（max_retries まで）は、前の送信がサーバーに届いて課金された可能性があるので、
+  送り直した回数 × 成功した呼び出しの費用を見積もりとして費用（Reply.cost_usd）に足す（Reply.resent に回数）。
+  429 / 5xx の再試行は課金されないので足さない
 - claude-cli: Claude Code の `claude -p` を道具なしで呼ぶ（ローカルで試すとき）
 - ReplayBackend: 記録しておいた生の返答を返すだけ（モデルは呼ばない. CI で配線の退行を見るため）
 - 外部に送るのは `--yes` を付けたときだけ。付けなければ見積もりだけ（cli.py）
@@ -18,11 +21,13 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import shutil
 import subprocess
 import time
+import urllib.error
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,6 +47,9 @@ class Reply:
     output_tokens: int
     cost_usd: float
     seconds: float
+    # 接続の切断・時間切れで送り直した回数. 前の送信が届いて課金された可能性があるので、cost_usd にその分の見積もりを含む
+    resent: int = 0
+    resent_cost_usd: float = 0.0
 
 
 class BackendError(RuntimeError):
@@ -113,12 +121,25 @@ def default_masker() -> Masker | None:
     return SecretsOnlyMasker() if secrets else None
 
 
-def _reply_of(comp, model: dict, seconds: float) -> Reply:
+def _reply_of(comp, model: dict, seconds: float, resent: int = 0) -> Reply:
+    """resent: 接続の切断・時間切れで送り直した回数. 前の送信も同じ量だけ課金されたとみなし、その分を費用に足す."""
     u = comp.usage
     inp = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
     out = u.output_tokens
     cost = comp.cost_usd if comp.cost_usd is not None else price(model, inp, out)
-    return Reply(comp.text, inp, out, cost, seconds)
+    extra = cost * resent
+    return Reply(comp.text, inp, out, cost + extra, seconds, resent=resent, resent_cost_usd=extra)
+
+
+def _maybe_billed(e: BaseException) -> bool:
+    """送り直しの原因が、サーバーに届いて処理された後かもしれない失敗（接続の切断・時間切れ）か.
+
+    HTTP のエラー（429・5xx）はサーバーが断ったもので課金されない. 接続の切断・時間切れは、届いて処理された後に
+    応答だけが失われた場合があり、そのときは前の送信も課金される（devtools_common.llm の注意）.
+    """
+    if isinstance(e, urllib.error.HTTPError):
+        return False
+    return isinstance(e, (urllib.error.URLError, OSError, http.client.HTTPException))
 
 
 class AnthropicBackend:
@@ -142,6 +163,7 @@ class AnthropicBackend:
         self.masker = masker if masker is not None else default_masker()
         self._factory = client_factory or self._make_client
         self._clients: dict[str, LLMClient] = {}
+        self._resent = 0  # いまの呼び出しで、接続の切断・時間切れのあとに送り直した回数
         if not (self.api_key or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
             raise BackendError("ANTHROPIC_API_KEY が設定されていません")
 
@@ -157,8 +179,21 @@ class AnthropicBackend:
 
     def _client(self, model_id: str) -> LLMClient:
         if model_id not in self._clients:
-            self._clients[model_id] = self._factory(model_id)
+            client = self._factory(model_id)
+            client._opener = self._counting(client._opener)  # 再試行は LLMClient の中なので、送信の口で失敗を数える
+            self._clients[model_id] = client
         return self._clients[model_id]
+
+    def _counting(self, opener: Callable):
+        def open_(req, timeout):
+            try:
+                return opener(req, timeout=timeout)
+            except BaseException as e:
+                if _maybe_billed(e):
+                    self._resent += 1
+                raise
+
+        return open_
 
     def call(self, model: dict, system: str, user: str, max_tokens: int, role: str = "", schema: dict | None = None) -> Reply:
         t0 = time.monotonic()
@@ -170,15 +205,17 @@ class AnthropicBackend:
                 "input_schema": schema,
             }
             kw = {"tools": [tool], "tool_choice": {"type": "tool", "name": RESULT_TOOL}}
+        client = self._client(model["id"])
+        self._resent = 0
         try:
-            comp = self._client(model["id"]).complete(user, system=system, max_tokens=max_tokens, **kw)
+            comp = client.complete(user, system=system, max_tokens=max_tokens, **kw)
         except MaxTokensError as e:
             partial = getattr(e, "completion", None)  # 課金はされている. 費用を記録に残せるように渡す
-            spent = _reply_of(partial, model, time.monotonic() - t0) if partial is not None else None
+            spent = _reply_of(partial, model, time.monotonic() - t0, self._resent) if partial is not None else None
             raise OutputTruncated(f"出力が上限で切れました（max_tokens={max_tokens}）. 結果は使えません", spent) from e
         except LLMError as e:
             raise BackendError(f"API エラー: {e}") from e
-        reply = _reply_of(comp, model, time.monotonic() - t0)
+        reply = _reply_of(comp, model, time.monotonic() - t0, self._resent)
         if schema is not None:
             used = [b for b in comp.content if b.get("type") == "tool_use" and b.get("name") == RESULT_TOOL]
             if not used:

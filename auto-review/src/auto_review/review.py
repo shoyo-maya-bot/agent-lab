@@ -125,6 +125,16 @@ def _safe_file(repo: Path, path: str) -> Path | None:
     return rp
 
 
+def _note_resent(result: Result, step: str, reply: Reply) -> None:
+    """接続の切断・時間切れで送り直した呼び出しは、前の送信の分（見積もり）も費用に含めたことを注記する."""
+    n = getattr(reply, "resent", 0)
+    if n:
+        result.notes.append(
+            f"{step}: 接続の切断・時間切れで {n} 回送り直しました。前の送信も課金された可能性があるので、"
+            f"その分の見積もり ${getattr(reply, 'resent_cost_usd', 0.0):.4f} を費用（予算の記録）に含めました"
+        )
+
+
 def _add_note(notes: list[str] | None, msg: str) -> None:
     if notes is not None and msg not in notes:
         notes.append(msg)
@@ -284,10 +294,12 @@ class Reviewer:
                 result.calls.append(
                     Call(step, model["id"], spent.input_tokens, spent.output_tokens, round(spent.cost_usd, 4), round(spent.seconds, 1))
                 )
+                _note_resent(result, step, spent)
             raise
         result.calls.append(
             Call(step, model["id"], reply.input_tokens, reply.output_tokens, round(reply.cost_usd, 4), round(reply.seconds, 1))
         )
+        _note_resent(result, step, reply)
         return reply.text
 
     def _estimate(self, model_key: str, system: str, user: str, out_key: str) -> float:
