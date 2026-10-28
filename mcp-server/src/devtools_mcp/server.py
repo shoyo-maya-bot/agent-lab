@@ -8,7 +8,9 @@ devtools-mcp            # VS Code / Claude などの MCP クライアントか�
 from __future__ import annotations
 
 import functools
+import os
 import re
+from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
@@ -67,16 +69,27 @@ def doc2md_convert(path: str, recursive: bool = False) -> dict[str, Any]:
     """Word / Excel / PowerPoint / PDF / draw.io を Markdown に変換する。
 
     path: 作業フォルダからの相対パス（ファイルかフォルダ）。結果の outputs に作られた Markdown のパスが入る。
+    recursive: フォルダのときサブフォルダも変換する。隠しフォルダ（.git・.mcp-out・.venv など名前が . で始まるもの）は探さない。
     """
     ws = Workspace.from_env()
     src = ws.path(path)
     out = ws.out_dir("doc2md")
-    args = [str(src), "-d", str(out), "-f", "json", "--continue-on-error"]
-    if recursive:
-        args.append("-r")
+    # doc2md -r はフォルダの下をすべて探すので、.git や前回までの出力（.mcp-out/）も変換してしまう.
+    # 探すフォルダをここで決め（隠しフォルダを除く）、それぞれを -r なしで渡す（出力名は doc2md が入力の一覧から決めるので -r と同じ）
+    inputs = _search_dirs(src) if recursive and src.is_dir() else [src]
+    args = [*map(str, inputs), "-d", str(out), "-f", "json", "--continue-on-error"]
     result = run("doc2md", args, ws)
     result["outputs"] = sorted(ws.rel(p) for p in out.rglob("*.md"))
     return result
+
+
+def _search_dirs(root: Path) -> list[Path]:
+    """root と、その下の隠しでないフォルダ（名前が . で始まらないもの）. シンボリックリンクはたどらない."""
+    dirs = [root]
+    for cur, subdirs, _ in os.walk(root):
+        subdirs[:] = sorted(d for d in subdirs if not d.startswith("."))
+        dirs += [Path(cur) / d for d in subdirs]
+    return dirs
 
 
 @mcp.tool(title="Excel 設計書の新旧差分", annotations=READ_ONLY)

@@ -159,3 +159,18 @@ def test_design_diff_rejects_bad_doc_type(tmp_path, monkeypatch):
 
     with pytest.raises(MCPToolError, match="doc_type"):
         server.design_diff_excel("../../etc/passwd", "a.xlsx", "b.xlsx")
+
+
+def test_doc2md_recursive_skips_git_and_previous_outputs(ws: Path):
+    """recursive: .git・前回までの出力（.mcp-out/）・隠しフォルダは探さない（doc2md -r に任せると全部変換していた）."""
+    for d in (".git/objects", ".mcp-out/doc2md/20260101-000000", ".venv/lib", "docs/sub/deep"):
+        (ws / d).mkdir(parents=True)
+    (ws / ".mcp-out/doc2md/20260101-000000/old.docx").write_bytes(b"x")
+    r = server.doc2md_convert(".", recursive=True)
+    args = r["report"]["args"]
+    inputs = args[: args.index("-d")]
+    assert inputs == [str(ws), *(str(ws / d) for d in ("config", "docs", "docs/sub", "docs/sub/deep"))]
+    assert "-r" not in args
+    assert not any("/." in Path(p).as_posix().replace(ws.as_posix(), "") for p in inputs)
+    # recursive なし・ファイルの指定は今までどおり 1 つだけ渡す
+    assert server.doc2md_convert("docs")["report"]["args"][0] == str(ws / "docs")

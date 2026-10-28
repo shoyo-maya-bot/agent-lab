@@ -73,3 +73,37 @@ def test_masking_env_vars_are_documented():
     src = (ROOT / "auto-review" / "src" / "auto_review" / "backends.py").read_text(encoding="utf-8")
     for name in set(re.findall(r'"(AUTO_REVIEW_[A-Z_]+)"', src)):
         assert name in README, name
+
+
+def test_pr_case_count_in_readmes_matches_cases_yaml():
+    """README の「課題は N PR」が bench/prs/cases.yaml の件数と同じ（後退: 16 件あるのに 11 PR と書いていた）."""
+    cases = yaml.safe_load((ROOT / "bench" / "prs" / "cases.yaml").read_text(encoding="utf-8"))["cases"]
+    ids = [c["id"] for c in cases]
+    n = len(ids)
+    kinds = {k: sum(1 for i in ids if i.startswith(k)) for k in ("P", "N", "D")}
+    assert f"課題は {n} PR" in README
+    assert f"弱いところを 1 つ戻した PR {kinds['P']}・問題の無い PR {kinds['N']}・おとり {kinds['D']}" in README
+    top = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert f"PR 単位の課題 {n} 件（弱いところを 1 つ戻した PR {kinds['P']} 件 + 問題の無い PR {kinds['N']} 件" in top
+    assert f"「おとり」{kinds['D']} 件" in top
+
+
+def test_agents_md_install_uses_constraints_like_ci():
+    """AGENTS.md のテストの手順は CI と同じく constraints.txt で版をそろえる（後退: -c constraints.txt が無かった）."""
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    ci_pkgs = re.search(r'pip install \$C (-e "mcp-server\[dev\]" -e "auto-review\[dev\]" pyyaml)', ci).group(1)
+    assert f"pip install -c constraints.txt {ci_pkgs}" in agents
+    for line in agents.splitlines():
+        if line.startswith("pip install"):
+            assert "-c constraints.txt" in line, line
+
+
+def test_label_and_retry_notes_match_code():
+    import inspect
+
+    from auto_review.backends import AnthropicBackend
+
+    default_retries = inspect.signature(AnthropicBackend.__init__).parameters["max_retries"].default
+    assert f"最大 {default_retries} 回（`max_retries`）" in README
+    assert f"`{CFG['labels']['deep']}`（必ず Opus まで。文書だけの変更でも省かない）" in README

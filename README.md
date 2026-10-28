@@ -38,10 +38,15 @@ pip install -c constraints.txt -e "mcp-server[dev]" -e "auto-review[dev]" pyyaml
 pytest -q mcp-server/tests runner/tests auto-review/tests
 ```
 
-CI は Linux（Python 3.12）と Windows（Python 3.12）で単体テストを流し、bandit（SAST）と pip-audit（依存の脆弱性）も確かめます。
+Python 3.11 以上（`requires-python`。`constraints.txt` も 3.11 で解く）。CI は Linux（Python 3.12）と Windows（Python 3.12）で単体テストを流し、bandit（SAST）と pip-audit（依存の脆弱性）も確かめます。
 
 ## 変更点
 
+- **auto-review・mcp-server: 第 8 回の指摘とドキュメントのずれ**（2026-10-28）.
+  `review:deep` のラベルを、文書だけの変更の省略より先に見る（文書だけの PR では効かなかった）.
+  接続の切断・時間切れで送り直した分（課金された可能性がある）を費用と予算の記録に足す（429・5xx の送り直しは足さない）.
+  mcp-server の `doc2md_convert`（`recursive`）が `.git` や前回までの出力（`.mcp-out/`）まで変換していたので、隠しフォルダを探さない.
+  runner.py の説明（作業フォルダの既定はカレント）を実際（必須）に直した. auto-review の README の課題の数（11 → 16 PR）、AGENTS.md のテストの手順（`-c constraints.txt`）を直し、ずれをテストで確かめる
 - **auto-review・mcp-server: 第 7 回の指摘とドキュメントのずれ**（2026-10-23）.
   テストのファイルの判定を部分一致からフォルダ名・ファイル名にした（`test_support/security/…` が 0 点になっていた・ルートの `test_*.py` を見逃していた）.
   テストにも当てる中身の規則は `router.yaml` の `in_tests: true` で明示（書いていない規則は従来どおり理由の「秘密」で判定）.

@@ -159,3 +159,13 @@ def test_docs_only_with_secret_is_not_skipped():
 def test_docs_only_without_risk_is_still_skipped():
     p = plan(parse_diff(_docs_diff("docs/setup.md", "手順を直した")), CFG)
     assert p.tier == "skip"
+
+
+def test_deep_label_wins_over_docs_only_skip():
+    """review:deep は「必ず Opus まで」（README）. 後退: 文書だけの変更の省略を先に見ていて、ラベルが効かなかった."""
+    changes = parse_diff(_docs_diff("docs/setup.md", "手順を直した"))
+    p = plan(changes, CFG, labels=["review:deep"])
+    assert p.tier == "deep" and p.forced_by == "ラベル review:deep"
+    # review:skip はそれより強い. review:standard は上限なので、文書だけなら今までどおり省く
+    assert plan(changes, CFG, labels=["review:deep", "review:skip"]).tier == "skip"
+    assert plan(changes, CFG, labels=["review:standard"]).tier == "skip"

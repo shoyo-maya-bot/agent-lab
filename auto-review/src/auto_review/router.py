@@ -260,14 +260,16 @@ def plan(changes: list[FileChange], cfg: dict, labels: list[str] | None = None, 
         return Plan("skip", score, reasons, per_file, forced_by=f"作成者 {author}")
     if not changes:
         return Plan("skip", 0, ["変更なし"], {}, forced_by="変更なし")
+    # review:deep は「必ず Opus まで」（README）. 文書だけの変更の省略より先に見る（以前は文書だけだと省かれ、ラベルが効かなかった）
+    if lab.get("deep") in labels:
+        return Plan("deep", score, reasons, per_file, forced_by=f"ラベル {lab['deep']}")
     only = skip.get("only_paths", [])
     never = skip.get("never_skip_paths", [])
     docs_only = all(any(glob_match(c.path, g) for g in only) and not any(glob_match(c.path, g) for g in never) for c in changes)
     # 文書だけの変更でも、秘密情報らしき値などファイルの危険度の点数があれば skip しない（変更の大きさの点数は除く）
+    # review:standard は「Opus に上げない」上限なので、文書だけの変更はこれまでどおり省く
     if docs_only and not any(s > 0 for s in per_file.values()):
         return Plan("skip", score, reasons, per_file, forced_by="文書・ロックファイルだけの変更")
-    if lab.get("deep") in labels:
-        return Plan("deep", score, reasons, per_file, forced_by=f"ラベル {lab['deep']}")
     if lab.get("standard") in labels:
         return Plan("standard", score, reasons, per_file, forced_by=f"ラベル {lab['standard']}", escalate=False)
     tier = "deep" if score >= cfg["escalation"]["deep_score"] else "standard"

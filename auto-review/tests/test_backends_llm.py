@@ -202,3 +202,68 @@ def test_reviewer_uses_structured_output_and_rejects_off_schema_tool_input(tmp_p
     monkeypatch.setattr(cli, "get_backend", lambda name: be)
     assert cli.main(["run", str(d), "--yes"]) == 3
     assert "スキーマ" in capsys.readouterr().err
+
+
+def _flaky(fails: list[BaseException]):
+    """FakeLLM の送信の口の前に、決まった失敗（接続の切断・時間切れなど）を順に起こす factory の包み."""
+
+    def wrap(fake: FakeLLM) -> FakeLLM:
+        inner = fake._opener
+
+        def open_(req, timeout):
+            if fails:
+                raise fails.pop(0)
+            return inner(req, timeout=timeout)
+
+        fake._opener = open_
+        return fake
+
+    return wrap
+
+
+def test_resent_after_timeout_is_counted_in_cost():
+    """接続の切断・時間切れのあとに送り直した分も、課金された可能性があるので費用（予算の記録）に足す.
+
+    後退: max_retries の送り直しの分が費用に入らず、PR の累計の予算から漏れていた.
+    """
+    be, fakes = _backend([_ok('{"findings": []}', inp=1000, out=200)])
+    wrap = _flaky([TimeoutError("read timed out"), ConnectionResetError("reset")])
+    be._factory = (lambda f: lambda mid: wrap(f(mid)))(be._factory)
+    reply = be.call(SONNET, "s", "u", 4000)
+    one = price(SONNET, 1000, 200)
+    assert reply.resent == 2
+    assert reply.cost_usd == pytest.approx(one * 3)
+    assert reply.resent_cost_usd == pytest.approx(one * 2)
+    # 次の呼び出しは数え直す
+    fakes["claude-sonnet-5-5"]._responses.append(_ok('{"findings": []}'))
+    assert be.call(SONNET, "s", "u", 4000).resent == 0
+
+
+def test_resent_after_429_or_529_is_not_counted():
+    """429・529 はサーバーが断ったもので課金されないので、送り直しても費用に足さない."""
+    be, _ = _backend([_overloaded("0"), _ok('{"findings": []}', inp=1000, out=200)])
+    reply = be.call(SONNET, "s", "u", 4000)
+    assert reply.resent == 0
+    assert reply.cost_usd == pytest.approx(price(SONNET, 1000, 200))
+
+
+def test_reviewer_records_resent_cost_and_note():
+    from auto_review.diff import parse_diff
+    from auto_review.review import Reviewer
+    from auto_review.router import load_config, plan
+
+    cfg = load_config()
+    changes = parse_diff(DIFF)
+
+    def review(fails: list[BaseException]):
+        be, _ = _backend([_tool({"findings": []})])
+        wrap = _flaky(fails)
+        be._factory = (lambda f: lambda mid: wrap(f(mid)))(be._factory)
+        return Reviewer(cfg, be).auto(DIFF, changes, plan(changes, cfg, labels=["review:standard"]))
+
+    base = review([])
+    r = review([TimeoutError("read timed out")])
+    assert base.calls[0].cost_usd > 0
+    assert r.calls[0].cost_usd == pytest.approx(2 * base.calls[0].cost_usd, abs=1e-4)
+    assert any("1 回送り直しました" in n for n in r.notes)
+    assert not any("送り直しました" in n for n in base.notes)
